@@ -1,0 +1,57 @@
+# --- Datos ---------------------------------------------------------------
+# raw/interim/processed NO se commitean. data/sample/ SI (ver checklist M7).
+data/raw/*
+data/interim/*
+data/processed/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+!data/sample/
+!data/sample/**
+
+# --- Artefactos de modelo ------------------------------------------------
+artifacts/*
+!artifacts/.gitkeep
+*.pkl
+*.joblib
+*.pt
+*.pth
+*.onnx
+
+# --- Python --------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.installed.cfg
+
+# --- Entornos ------------------------------------------------------------
+.venv/
+venv/
+env/
+.env
+.python-version
+
+# --- Herramientas --------------------------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# --- Reportes generados --------------------------------------------------
+reports/figures/*
+!reports/figures/.gitkeep
+
+# --- Editor / OS ---------------------------------------------------------
+.vscode/*
+!.vscode/settings.json
+.idea/
+Thumbs.db
+Desktop.ini

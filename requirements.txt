@@ -1,0 +1,59 @@
+# demand-forecasting-core · dependencias con versiones fijas
+# El checklist de M7 pide "requirements.txt con versiones fijas".
+# Este archivo es la fuente para el evaluador; pyproject.toml existe para
+# instalar el paquete (`pip install -e .`) y no duplica estos pines.
+#
+# Regenerar tras cambiar dependencias:  pip freeze > requirements.txt
+
+# --- Core cientifico -----------------------------------------------------
+numpy==2.0.2
+pandas==2.2.3
+pyarrow==17.0.0
+matplotlib==3.9.2
+seaborn==0.13.2
+
+# --- Acceso al dataset ---------------------------------------------------
+datasets==3.0.1
+huggingface-hub==0.25.2
+
+# --- ML clasico ----------------------------------------------------------
+scikit-learn==1.5.2
+lightgbm==4.5.0
+xgboost==2.1.1
+
+# --- Series temporales ---------------------------------------------------
+statsmodels==0.14.4
+statsforecast==1.7.6
+
+# --- Deep learning -------------------------------------------------------
+torch==2.4.1
+
+# --- No supervisado / reduccion de dimensionalidad -----------------------
+umap-learn==0.5.6
+
+# --- Interpretabilidad ---------------------------------------------------
+shap==0.46.0
+
+# --- Optimizacion de hiperparametros -------------------------------------
+optuna==4.0.0
+
+# --- Serializacion -------------------------------------------------------
+joblib==1.4.2
+
+# --- API y app -----------------------------------------------------------
+fastapi==0.115.0
+uvicorn==0.31.0
+pydantic==2.9.2
+streamlit==1.39.0
+
+# --- Notebooks -----------------------------------------------------------
+jupyter==1.1.1
+ipykernel==6.29.5
+
+# --- Calidad -------------------------------------------------------------
+pytest==8.3.3
+ruff==0.6.9
+
+# --- Opcionales (instalacion pesada; aislados del camino critico) --------
+# prophet==1.1.6
+# pmdarima==2.0.4
