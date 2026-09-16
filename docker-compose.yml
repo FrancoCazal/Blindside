@@ -1,0 +1,124 @@
+# Orquestacion de las dos superficies de servicio (seccion 10 del plan).
+#
+#   docker compose up -d          levanta api + app
+#   docker compose --profile pipeline run --rm pipeline make data
+#
+# ---------------------------------------------------------------------------
+# AVISO DE SEGURIDAD
+# ---------------------------------------------------------------------------
+# La API **no tiene autenticacion**. Es deliberado para el alcance del prototipo,
+# pero por eso los puertos se publican atados a 127.0.0.1 y no a 0.0.0.0: con
+# `- "8000:8000"` Docker abre el puerto en todas las interfaces de la maquina, y
+# en una red compartida cualquiera podria consultar los pronosticos y las
+# cantidades de reposicion, que son informacion comercial. Cambiar el binding a
+# 0.0.0.0 exige agregar autenticacion antes.
+#
+# ---------------------------------------------------------------------------
+# Por que data/ y artifacts/ son volumenes y no capas de la imagen
+# ---------------------------------------------------------------------------
+# data/ pesa cientos de MB y artifacts/ cambia en cada entrenamiento. Meterlos en
+# la imagen la volveria inmutable respecto de los datos: reentrenar exigiria
+# rebuild. Montados, se entrena en el host o con el perfil `pipeline` y los dos
+# servicios ven el resultado sin reconstruir nada.
+
+name: dfcore
+
+x-common: &common
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: serve
+  image: dfcore:serve
+  restart: unless-stopped
+  environment:
+    # Misma semilla que el proyecto. Se puede sobreescribir para comprobar que un
+    # resultado no depende de una semilla afortunada.
+    DFCORE_SEED: "${DFCORE_SEED:-42}"
+    PYTHONUNBUFFERED: "1"
+  volumes:
+    # data/ va de solo lectura: ningun servicio de consulta tiene por que
+    # escribir en la capa de datos, y que no pueda es una garantia y no una
+    # molestia.
+    - ./data:/app/data:ro
+    - ./artifacts:/app/artifacts:ro
+    - ./reports:/app/reports:ro
+
+services:
+  # -------------------------------------------------------------------------
+  api:
+    <<: *common
+    container_name: dfcore-api
+    command:
+      - uvicorn
+      - api.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      # /health distingue "arranco" de "arranco con modelo", asi que un
+      # contenedor healthy sin artefacto es un estado valido y visible.
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+
+  # -------------------------------------------------------------------------
+  app:
+    <<: *common
+    container_name: dfcore-app
+    command:
+      - streamlit
+      - run
+      - app/streamlit_app.py
+      - --server.address=0.0.0.0
+      - --server.port=8501
+      - --server.headless=true
+      # Sin esto Streamlit intenta abrir un navegador dentro del contenedor y
+      # pide un mail en el primer arranque, que en un contenedor cuelga el inicio.
+      - --browser.gatherUsageStats=false
+    ports:
+      - "127.0.0.1:8501:8501"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+    depends_on:
+      # El dashboard lee los parquet directamente, no la API: es la red de
+      # seguridad del despliegue y tiene que funcionar aunque la API este caida.
+      # La dependencia es solo de orden de arranque, sin condicion de salud.
+      - api
+
+  # -------------------------------------------------------------------------
+  # Perfil `pipeline` · one-off para preparar datos y entrenar.
+  # No levanta con `docker compose up`; se invoca explicitamente:
+  #
+  #   docker compose --profile pipeline run --rm pipeline make data
+  #   docker compose --profile pipeline run --rm pipeline make recover
+  #   docker compose --profile pipeline run --rm pipeline make train
+  #
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: full
+    image: dfcore:full
+    container_name: dfcore-pipeline
+    profiles: ["pipeline"]
+    environment:
+      DFCORE_SEED: "${DFCORE_SEED:-42}"
+      PYTHONUNBUFFERED: "1"
+      HF_HOME: /app/data/.hf_cache
+    volumes:
+      # Aca si con permiso de escritura: es el servicio que genera las capas.
+      - ./data:/app/data
+      - ./artifacts:/app/artifacts
+      - ./reports:/app/reports
+    # El Makefile del contenedor apunta al venv de la imagen, no a .venv/.
+    entrypoint: ["make", "-e", "PY=python"]
+    command: ["help"]

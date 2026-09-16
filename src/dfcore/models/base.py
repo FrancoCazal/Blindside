@@ -73,6 +73,25 @@ def check_future_index(future: pd.DataFrame) -> pd.DataFrame:
     return future
 
 
+def normalize_future_index(future: pd.DataFrame) -> pd.DataFrame:
+    """Uniformiza los tipos del indice de futuro antes de predecir.
+
+    `series_id` es `string` de pandas en el panel, y un indice construido a mano
+    — la API lo arma desde una lista de `str` de Python — queda en `object`.
+    pandas resuelve bien el merge entre los dos, asi que esto **no** arregla un
+    bug; deja los tipos parejos para que un `groupby` o un `map` posterior no
+    dependa de como se construyo el frame.
+    """
+    out = future.copy()
+    if S.SERIES_ID in out.columns:
+        out[S.SERIES_ID] = out[S.SERIES_ID].astype("string")
+    if S.DATE in out.columns:
+        out[S.DATE] = pd.to_datetime(out[S.DATE])
+    if "h" in out.columns:
+        out["h"] = out["h"].astype("int16")
+    return out
+
+
 class Forecaster(ABC):
     """Interfaz comun. Subclasificar e implementar `_fit` y `_predict`.
 
@@ -109,7 +128,8 @@ class Forecaster(ABC):
     def predict(self, future: pd.DataFrame) -> pd.Series:
         """Prediccion puntual. Devuelve una Serie alineada al indice de `future`."""
         self._check_ready(future)
-        out = self._predict(future)
+        normalized = normalize_future_index(future)
+        out = self._predict(normalized)
         return self._as_series(out, future)
 
     def predict_quantile(self, future: pd.DataFrame, quantiles: Sequence[float]) -> pd.DataFrame:

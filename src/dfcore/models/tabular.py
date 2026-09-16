@@ -70,6 +70,12 @@ class TabularForecaster(Forecaster):
 
     supports_quantiles = False
 
+    #: Fraccion maxima de filas de futuro que puede no encontrar su estado de
+    #: origen antes de considerar que el cruce esta roto. Se admite algo mayor que
+    #: cero porque una serie nueva (arranque en frio) legitimamente no tiene
+    #: estado; lo que no puede pasar es que **no matchee casi nada**.
+    max_unmatched_share: float = 0.2
+
     def __init__(
         self,
         *,
@@ -149,11 +155,63 @@ class TabularForecaster(Forecaster):
         return strided[-self.max_train_origins :]
 
     def _assemble(self, future: pd.DataFrame) -> pd.DataFrame:
-        """Cruza el estado congelado del origen con el indice de futuro."""
+        """Cruza el estado congelado del origen con el indice de futuro.
+
+        El chequeo del cruce no es defensivo por gusto: sin el, un cruce vacio deja
+        las features en NaN y **el modelo predice igual**, devolviendo el mismo
+        valor para todas las series.
+
+        Paso de verdad en este proyecto, y es un desajuste train/serve clasico: el
+        artefacto se habia entrenado sobre la muestra de 60 series de
+        `data/sample/` y la API estaba sirviendo series del panel completo de 3066.
+        Ninguna de las series pedidas existia en el estado de origen del modelo,
+        asi que las 73 features llegaban en NaN, LightGBM caia siempre a la misma
+        hoja, y la API respondia **200 OK con la misma cantidad a reponer para
+        todos los productos**, hasta el ultimo decimal.
+
+        Ninguna metrica de exactitud detecta eso: ocurre solo en inferencia, con un
+        modelo cuyo backtest esta perfecto. Un numero plausible y equivocado es
+        peor que un error, asi que aca se vuelve error.
+        """
         assert self._origin_state is not None
         keep = [c for c in future.columns if c in (S.SERIES_ID, S.DATE, "h", *S.KNOWN_FUTURE_COLS)]
         grid = future[keep].copy()
-        merged = grid.merge(self._origin_state, on=S.SERIES_ID, how="left")
+
+        # Los tipos de la clave se igualan por prolijidad. pandas resuelve bien
+        # `object` contra `string`, asi que esto no arregla nada por si solo; lo
+        # que protege de verdad es el chequeo de cruce que viene abajo.
+        state = self._origin_state
+        grid[S.SERIES_ID] = grid[S.SERIES_ID].astype("string")
+        state = state.assign(**{S.SERIES_ID: state[S.SERIES_ID].astype("string")})
+
+        merged = grid.merge(state, on=S.SERIES_ID, how="left", indicator=True)
+        unmatched = int((merged["_merge"] == "left_only").sum())
+        share = unmatched / len(merged) if len(merged) else 0.0
+        if share > self.max_unmatched_share:
+            sample = (
+                merged.loc[merged["_merge"] == "left_only", S.SERIES_ID]
+                .drop_duplicates()
+                .head(5)
+                .tolist()
+            )
+            raise ValueError(
+                f"{self.name}: {unmatched}/{len(merged)} filas de futuro "
+                f"({share:.0%}) no encontraron su estado de origen. Series sin "
+                f"cruzar, p.ej. {sample}. Con el estado ausente las features "
+                "quedarian en NaN y el modelo devolveria el mismo valor para todas "
+                "las series. Causa habitual: el artefacto se entreno sobre una capa "
+                "de datos distinta de la que se esta sirviendo (p. ej. data/sample/ "
+                "contra data/processed/)."
+            )
+        if unmatched:
+            log.warning(
+                "%s: %d filas de futuro sin estado de origen (%.1f %%); son series "
+                "nuevas y el modelo va a extrapolar",
+                self.name,
+                unmatched,
+                100 * share,
+            )
+        merged = merged.drop(columns=["_merge"])
         merged = cal.add_calendar_features(merged)
 
         missing = [c for c in self._features if c not in merged.columns]

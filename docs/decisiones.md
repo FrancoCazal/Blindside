@@ -253,6 +253,79 @@ de errores de escala que el boosting no tiene.
 
 ---
 
+## D13 · Dos imágenes Docker, y una sola fuente de versiones
+
+**Decisión.** Un `Dockerfile` multi-stage con dos targets: `serve` (1,17 GB) para la API y el
+dashboard, y `full` (3,57 GB) para el pipeline, el entrenamiento y los tests.
+
+**Por qué.** `requirements.txt` tiene torch, jupyter, shap, optuna, umap-learn y xgboost. Nada de
+eso se ejecuta para responder `/forecast` ni para levantar el dashboard: el artefacto servido es un
+LightGBM y la app lee parquet. Instalar todo en la imagen de servicio la triplica y alarga cada
+build sin que nada de eso corra nunca.
+
+**El detalle que evita la divergencia.** El target `serve` **no tiene su propio archivo de
+dependencias**. Instala una lista corta de paquetes de primer nivel con
+`--constraint requirements.txt`, así que las versiones salen del mismo archivo que el entorno
+completo. Un `requirements-serve.txt` separado habría sido más obvio de leer y habría abierto la
+puerta a que los pines se desincronicen en silencio, que es peor que una línea menos legible.
+
+**Alternativa descartada.** Una sola imagen con todo. Habría sido más simple y son 2,4 GB de
+diferencia en el artefacto que se despliega.
+
+---
+
+## D14 · La imagen es de CPU por diseño, y el build lo verifica
+
+**Decisión.** `torch==2.4.1+cpu` desde el índice CPU de PyTorch, `nvidia-nccl-cu12` desinstalado, y
+un paso de build que **falla** si aparece cualquier paquete `nvidia-*` o `triton`.
+
+**Por qué.** En Linux el `torch==2.4.1` de PyPI es la build CUDA y arrastra los paquetes `nvidia-*`,
+del orden de 2,5 GB de wheels. No hay GPU en el host de la defensa y los modelos servidos son
+LightGBM. La variante `+cpu` satisface el pin de `requirements.txt` porque PEP 440 permite el
+sufijo local, así que no hay que tocar el archivo de dependencias.
+
+Esto no se nota en Windows: ahí `pip install torch==2.4.1` ya trae CPU por defecto, que es por qué
+el entorno local dice `2.4.1+cpu` sin haber hecho nada especial. El problema aparece solo al
+construir la imagen.
+
+**Un segundo hallazgo, que costó un build fallido.** Después de sacar torch del camino, la imagen
+seguía trayendo `nvidia-nccl-cu12`: son 454 MB medidos y los declara **xgboost 2.1.1** como
+dependencia dura en Linux, para comunicación multi-GPU que este proyecto no usa.
+
+El primer intento fue `pip install --no-deps xgboost==2.1.1` antes de `requirements.txt`. **No
+funciona**, y el guard lo detectó: pip completa las dependencias faltantes de un paquete que ya
+está instalado, así que el `-r requirements.txt` posterior vuelve a traer nccl. La solución es
+desinstalarlo **después**. Verificado en el contenedor que sin nccl xgboost importa, entrena con
+`tree_method="hist"` y predice.
+
+**Por qué el guard y no solo el fix.** Una dependencia futura puede volver a arrastrar el stack
+CUDA, y 2,5 GB extra en una imagen no se notan hasta que alguien intenta subirla a un registry.
+Con el guard el build falla y dice qué paquete lo trajo. Ya disparó una vez de verdad, que es la
+única forma de saber que un chequeo sirve.
+
+---
+
+## D15 · Los datos son volúmenes, no capas de la imagen
+
+**Decisión.** `data/`, `artifacts/` y `reports/` se montan como volúmenes. El `.dockerignore` los
+excluye del contexto de build.
+
+**Por qué.** `data/` pesa cientos de MB y `artifacts/` cambia en cada entrenamiento. Metidos en una
+capa, la imagen quedaría inmutable respecto de los datos: reentrenar exigiría un rebuild de 3,5 GB.
+Montados, se entrena en el host o con el perfil `pipeline` y los dos servicios ven el resultado sin
+reconstruir nada.
+
+**Detalle de permisos.** En los servicios de consulta los tres se montan **de solo lectura**.
+Ningún servicio que responde consultas tiene por qué escribir en la capa de datos, y que no pueda
+es una garantía y no una molestia. Solo el perfil `pipeline` monta con escritura.
+
+**Consecuencia operativa que el frontend debería exponer.** Un artefacto entrenado sobre una capa
+de datos distinta de la servida devuelve predicciones plausibles e idénticas para todas las series
+(ver D12 y la sección de validación del README). Hay un chequeo al arrancar la API que lo loguea;
+verificado dentro del contenedor, avisa «el modelo conoce 60 de las 3066 series del panel servido».
+
+---
+
 ## Roadmap
 
 Fuera del alcance de la entrega, en orden de valor:

@@ -78,6 +78,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             model.last_train_date.date() if model.last_train_date is not None else None
         )
         log.info("modelo '%s' cargado de %s", model.name, artifact)
+        if STATE["panel"] is not None:
+            _check_model_matches_panel(model, STATE["panel"])
     else:
         log.warning(
             "no hay artefacto en %s; /forecast y /reorder van a responder 503",
@@ -159,8 +161,52 @@ def _future_index(panel: pd.DataFrame, series_ids: Sequence[str], horizon: int) 
     ).to_frame(index=False)
     grid["h"] = (grid[S.DATE] - origin).dt.days.astype("int16")
 
+    # Tipos parejos con el panel, para que un map o un groupby posterior no
+    # dependa de como se construyo el frame.
+    grid[S.SERIES_ID] = grid[S.SERIES_ID].astype("string")
+
     static = S.series_index(panel)
-    return grid.merge(static, on=S.SERIES_ID, how="left")
+    out = grid.merge(static, on=S.SERIES_ID, how="left")
+    if out[S.STORE_ID].isna().any():
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="el cruce con los atributos de serie dejo filas sin jerarquia",
+        )
+    return out
+
+
+def _check_model_matches_panel(model, panel: pd.DataFrame) -> None:
+    """Avisa si el artefacto se entreno sobre otra capa de datos que la servida.
+
+    Es un desajuste train/serve que **ninguna metrica detecta**: el backtest del
+    modelo puede estar perfecto y la API devolver la misma cantidad para todas las
+    series, porque ninguna de las que se piden existe en su estado de origen.
+    Paso en este proyecto con un artefacto de `data/sample/` sirviendo el panel de
+    `data/processed/`.
+    """
+    seen = getattr(model, "_series_seen", None)
+    base = getattr(model, "base", None)
+    if not seen and base is not None:
+        seen = getattr(base, "_series_seen", None)
+    if not seen:
+        return
+    available = set(panel[S.SERIES_ID].astype(str).unique())
+    overlap = len(available & set(seen))
+    if overlap == 0:
+        log.error(
+            "el modelo conoce %d series y NINGUNA esta en el panel servido: el "
+            "artefacto se entreno sobre otra capa de datos. Reentrenar con "
+            "`make train`.",
+            len(seen),
+        )
+    elif overlap < 0.5 * len(available):
+        log.warning(
+            "el modelo conoce %d de las %d series del panel servido (%.0f %%); las "
+            "demas van a extrapolar",
+            overlap,
+            len(available),
+            100 * overlap / len(available),
+        )
 
 
 # --------------------------------------------------------------------------

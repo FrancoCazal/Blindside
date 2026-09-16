@@ -181,6 +181,76 @@ def test_wrong_prediction_length_is_caught() -> None:
         model.predict(_future("1_1", pd.Timestamp("2024-01-05"), 3))
 
 
+@pytest.mark.slow
+def test_tabular_model_fails_loudly_when_the_origin_state_does_not_match(
+    recovered_panel: pd.DataFrame,
+) -> None:
+    """Un cruce vacio tiene que ser un error, no predicciones iguales para todos.
+
+    Fija un desajuste train/serve que paso de verdad: el artefacto se habia
+    entrenado sobre la muestra de 60 series y la API servia el panel de 3066.
+    Ninguna serie pedida existia en el estado de origen, las 73 features llegaban
+    en NaN, LightGBM caia siempre a la misma hoja, y la API respondia 200 OK con
+    **la misma cantidad a reponer para todos los productos**.
+
+    Ninguna metrica de exactitud detecta esto: ocurre solo en inferencia, con un
+    backtest impecable. Un numero plausible y equivocado es peor que un error.
+    """
+    from dfcore.models.gbdt import LightGBMForecaster
+
+    dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
+    origin = dates[-8]
+    history = recovered_panel[recovered_panel[S.DATE] <= origin]
+    model = LightGBMForecaster(n_estimators=60, max_train_origins=6).fit(
+        history, target=S.DEMAND_LATENT
+    )
+
+    # Series que no existen: el estado de origen no las tiene.
+    bogus = pd.DataFrame(
+        {
+            S.SERIES_ID: ["99_991", "99_992", "99_993", "99_994"],
+            S.DATE: [origin + pd.Timedelta(days=1)] * 4,
+            "h": [1, 1, 1, 1],
+        }
+    )
+    with pytest.raises(ValueError, match="no encontraron su estado de origen"):
+        model.predict(bogus)
+
+
+@pytest.mark.slow
+def test_tabular_model_gives_different_series_different_predictions(
+    recovered_panel: pd.DataFrame,
+) -> None:
+    """El sintoma que delataba el desajuste: predicciones identicas entre series.
+
+    Se verifica sobre un indice de futuro construido a mano con `str` de Python,
+    que es exactamente como lo arma la API. De paso confirma que el merge entre
+    `object` y `string` de pandas **si** funciona: el problema nunca fue el dtype.
+    """
+    from dfcore.models.gbdt import LightGBMForecaster
+
+    dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
+    origin = dates[-8]
+    history = recovered_panel[recovered_panel[S.DATE] <= origin]
+    model = LightGBMForecaster(n_estimators=80, max_train_origins=6).fit(
+        history, target=S.DEMAND_LATENT
+    )
+
+    ids = sorted(history[S.SERIES_ID].astype(str).unique())[:6]
+    future = pd.DataFrame(
+        {
+            S.SERIES_ID: ids,  # dtype object, como los manda la API
+            S.DATE: [origin + pd.Timedelta(days=1)] * len(ids),
+            "h": [1] * len(ids),
+        }
+    )
+    preds = model.predict(future)
+    assert preds.nunique() > 1, (
+        "todas las series recibieron la misma prediccion; el cruce con el estado "
+        "de origen esta fallando en silencio"
+    )
+
+
 def test_save_and_load_roundtrip(tmp_path, recovered_panel: pd.DataFrame) -> None:
     model = B.SeasonalNaiveForecaster().fit(recovered_panel, target=S.DEMAND_LATENT)
     path = model.save(tmp_path / "m.joblib")
