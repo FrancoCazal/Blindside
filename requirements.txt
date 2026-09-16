@@ -1,4 +1,4 @@
-# demand-forecasting-core · dependencias con versiones fijas
+# blindside-core · dependencias con versiones fijas
 # El checklist de M7 pide "requirements.txt con versiones fijas".
 # Este archivo es la fuente para el evaluador; pyproject.toml existe para
 # instalar el paquete (`pip install -e .`) y no duplica estos pines.

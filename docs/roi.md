@@ -1,6 +1,6 @@
 # Cálculo de ROI
 
-> **Estado:** el simulador está implementado (`src/dfcore/decision/policy.py`) y su aritmética
+> **Estado:** el simulador está implementado (`src/blindside/decision/policy.py`) y su aritmética
 > está cubierta por tests. Los números de la capa 1 se completan al correr el backtest con un
 > modelo cuantílico; la capa 2 requiere fijar los cuatro supuestos declarados.
 
@@ -41,7 +41,7 @@ de contar, no de suponer una normal.
 
 #### Las cuatro políticas que compara el simulador
 
-`src/dfcore/decision/policy.py` no compara dos políticas sino cuatro, y la razón es que un
+`src/blindside/decision/policy.py` no compara dos políticas sino cuatro, y la razón es que un
 «ahorro del 12 %» suelto no se puede interpretar.
 
 | Política | Qué repone | Para qué sirve |

@@ -24,12 +24,12 @@ _SRC = Path(__file__).resolve().parents[1] / "src"
 if _SRC.exists() and str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
-from dfcore import config as cfg  # noqa: E402
-from dfcore.data import loaders  # noqa: E402
-from dfcore.data import schema as S  # noqa: E402
+from blindside import config as cfg  # noqa: E402
+from blindside.data import loaders  # noqa: E402
+from blindside.data import schema as S  # noqa: E402
 
 st.set_page_config(
-    page_title="demand-forecasting-core",
+    page_title="blindside-core",
     page_icon="📦",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -100,7 +100,7 @@ def screen_overview(panel: pd.DataFrame, layer: str) -> None:
     )
 
     st.subheader("Recuperacion de demanda censurada")
-    from dfcore.decision.censoring import censoring_report
+    from blindside.decision.censoring import censoring_report
 
     report = censoring_report(panel)
     st.dataframe(
@@ -125,8 +125,8 @@ def screen_overview(panel: pd.DataFrame, layer: str) -> None:
         st.info("Sin backtest todavia. Correr `make backtest` o `make models`.")
         return
 
-    from dfcore.evaluate import metrics as M
-    from dfcore.models.baselines import REFERENCE_BASELINE
+    from blindside.evaluate import metrics as M
+    from blindside.models.baselines import REFERENCE_BASELINE
 
     summary_tbl = M.summarize(result)
     try:
@@ -217,8 +217,8 @@ def screen_models() -> None:
         st.info("Sin backtest todavia. Correr `make models`.")
         return
 
-    from dfcore.evaluate import contracts as C
-    from dfcore.evaluate import metrics as M
+    from blindside.evaluate import contracts as C
+    from blindside.evaluate import metrics as M
 
     st.subheader("Por origen de backtest")
     by_origin = M.metrics_by_origin(result)
@@ -260,7 +260,7 @@ def screen_decision(panel: pd.DataFrame) -> None:
     cu = c1.number_input("Cu · costo de quedarse corto", 0.1, 20.0, 1.0, 0.1)
     co = c2.number_input("Co · costo de quedarse largo", 0.1, 20.0, 0.6, 0.1)
 
-    from dfcore.decision.newsvendor import critical_fraction
+    from blindside.decision.newsvendor import critical_fraction
 
     q_star = critical_fraction(cu=cu, co=co)
     st.metric("Cuantil critico q*", f"{q_star:.3f}")
@@ -285,7 +285,7 @@ def screen_decision(panel: pd.DataFrame) -> None:
         )
         return
 
-    from dfcore.models.base import Forecaster
+    from blindside.models.base import Forecaster
 
     model = Forecaster.load(artifact)
     if not getattr(model, "supports_quantiles", False):
@@ -351,7 +351,7 @@ def screen_report() -> None:
 # Layout
 # --------------------------------------------------------------------------
 def main() -> None:
-    st.sidebar.title("📦 demand-forecasting-core")
+    st.sidebar.title("📦 blindside-core")
     st.sidebar.caption(
         "Pronostico de demanda de perecederos con recuperacion de demanda censurada "
         "y capa de decision de reposicion."

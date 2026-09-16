@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dfcore.evaluate import metrics as M
+from blindside.evaluate import metrics as M
 
 
 def test_mae_and_rmse_by_hand() -> None:
@@ -128,8 +128,8 @@ def test_summarize_reports_dispersion(recovered_panel: pd.DataFrame, small_forec
     La metodologia prohibe el numero unico: un promedio bueno esconde un origen
     catastrofico, y el origen catastrofico es el que pasa en produccion.
     """
-    from dfcore.evaluate.backtest import run_backtest
-    from dfcore.models.baselines import NaiveForecaster, SeasonalNaiveForecaster
+    from blindside.evaluate.backtest import run_backtest
+    from blindside.models.baselines import NaiveForecaster, SeasonalNaiveForecaster
 
     result = run_backtest(
         recovered_panel,
@@ -149,8 +149,8 @@ def test_improvement_vs_baseline_computes_the_smart_objective(
     recovered_panel: pd.DataFrame, small_forecast_config
 ) -> None:
     """La tabla que responde "20 % menos MASE que el naive estacional"."""
-    from dfcore.evaluate.backtest import run_backtest
-    from dfcore.models.baselines import (
+    from blindside.evaluate.backtest import run_backtest
+    from blindside.models.baselines import (
         REFERENCE_BASELINE,
         NaiveForecaster,
         SeasonalNaiveForecaster,

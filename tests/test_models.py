@@ -11,9 +11,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dfcore.data import schema as S
-from dfcore.models import baselines as B
-from dfcore.models.base import Forecaster, NotFittedError, quantile_col
+from blindside.data import schema as S
+from blindside.models import baselines as B
+from blindside.models.base import Forecaster, NotFittedError, quantile_col
 
 
 def _tiny_panel(values: dict[str, list[float]]) -> pd.DataFrame:
@@ -196,7 +196,7 @@ def test_tabular_model_fails_loudly_when_the_origin_state_does_not_match(
     Ninguna metrica de exactitud detecta esto: ocurre solo en inferencia, con un
     backtest impecable. Un numero plausible y equivocado es peor que un error.
     """
-    from dfcore.models.gbdt import LightGBMForecaster
+    from blindside.models.gbdt import LightGBMForecaster
 
     dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
     origin = dates[-8]
@@ -227,7 +227,7 @@ def test_tabular_model_gives_different_series_different_predictions(
     que es exactamente como lo arma la API. De paso confirma que el merge entre
     `object` y `string` de pandas **si** funciona: el problema nunca fue el dtype.
     """
-    from dfcore.models.gbdt import LightGBMForecaster
+    from blindside.models.gbdt import LightGBMForecaster
 
     dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
     origin = dates[-8]
@@ -289,10 +289,10 @@ def test_lightgbm_beats_the_seasonal_naive(recovered_panel: pd.DataFrame) -> Non
     gana al naive estacional teniendo esa senal disponible, el problema esta en
     el ensamblado de features, no en el modelo.
     """
-    from dfcore import config as cfg
-    from dfcore.evaluate import metrics as M
-    from dfcore.evaluate.backtest import run_backtest
-    from dfcore.models.gbdt import LightGBMForecaster
+    from blindside import config as cfg
+    from blindside.evaluate import metrics as M
+    from blindside.evaluate.backtest import run_backtest
+    from blindside.models.gbdt import LightGBMForecaster
 
     forecast = cfg.ForecastConfig(
         horizon=7, season_length=7, n_origins=3, step=3, min_train_days=42
@@ -313,7 +313,7 @@ def test_lightgbm_beats_the_seasonal_naive(recovered_panel: pd.DataFrame) -> Non
 @pytest.mark.slow
 def test_quantile_model_produces_monotone_quantiles(recovered_panel: pd.DataFrame) -> None:
     """Los cuantiles no pueden cruzarse: un q90 debajo del q50 no es un intervalo."""
-    from dfcore.models.gbdt import LightGBMQuantileForecaster
+    from blindside.models.gbdt import LightGBMQuantileForecaster
 
     dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
     origin = dates[-8]
@@ -341,8 +341,8 @@ def test_reorder_quantity_uses_the_critical_fraction(recovered_panel: pd.DataFra
     que quedar por encima de la mediana: en perecederos el sobre-stock duele,
     pero el quiebre duele mas.
     """
-    from dfcore import config as cfg
-    from dfcore.models.gbdt import LightGBMQuantileForecaster
+    from blindside import config as cfg
+    from blindside.models.gbdt import LightGBMQuantileForecaster
 
     economics = cfg.EconomicsConfig(cu=1.0, co=0.6)
     assert economics.critical_fraction == pytest.approx(0.625)

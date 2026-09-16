@@ -21,19 +21,19 @@
 # rebuild. Montados, se entrena en el host o con el perfil `pipeline` y los dos
 # servicios ven el resultado sin reconstruir nada.
 
-name: dfcore
+name: blindside
 
 x-common: &common
   build:
     context: .
     dockerfile: Dockerfile
     target: serve
-  image: dfcore:serve
+  image: blindside:serve
   restart: unless-stopped
   environment:
     # Misma semilla que el proyecto. Se puede sobreescribir para comprobar que un
     # resultado no depende de una semilla afortunada.
-    DFCORE_SEED: "${DFCORE_SEED:-42}"
+    BLINDSIDE_SEED: "${BLINDSIDE_SEED:-42}"
     PYTHONUNBUFFERED: "1"
   volumes:
     # data/ va de solo lectura: ningun servicio de consulta tiene por que
@@ -47,7 +47,7 @@ services:
   # -------------------------------------------------------------------------
   api:
     <<: *common
-    container_name: dfcore-api
+    container_name: blindside-api
     command:
       - uvicorn
       - api.main:app
@@ -69,7 +69,7 @@ services:
   # -------------------------------------------------------------------------
   app:
     <<: *common
-    container_name: dfcore-app
+    container_name: blindside-app
     command:
       - streamlit
       - run
@@ -107,11 +107,11 @@ services:
       context: .
       dockerfile: Dockerfile
       target: full
-    image: dfcore:full
-    container_name: dfcore-pipeline
+    image: blindside:full
+    container_name: blindside-pipeline
     profiles: ["pipeline"]
     environment:
-      DFCORE_SEED: "${DFCORE_SEED:-42}"
+      BLINDSIDE_SEED: "${BLINDSIDE_SEED:-42}"
       PYTHONUNBUFFERED: "1"
       HF_HOME: /app/data/.hf_cache
     volumes:

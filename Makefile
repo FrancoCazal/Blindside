@@ -43,14 +43,14 @@ setup:
 	$(PY) -m pip install -e . --no-deps
 
 data:
-	$(PY) -m dfcore.data.freshretail --out data/interim --seed 42
+	$(PY) -m blindside.data.freshretail --out data/interim --seed 42
 
 recover:
-	$(PY) -m dfcore.decision recover --method hourly_profile
+	$(PY) -m blindside.decision recover --method hourly_profile
 
 sample:
-	$(PY) -m dfcore.data.freshretail --make-sample --out data/sample --seed 42
-	$(PY) -m dfcore.decision recover --method hourly_profile --sample --out data/sample
+	$(PY) -m blindside.data.freshretail --make-sample --out data/sample --seed 42
+	$(PY) -m blindside.decision recover --method hourly_profile --sample --out data/sample
 
 lint:
 	$(PY) -m ruff check src tests api app
@@ -65,20 +65,20 @@ test-leakage:
 	$(PY) -m pytest -m leakage -v
 
 backtest:
-	$(PY) -m dfcore.evaluate.backtest --out reports/metrics.md \
+	$(PY) -m blindside.evaluate.backtest --out reports/metrics.md \
 		--save-result reports/backtest_baselines.parquet
 
 models:
-	$(PY) -m dfcore.evaluate.backtest --out reports/metrics.md \
+	$(PY) -m blindside.evaluate.backtest --out reports/metrics.md \
 		--models seasonal_naive naive croston_sba moving_average \
 		         seasonal_moving_average lgbm_global ridge \
 		--save-result reports/backtest_models.parquet
 
 train:
-	$(PY) -m dfcore.models train --model lgbm_quantile --conformal
+	$(PY) -m blindside.models train --model lgbm_quantile --conformal
 
 ablation:
-	$(PY) -m dfcore.evaluate.ablation --out reports/censoring_ablation.md
+	$(PY) -m blindside.evaluate.ablation --out reports/censoring_ablation.md
 
 app:
 	$(PY) -m streamlit run app/streamlit_app.py --server.address 127.0.0.1
@@ -94,10 +94,10 @@ clean:
 # Los targets de abajo no usan $(PY): corren docker en el host.
 
 docker-build:
-	docker build --target serve -t dfcore:serve .
+	docker build --target serve -t blindside:serve .
 
 docker-build-full:
-	docker build --target full -t dfcore:full .
+	docker build --target full -t blindside:full .
 
 docker-up:
 	docker compose up -d --build

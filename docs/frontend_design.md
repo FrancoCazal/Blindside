@@ -1,4 +1,4 @@
-# Diseño del frontend · demand-forecasting-core
+# Diseño del frontend · Blindside
 
 **Estado:** especificación para diseñar. No hay código de frontend todavía.
 **Frente H** del plan (sección 13). Depende del contrato de API, que ya está congelado.
@@ -92,7 +92,7 @@ Propuesta: un control **siempre visible en el header**, no enterrado en un panel
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│  ◈ dfcore        Viendo:  [ Venta observada │ Demanda recuperada ]   │
+│  ◈ Blindside     Viendo:  [ Venta observada │ Demanda recuperada ]    │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 

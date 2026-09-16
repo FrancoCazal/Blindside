@@ -20,8 +20,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dfcore import config as cfg
-from dfcore.data import schema as S
+from blindside import config as cfg
+from blindside.data import schema as S
 
 N_DAYS = 97  # los mismos 90 + 7 del dataset real
 START = pd.Timestamp("2024-03-28")
@@ -152,7 +152,7 @@ def synthetic_panel(synthetic_hourly_panel: pd.DataFrame) -> pd.DataFrame:
 @pytest.fixture(scope="session")
 def recovered_panel(synthetic_hourly_panel: pd.DataFrame) -> pd.DataFrame:
     """Panel con demanda latente recuperada, listo para features y modelos."""
-    from dfcore.decision.censoring import HourlyProfileRecovery
+    from blindside.decision.censoring import HourlyProfileRecovery
 
     out = HourlyProfileRecovery().recover(synthetic_hourly_panel)
     return out.drop(columns=[*S.HOURLY_COLS, "profile_weight"], errors="ignore")
@@ -167,7 +167,7 @@ def small_forecast_config() -> cfg.ForecastConfig:
 @pytest.fixture()
 def supervised_matrix(recovered_panel: pd.DataFrame) -> pd.DataFrame:
     """Matriz supervisada de unos pocos origenes."""
-    from dfcore.features import build as fb
+    from blindside.features import build as fb
 
     state = fb.add_origin_features(recovered_panel, target=S.DEMAND_LATENT)
     origins = pd.DatetimeIndex(sorted(state[S.DATE].unique()))[-20:-8]

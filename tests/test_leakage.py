@@ -15,16 +15,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dfcore import config as cfg
-from dfcore.data import schema as S
-from dfcore.evaluate import contracts as C
-from dfcore.evaluate import metrics as M
-from dfcore.evaluate.backtest import _future_index, run_backtest
-from dfcore.features import build as fb
-from dfcore.models.base import check_future_index
-from dfcore.models.baselines import SeasonalNaiveForecaster
-from dfcore.validation import leakage as lk
-from dfcore.validation.splits import RollingOriginSplitter, naive_seasonal_scale
+from blindside import config as cfg
+from blindside.data import schema as S
+from blindside.evaluate import contracts as C
+from blindside.evaluate import metrics as M
+from blindside.evaluate.backtest import _future_index, run_backtest
+from blindside.features import build as fb
+from blindside.models.base import check_future_index
+from blindside.models.baselines import SeasonalNaiveForecaster
+from blindside.validation import leakage as lk
+from blindside.validation.splits import RollingOriginSplitter, naive_seasonal_scale
 
 pytestmark = pytest.mark.leakage
 
@@ -41,8 +41,8 @@ def _lgbm_fit_predict(features: list[str]):
     def fit_predict(tr: pd.DataFrame, te: pd.DataFrame) -> np.ndarray:
         import lightgbm as lgb
 
-        from dfcore.models.gbdt import LightGBMForecaster
-        from dfcore.models.tabular import prepare_categoricals
+        from blindside.models.gbdt import LightGBMForecaster
+        from blindside.models.tabular import prepare_categoricals
 
         params = {**LightGBMForecaster().params, "verbosity": -1}
         dtrain = lgb.Dataset(
@@ -152,7 +152,7 @@ def test_pipeline_fitted_on_train_only(recovered_panel: pd.DataFrame) -> None:
     Es el item que separa M2 bien hecho de M2 mal hecho: escalar antes de partir
     contamina el escalador con el test y no se nota en ninguna metrica.
     """
-    from dfcore.models.linear import RidgeForecaster
+    from blindside.models.linear import RidgeForecaster
 
     dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
     origin = dates[-15]
@@ -268,7 +268,7 @@ def test_folds_are_disjoint(
 
 def test_fold_detects_overlap(recovered_panel: pd.DataFrame) -> None:
     """Caso negativo: un fold cuyo test empieza antes del origen debe fallar."""
-    from dfcore.validation.splits import Fold
+    from blindside.validation.splits import Fold
 
     dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
     bad = Fold(index=0, origin=dates[-3], horizon=7)  # el test se sale del panel

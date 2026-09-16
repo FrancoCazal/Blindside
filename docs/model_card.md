@@ -1,4 +1,4 @@
-# Model card · demand-forecasting-core
+# Model card · blindside-core
 
 Conecta con el eje de ética y AI Act del programa. La estructura sigue la de Mitchell et al.,
 *Model Cards for Model Reporting* (2019).
@@ -158,7 +158,7 @@ la fracción de la mejora efectivamente capturada nunca es 100 %.
 
 | Elemento | Cómo se fija |
 |---|---|
-| Semilla | `DFCORE_SEED`, por defecto 42, en `src/dfcore/config.py` |
+| Semilla | `BLINDSIDE_SEED`, por defecto 42, en `src/blindside/config.py` |
 | Dependencias | `requirements.txt` con versiones exactas |
 | Python | 3.11 o 3.12 (los pines no tienen wheels en 3.13+) |
 | Submuestreo | Semilla fija + manifiesto en `data/interim/` |

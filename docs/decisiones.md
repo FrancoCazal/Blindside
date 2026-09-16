@@ -34,7 +34,7 @@ secuencias de 24 elementos. Expandido son ~4,85 M filas × 48 valores ≈ 233 mi
 del orden de 1,9 GB en `float64` solo para esas dos columnas. Un `load_dataset(...).to_pandas()`
 no entra en una máquina de trabajo normal.
 
-**Consecuencia de diseño.** `dfcore.data.freshretail` tiene un contrato explícito: **nunca
+**Consecuencia de diseño.** `blindside.data.freshretail` tiene un contrato explícito: **nunca
 materializa el dataset completo**. Cualquier función que lo haga es un bug, no una optimización
 pendiente.
 
@@ -52,7 +52,7 @@ intermedias separadas) y la convención de nombres de notebooks.
 fijas. Adoptar `ccds` literal habría implicado renombrar y mover media estructura.
 
 **Nota.** `pyproject.toml` existe igual, porque el src-layout con paquete instalable es lo que
-permite que los notebooks y la app importen `dfcore` sin manipular `sys.path`. Los pines viven
+permite que los notebooks y la app importen `blindside` sin manipular `sys.path`. Los pines viven
 en `requirements.txt` para no duplicar la fuente de verdad.
 
 ---
@@ -328,8 +328,8 @@ verificado dentro del contenedor, avisa «el modelo conoce 60 de las 3066 series
 
 ## D16 · El proyecto se llama Blindside
 
-**Decisión.** El nombre es **Blindside**. El paquete Python pasa de `dfcore` a `blindside`, y el
-repo de `demand-forecasting-core` a `blindside-core`.
+**Decisión.** El nombre es **Blindside**. El paquete Python pasa de `blindside` a `blindside`, y el
+repo de `blindside-core` a `blindside-core`.
 
 **Por qué ese nombre.** Los quiebres de stock te toman del lado ciego: la venta cae a cero y el
 ERP no registra que hubo demanda. El nombre apunta al punto ciego de los datos, que es el
@@ -357,6 +357,27 @@ Frase de defensa, que sale sola y es el test que el nombre tiene que pasar:
 agéntica está consumiendo rápido todo el territorio semántico de «conocimiento oculto»: Vestige y
 Blindsight cayeron por lo mismo, los dos tomados por proyectos de MCP que razonan sobre lo que no
 se puede ver. Si en el futuro hace falta otro nombre de esa familia, hay que verificar antes.
+
+### La consecuencia del rename que no era obvia
+
+`joblib` graba la **ruta del módulo dentro del pickle**. Al renombrar el paquete, todo artefacto
+serializado antes del cambio quedó inservible con `ModuleNotFoundError: No module named 'dfcore'`.
+
+Y ahí apareció un bug de resiliencia que el rename solo expuso: **la API explotaba en el arranque**
+y el contenedor entraba en bucle de reinicio. Manejaba bien el caso «no hay artefacto» — arrancaba
+con `model_loaded: false` — pero no el caso «hay uno y está roto».
+
+Eso no es una excepción excepcional. La misma falla aparece con cualquier desfasaje entre artefacto
+y código: una clase renombrada, un módulo movido, una versión de scikit-learn distinta de la que
+serializó. Es una condición esperable en operación, así que ahora degrada a `model_loaded: false`
+con el motivo visible en `/health`, y los endpoints que dependen del modelo responden 503
+distinguiendo los dos casos, porque se arreglan distinto: uno pide entrenar, el otro reentrenar.
+
+El dashboard no se ve afectado porque lee los parquet directamente, que es exactamente para lo que
+se diseñó así.
+
+Cubierto por `tests/test_api.py`, que simula un artefacto ilegible y verifica que la API arranque
+igual.
 
 **Nota sobre PyPI, que no fue un filtro.** Publicar en PyPI es Fase 2, después de la defensa
 (sección 16 del plan, bajo «no empezar antes»). Lo que sí hace falta y ya está es `pyproject.toml`

@@ -26,6 +26,11 @@ class Health(BaseModel):
     #: Etiqueta del artefacto servido. Sin esto no se sabe que modelo respondio.
     model_name: str | None = None
     trained_until: date | None = None
+    #: Motivo por el que el artefacto existe pero no se pudo cargar. Distingue
+    #: "no hay modelo" de "hay uno y esta roto", que se arreglan distinto: el
+    #: primero pide entrenar, el segundo casi siempre es desfasaje entre el
+    #: artefacto y el codigo (paquete renombrado, version de sklearn distinta).
+    model_error: str | None = None
 
     model_config = ConfigDict(protected_namespaces=())
 

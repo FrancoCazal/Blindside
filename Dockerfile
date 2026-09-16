@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1.7
 #
-# Imagen de demand-forecasting-core. Dos targets, y la eleccion importa:
+# Imagen de blindside-core. Dos targets, y la eleccion importa:
 #
 #   serve  (default) - API + dashboard. Solo lo necesario para servir.
 #   full             - todo requirements.txt, para correr el pipeline y entrenar.
 #
 # Construir:
-#   docker build --target serve -t dfcore:serve .
-#   docker build --target full  -t dfcore:full  .
+#   docker build --target serve -t blindside:serve .
+#   docker build --target full  -t blindside:full  .
 #
 # ---------------------------------------------------------------------------
 # Por que dos targets
@@ -69,7 +69,7 @@ COPY requirements.txt ./
 
 # Las versiones vienen de requirements.txt via --constraint, asi que no hay dos
 # fuentes de verdad. La lista de abajo es la superficie de import real:
-#   dfcore nucleo -> numpy pandas pyarrow scikit-learn lightgbm joblib
+#   blindside nucleo -> numpy pandas pyarrow scikit-learn lightgbm joblib
 #   api           -> fastapi uvicorn pydantic
 #   app           -> streamlit
 RUN pip install --constraint requirements.txt \
@@ -136,14 +136,14 @@ COPY --from=deps-serve /opt/venv /opt/venv
 # Usuario sin privilegios. La API no tiene autenticacion (ver README), asi que
 # reducir lo que puede hacer el proceso si alguien alcanza el puerto es lo menos
 # que corresponde.
-RUN useradd --create-home --uid 1000 dfcore
+RUN useradd --create-home --uid 1000 blindside
 
 # El codigo va despues de las dependencias a proposito: cambia mucho mas seguido,
 # y asi un cambio en src/ no invalida la capa de pip.
-COPY --chown=dfcore:dfcore pyproject.toml README.md ./
-COPY --chown=dfcore:dfcore src ./src
-COPY --chown=dfcore:dfcore api ./api
-COPY --chown=dfcore:dfcore app ./app
+COPY --chown=blindside:blindside pyproject.toml README.md ./
+COPY --chown=blindside:blindside src ./src
+COPY --chown=blindside:blindside api ./api
+COPY --chown=blindside:blindside app ./app
 
 RUN pip install --no-deps -e .
 
@@ -151,9 +151,9 @@ RUN pip install --no-deps -e .
 # copian: data/ pesa cientos de MB y meterla en una capa volveria la imagen
 # inmutable respecto de los datos, que es lo contrario de lo que se quiere.
 RUN mkdir -p data/raw data/interim data/processed data/sample artifacts reports/figures \
-    && chown -R dfcore:dfcore /app
+    && chown -R blindside:blindside /app
 
-USER dfcore
+USER blindside
 
 EXPOSE 8000 8501
 
@@ -171,23 +171,23 @@ FROM base AS full
 
 COPY --from=deps-full /opt/venv /opt/venv
 
-RUN useradd --create-home --uid 1000 dfcore
+RUN useradd --create-home --uid 1000 blindside
 
-COPY --chown=dfcore:dfcore pyproject.toml README.md Makefile ./
-COPY --chown=dfcore:dfcore src ./src
-COPY --chown=dfcore:dfcore api ./api
-COPY --chown=dfcore:dfcore app ./app
-COPY --chown=dfcore:dfcore tests ./tests
+COPY --chown=blindside:blindside pyproject.toml README.md Makefile ./
+COPY --chown=blindside:blindside src ./src
+COPY --chown=blindside:blindside api ./api
+COPY --chown=blindside:blindside app ./app
+COPY --chown=blindside:blindside tests ./tests
 
 RUN pip install --no-deps -e .
 
 RUN mkdir -p data/raw data/interim data/processed data/sample artifacts reports/figures \
-    && chown -R dfcore:dfcore /app
+    && chown -R blindside:blindside /app
 
-USER dfcore
+USER blindside
 
 # La cache de HuggingFace apunta a un directorio del proyecto para que se pueda
 # montar como volumen y no se re-descarguen 115 MB en cada corrida.
 ENV HF_HOME=/app/data/.hf_cache
 
-CMD ["python", "-c", "import dfcore; print('dfcore', dfcore.__version__, 'listo')"]
+CMD ["python", "-c", "import blindside; print('blindside', blindside.__version__, 'listo')"]

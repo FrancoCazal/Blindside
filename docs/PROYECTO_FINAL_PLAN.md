@@ -87,7 +87,7 @@ la versión canónica del alcance declarado.
 > ventana de trabajo; el submuestreo se declara.
 >
 > **Fuente secundaria: generador sintético propio** versionado con semilla fija
-> (`src/dfcore/data/generator.py`), calibrado a la estructura operativa real de Focal Point —
+> (`src/blindside/data/generator.py`), calibrado a la estructura operativa real de Focal Point —
 > jerarquía producto → categoría → sucursal → total, feriados paraguayos, cola de baja
 > rotación, vida útil de lote y quiebres que censuran. Es el caso de la organización propia y
 > el único donde el ROI se expresa en guaraníes, porque en el dataset primario las ventas
@@ -337,7 +337,7 @@ por adelantado la pregunta de si el trabajo es integrador o parcial.
 Definido en la conversación previa. El corte entre público y privado **no** es básico
 contra avanzado. Es **método contra producto**.
 
-### 3.1 Repo público · `demand-forecasting-core`
+### 3.1 Repo público · `blindside-core`
 
 Entregable del diplomado y prueba pública de rigor de modelado. Se hace completo. No se lo
 llama "lite" ni interna ni externamente. Se lo llama **core** o **implementación de
@@ -729,7 +729,7 @@ supuesto está inflado.
 ## 12. Estructura del repo
 
 ```
-demand-forecasting-core/
+blindside-core/
 ├── README.md
 ├── LICENSE
 ├── pyproject.toml
@@ -739,7 +739,7 @@ demand-forecasting-core/
 ├── data/
 │   ├── raw/                      # gitignored
 │   └── synthetic/                # generador versionado, semilla fija
-├── src/dfcore/
+├── src/blindside/
 │   ├── data/
 │   │   ├── generator.py          # caso secundario Focal Point
 │   │   ├── freshretail.py        # caso primario: carga + submuestreo con semilla
@@ -809,9 +809,9 @@ no encajan y se pierde más tiempo integrando del que se ganó paralelizando.
 
 ### Contratos a congelar en la primera hora
 
-1. **Esquema de datos**, en `src/dfcore/data/schema.py`. Columnas, tipos, granularidad,
+1. **Esquema de datos**, en `src/blindside/data/schema.py`. Columnas, tipos, granularidad,
    claves de jerarquía.
-2. **Interfaz de modelo**, en `src/dfcore/models/base.py`. Métodos `fit`, `predict`,
+2. **Interfaz de modelo**, en `src/blindside/models/base.py`. Métodos `fit`, `predict`,
    `predict_quantile`, y formato del artefacto serializado.
 3. **Contrato de backtest.** Forma exacta del DataFrame de resultados que todo modelo
    devuelve, para que las métricas y el dashboard consuman lo mismo.

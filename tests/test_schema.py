@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dfcore.data import schema as S
+from blindside.data import schema as S
 
 
 def test_validate_panel_accepts_valid(synthetic_panel: pd.DataFrame) -> None:

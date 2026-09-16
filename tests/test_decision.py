@@ -12,15 +12,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dfcore import config as cfg
-from dfcore.data import schema as S
-from dfcore.decision import newsvendor as nv
-from dfcore.decision.conformal import ConformalForecaster
-from dfcore.evaluate import contracts as C
-from dfcore.evaluate import metrics as M
-from dfcore.evaluate.backtest import run_backtest
-from dfcore.models.base import quantile_col
-from dfcore.models.baselines import SeasonalNaiveForecaster
+from blindside import config as cfg
+from blindside.data import schema as S
+from blindside.decision import newsvendor as nv
+from blindside.decision.conformal import ConformalForecaster
+from blindside.evaluate import contracts as C
+from blindside.evaluate import metrics as M
+from blindside.evaluate.backtest import run_backtest
+from blindside.models.base import quantile_col
+from blindside.models.baselines import SeasonalNaiveForecaster
 
 
 # --- Fraccion critica ---------------------------------------------------
@@ -349,7 +349,7 @@ def test_quantile_trained_model_beats_the_point_model_economically(
     salir mas caro que el punto. El conformal entrega **un** intervalo a un nivel,
     no una distribucion; para cuantiles hay que entrenar cuantiles.
     """
-    from dfcore.models.gbdt import LightGBMForecaster, LightGBMQuantileForecaster
+    from blindside.models.gbdt import LightGBMForecaster, LightGBMQuantileForecaster
 
     economics = cfg.EconomicsConfig(cu=1.0, co=0.6)
     q_star = economics.critical_fraction
@@ -462,8 +462,8 @@ def _backtest_with_intervals(
     El arnes general devuelve el contrato sin intervalos; aca se agregan llamando
     a `predict_interval` con el mismo indice de futuro de cada fold.
     """
-    from dfcore.evaluate.backtest import _future_index
-    from dfcore.validation.splits import RollingOriginSplitter
+    from blindside.evaluate.backtest import _future_index
+    from blindside.validation.splits import RollingOriginSplitter
 
     splitter = RollingOriginSplitter(
         horizon=forecast.horizon,

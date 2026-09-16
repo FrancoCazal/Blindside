@@ -1,4 +1,4 @@
-# demand-forecasting-core
+# Blindside
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -7,6 +7,9 @@
 Pronóstico de demanda de productos perecederos por tienda y producto, con **recuperación de
 demanda censurada por quiebres de stock** y una **capa de decisión** que convierte el
 pronóstico en una cantidad concreta a reponer.
+
+> Los quiebres de stock te toman del lado ciego: la venta cae a cero y tu ERP no registra que
+> hubo demanda. **Blindside recupera esa demanda antes de pronosticar.**
 
 Proyecto final integrador · Diplomado en Machine Learning y Deep Learning Aplicado ·
 FIUNA 2026.
@@ -170,8 +173,8 @@ obvio de leer y habría abierto la puerta a que los pines se desincronicen en si
 ### Verificado
 
 ```
-dfcore-api   Up (healthy)   127.0.0.1:8000->8000/tcp
-dfcore-app   Up (healthy)   127.0.0.1:8501->8501/tcp
+blindside-api   Up (healthy)   127.0.0.1:8000->8000/tcp
+blindside-app   Up (healthy)   127.0.0.1:8501->8501/tcp
 ```
 
 `/health` responde con el modelo cargado, `/series` devuelve el catálogo, Streamlit responde en
@@ -198,8 +201,8 @@ numba vía umap-learn) no publican wheels para 3.13 ni 3.14, y desfijarlos para 
 rompería la reproducibilidad que ese archivo está protegiendo.
 
 ```bash
-git clone https://github.com/FrancoCazal/demand-forecasting-core.git
-cd demand-forecasting-core
+git clone https://github.com/FrancoCazal/blindside-core.git
+cd blindside-core
 
 python3.11 -m venv .venv
 # Windows
@@ -229,13 +232,13 @@ ocho folds sobre 400.000 filas cada uno, así que son decenas de minutos.
 ## Estructura del repositorio
 
 ```
-demand-forecasting-core/
+blindside-core/
 ├── data/
 │   ├── raw/          # descarga original (no commiteado)
 │   ├── interim/      # subconjunto submuestreado (no commiteado)
 │   ├── processed/     # demanda latente recuperada + features (no commiteado)
 │   └── sample/       # muestra chica (SI commiteada)
-├── src/dfcore/
+├── src/blindside/
 │   ├── config.py      # rutas, semilla, economia, parametros de pronostico
 │   ├── data/          # schema.py (CONTRATO 1), freshretail.py, loaders.py
 │   ├── features/      # calendar.py, lags.py, build.py (anclado en el origen)
@@ -261,9 +264,9 @@ paralelos producen piezas que no encajan.
 
 | Contrato | Archivo | Qué fija |
 |---|---|---|
-| Esquema de datos | `src/dfcore/data/schema.py` | Columnas, tipos, granularidad, jerarquías |
-| Interfaz de modelo | `src/dfcore/models/base.py` | `fit(history)` / `predict(future)`, artefacto |
-| Resultado de backtest | `src/dfcore/evaluate/contracts.py` | Forma única que consumen métricas y dashboard |
+| Esquema de datos | `src/blindside/data/schema.py` | Columnas, tipos, granularidad, jerarquías |
+| Interfaz de modelo | `src/blindside/models/base.py` | `fit(history)` / `predict(future)`, artefacto |
+| Resultado de backtest | `src/blindside/evaluate/contracts.py` | Forma única que consumen métricas y dashboard |
 | API | `api/schemas.py` | Request y response Pydantic |
 
 El segundo es el que hace estructural el diseño antifugas: un modelo recibe `history` (hasta el

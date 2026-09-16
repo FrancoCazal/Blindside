@@ -11,11 +11,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dfcore.data import schema as S
-from dfcore.features import build as fb
-from dfcore.features import calendar as cal
-from dfcore.features import lags as lg
-from dfcore.validation.splits import Fold, RollingOriginSplitter, rotation_bands
+from blindside.data import schema as S
+from blindside.features import build as fb
+from blindside.features import calendar as cal
+from blindside.features import lags as lg
+from blindside.validation.splits import Fold, RollingOriginSplitter, rotation_bands
 
 
 # --- Calendario ---------------------------------------------------------
@@ -74,9 +74,9 @@ def test_trend_is_consistent_between_training_and_inference(
     modelo al entrenar contra lo que ve al predecir, atravesando el ensamblado
     supervisado y el estado de origen congelado.
     """
-    from dfcore.evaluate.backtest import _future_index
-    from dfcore.models.linear import RidgeForecaster
-    from dfcore.validation.splits import Fold
+    from blindside.evaluate.backtest import _future_index
+    from blindside.models.linear import RidgeForecaster
+    from blindside.validation.splits import Fold
 
     dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
     origin = dates[-8]

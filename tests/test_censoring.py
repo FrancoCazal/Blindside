@@ -13,9 +13,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dfcore import config as cfg
-from dfcore.data import schema as S
-from dfcore.decision import censoring as cen
+from blindside import config as cfg
+from blindside.data import schema as S
+from blindside.decision import censoring as cen
 
 
 def test_clean_days_are_never_modified(recovered_panel: pd.DataFrame) -> None:

@@ -84,7 +84,7 @@ jobs:
         # Verifica que `make backtest` produzca un MASE de baseline. Con 60 series
         # y 3 origenes: es una prueba de humo del pipeline, no un resultado.
         run: |
-          python -m dfcore.evaluate.backtest \
+          python -m blindside.evaluate.backtest \
             --prefer-sample --n-origins 3 --min-train-days 42 \
             --out /tmp/metrics.md
           grep -q "MASE" /tmp/metrics.md

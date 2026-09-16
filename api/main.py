@@ -33,10 +33,10 @@ import pandas as pd
 from api import schemas as sc
 from fastapi import FastAPI, HTTPException, status
 
-from dfcore import __version__
-from dfcore import config as cfg
-from dfcore.data import loaders
-from dfcore.data import schema as S
+from blindside import __version__
+from blindside import config as cfg
+from blindside.data import loaders
+from blindside.data import schema as S
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Sequence
@@ -51,6 +51,9 @@ STATE: dict[str, Any] = {
     "model_name": None,
     "trained_until": None,
     "coverage_empirical": None,
+    #: Motivo por el que el artefacto no se pudo cargar, si existe pero fallo.
+    #: Distingue "no hay modelo" de "hay uno y esta roto", que se arreglan distinto.
+    "model_error": None,
 }
 
 
@@ -68,29 +71,53 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.warning("sin datos: %s", exc)
 
     artifact = cfg.ARTIFACTS / "model.joblib"
-    if artifact.exists():
-        from dfcore.models.base import Forecaster
-
-        model = Forecaster.load(artifact)
-        STATE["model"] = model
-        STATE["model_name"] = model.name
-        STATE["trained_until"] = (
-            model.last_train_date.date() if model.last_train_date is not None else None
-        )
-        log.info("modelo '%s' cargado de %s", model.name, artifact)
-        if STATE["panel"] is not None:
-            _check_model_matches_panel(model, STATE["panel"])
-    else:
+    if not artifact.exists():
         log.warning(
             "no hay artefacto en %s; /forecast y /reorder van a responder 503",
             artifact,
         )
+    else:
+        # Un artefacto ilegible **no puede tumbar la API**. Antes si lo hacia, y lo
+        # expuso el rename de `dfcore` a `blindside`: joblib graba la ruta del
+        # modulo dentro del pickle, asi que todo .joblib anterior al rename murio
+        # con `ModuleNotFoundError: No module named 'dfcore'` y el contenedor
+        # entraba en bucle de reinicio.
+        #
+        # La misma falla aparece con cualquier desfasaje entre el artefacto y el
+        # codigo: una clase renombrada, un modulo movido, una version de
+        # scikit-learn distinta de la que serializo. Es una condicion esperable en
+        # operacion, no una excepcion excepcional, asi que se degrada a
+        # `model_loaded: false` con el motivo a la vista y los endpoints que
+        # dependen del modelo responden 503. El dashboard sigue funcionando porque
+        # lee los parquet directamente.
+        try:
+            from blindside.models.base import Forecaster
+
+            model = Forecaster.load(artifact)
+        except Exception as exc:  # noqa: BLE001 - cualquier fallo de carga degrada igual
+            STATE["model_error"] = f"{type(exc).__name__}: {exc}"
+            log.error(
+                "el artefacto %s existe pero no se pudo cargar (%s). La API arranca "
+                "sin modelo. Si acabas de renombrar el paquete o cambiar versiones, "
+                "reentrenar con `make train`.",
+                artifact,
+                STATE["model_error"],
+            )
+        else:
+            STATE["model"] = model
+            STATE["model_name"] = model.name
+            STATE["trained_until"] = (
+                model.last_train_date.date() if model.last_train_date is not None else None
+            )
+            log.info("modelo '%s' cargado de %s", model.name, artifact)
+            if STATE["panel"] is not None:
+                _check_model_matches_panel(model, STATE["panel"])
     yield
     STATE.clear()
 
 
 app = FastAPI(
-    title="demand-forecasting-core",
+    title="Blindside",
     version=__version__,
     summary=(
         "Pronostico de demanda de perecederos con recuperacion de demanda censurada "
@@ -106,15 +133,17 @@ app = FastAPI(
 # --------------------------------------------------------------------------
 def _require_model():
     model = STATE.get("model")
-    if model is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=(
-                "no hay modelo cargado. Entrenar y serializar en "
-                f"{cfg.ARTIFACTS / 'model.joblib'}"
-            ),
-        )
-    return model
+    if model is not None:
+        return model
+    # El mensaje distingue los dos casos porque se arreglan distinto.
+    error = STATE.get("model_error")
+    detail = (
+        f"el artefacto existe pero no se pudo cargar ({error}). Suele ser desfasaje "
+        "entre el artefacto y el codigo: reentrenar con `make train`."
+        if error
+        else f"no hay modelo cargado. Entrenar y serializar en {cfg.ARTIFACTS / 'model.joblib'}"
+    )
+    raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
 
 
 def _require_panel() -> pd.DataFrame:
@@ -221,6 +250,7 @@ def health() -> sc.Health:
         model_loaded=STATE.get("model") is not None,
         model_name=STATE.get("model_name"),
         trained_until=STATE.get("trained_until"),
+        model_error=STATE.get("model_error"),
     )
 
 
@@ -286,7 +316,7 @@ def reorder(req: sc.ReorderRequest) -> sc.ReorderResponse:
     La salida del modelo **es** la orden. No es un pronostico que alguien tenga que
     interpretar y despues ajustar a mano con un stock de seguridad.
     """
-    from dfcore.decision.newsvendor import critical_fraction
+    from blindside.decision.newsvendor import critical_fraction
 
     panel = _require_panel()
     model = _require_model()
@@ -299,7 +329,7 @@ def reorder(req: sc.ReorderRequest) -> sc.ReorderResponse:
     if hasattr(model, "reorder_quantity"):
         qty = model.reorder_quantity(future, economics=economics)
     elif hasattr(model, "predict_quantile") and getattr(model, "supports_quantiles", False):
-        from dfcore.decision.newsvendor import optimal_order_from_quantiles
+        from blindside.decision.newsvendor import optimal_order_from_quantiles
 
         quantiles = getattr(model, "quantiles", cfg.FORECAST.quantiles)
         qty = optimal_order_from_quantiles(
@@ -342,7 +372,7 @@ def backtest() -> sc.BacktestResponse:
     Lee `reports/backtest_models.parquet`, que produce `make models`. No corre el
     backtest en el request: son minutos de entrenamiento y una API no es el lugar.
     """
-    from dfcore.evaluate import metrics as M
+    from blindside.evaluate import metrics as M
 
     path = cfg.REPORTS / "backtest_models.parquet"
     if not path.exists():
@@ -374,7 +404,7 @@ def backtest() -> sc.BacktestResponse:
 @app.get("/censoring", tags=["evaluacion"])
 def censoring() -> dict[str, Any]:
     """Resumen de censura del panel: observado contra latente recuperado."""
-    from dfcore.decision.censoring import censoring_report
+    from blindside.decision.censoring import censoring_report
 
     panel = _require_panel()
     report = censoring_report(panel)
@@ -391,7 +421,7 @@ def censoring() -> dict[str, Any]:
 @app.get("/", include_in_schema=False)
 def root() -> dict[str, str]:
     return {
-        "name": "demand-forecasting-core",
+        "name": "blindside-core",
         "version": __version__,
         "docs": "/docs",
         "warning": "sin autenticacion; no exponer a una red publica",

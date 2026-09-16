@@ -11,11 +11,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dfcore import config as cfg
-from dfcore.data import schema as S
-from dfcore.decision import policy as pol
-from dfcore.evaluate import contracts as C
-from dfcore.models.base import quantile_col
+from blindside import config as cfg
+from blindside.data import schema as S
+from blindside.decision import policy as pol
+from blindside.evaluate import contracts as C
+from blindside.models.base import quantile_col
 
 
 def _fake_result(n_series: int = 12, n_days: int = 6, seed: int = 0) -> pd.DataFrame:
