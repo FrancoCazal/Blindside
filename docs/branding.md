@@ -49,6 +49,28 @@ Estas no son preferencias estéticas, son separación de territorio:
 - **Cero estética brutalista.** Es Urban Attic.
 - **Cero módulos ni menú de ERP.** Es Focal Point.
 
+### La restricción dura: el registro de terminal está doblemente ocupado
+
+Confirmado con el autor. **WhisperDocs** es consola futurista monocromática: azul oscuro con
+blanco y negro, todo muy cuadrado, registro Windows Vista. Y **francocazal.com** también usa el
+registro de terminal, con `$ whoami`, `franco@prod:~` y `$ ls ~/work`.
+
+O sea que el lenguaje de consola ya aparece dos veces en el portfolio. Blindside no puede ser la
+tercera, y esto elimina un conjunto grande de decisiones que de otro modo eran tentadoras para un
+panel denso:
+
+| Prohibido | Por qué |
+|---|---|
+| Fondo oscuro como expresión canónica | Es WhisperDocs |
+| Azul oscuro en cualquier rol protagónico | Es WhisperDocs |
+| Paleta monocromática | Es WhisperDocs |
+| Monoespaciada como recurso estético | WhisperDocs y el sitio personal |
+| Prompt, cursor parpadeante, scanlines, glow | Registro de consola |
+| Bordes gruesos y cajas duras estilo Vista | Es WhisperDocs |
+| Cromado, vidrio, gradientes lustrosos | Vista |
+
+Queda poco margen por el lado oscuro-técnico, y eso es bueno: fuerza la decisión que sigue.
+
 ---
 
 ## 3. El concepto visual: la brecha es el sujeto
@@ -106,28 +128,88 @@ en que se muestra la corrección de censura.
 | Pronóstico e intervalo | Futuro | Distinto del pasado, sin competir con el acento |
 | Alerta | Series que requieren atención | Reservado, y **no** puede ser el acento de recuperado |
 
-### Dirección recomendada: ámbar sobre pizarra fría
+### Dirección recomendada: el registro corregido
 
-Un acento **cálido de alta croma** — ámbar, ascua — sobre una base de grises fríos.
+**La interfaz es un registro de medición impreso, y la demanda recuperada es la corrección
+anotada encima.** Papel cálido, reglas finas, tablas regladas, y un único acento de anotación.
 
-Tres razones, en orden:
+Es la dirección que propongo después de confirmar que WhisperDocs es consola oscura monocromática,
+y la elijo por cinco razones que van de la más fuerte a la más débil:
 
-1. La demanda recuperada tiene que leerse como algo que se enciende sobre un fondo apagado. Cálido
-   sobre frío hace eso sin trucos.
-2. Evita por completo la paleta por defecto de las herramientas de IA, que va a violeta, índigo,
-   teal o verde. Ese es el territorio donde probablemente ya está WhisperDocs.
-3. Cadena de frío invita a azules y celestes, que es la decisión obvia y por eso mismo la
-   equivocada: te deja igual a cualquier dashboard de logística.
+**1. Encoda la tesis, no la decora.** El proyecto sostiene que el registro del ERP está mal y que
+esto es la corrección. Dibujar la demanda recuperada como una anotación sobre un registro impreso
+*es* el argumento. El rojo de corrección sobre el informe ya significa eso culturalmente, sin que
+haya que explicarlo.
 
-**Restricción sobre el ámbar:** no puede ser también el color de alerta. Si «recuperado» y
-«atención» comparten hue, se pierde la lectura de los dos. La alerta tiene que resolverse por otro
-canal, probablemente forma o posición antes que color.
+**2. Es el contraste máximo contra WhisperDocs.** Consola oscura monocromática contra registro
+claro con un acento. No hay forma de confundirlos ni de reojo.
+
+**3. Es la decisión menos obvia y por lo tanto la que se recuerda.** Prácticamente toda herramienta
+de datos y de IA en 2026 va oscura. Ir claro es lo diferenciado, y además es lo que hace un
+instrumento de medición serio: los papers, los informes de laboratorio y los registros de
+calibración son claros.
+
+**4. Resuelve mejor la tensión técnica de la sección 5.** Un lavado de sombra de 8 px es más fácil
+de hacer visible sobre papel que sobre fondo oscuro, y un gráfico con el fondo entero sombreado
+sigue siendo legible en claro. Sobre negro, un sombreado que se vea a 8 px vuelve ilegible el caso
+de 95 días.
+
+**5. Se aleja del reflejo obvio del dominio.** Cadena de frío invita a azules y celestes, que es la
+decisión evidente y por eso mismo la equivocada: te deja igual a cualquier dashboard de logística,
+y encima cerca del azul de WhisperDocs.
+
+### Paleta de arranque
+
+Valores para empezar el draft, no para cerrarlo. La lógica de los roles es lo que importa.
+
+| Rol | Valor | Nota |
+|---|---|---|
+| Papel | `#FAF8F5` | Blanco cálido, no puro. El frío llevaría al eje azul |
+| Papel hundido | `#F2EEE8` | Insets, encabezados de tabla, franjas alternas |
+| Tinta | `#1A1A18` | Casi negro cálido. Texto principal |
+| **Observado** | `#8A8A84` | Gris cálido medio. Es «lo que hay», no «lo que está bien» |
+| **Recuperado** | `#D6451A` | **Vermellón de anotación. El único saturado del sistema** |
+| Quiebre | Tinta al 7 % | Lavado neutro. Sobre papel lee como sombra, que es exacto |
+| Pronóstico | Tinta al 55 %, trazo discontinuo | Futuro distinto del pasado |
+| Banda conformal | Recuperado al 12 % | Deriva del acento, no compite con él |
+| Reglas | Tinta al 12 % | Hairlines. Nunca bordes gruesos |
+
+**Dos restricciones sobre el acento:**
+
+El vermellón **no puede ser también el color de alerta**. Si «recuperado» y «atención» comparten
+hue se pierden los dos. La alerta se resuelve por forma y peso — un marcador lleno, la fila en
+negrita — antes que por color. Si hace falta un hue, que sea un oro oscuro y sobrio, lejos del
+vermellón.
+
+Y el vermellón **no se usa en ningún otro lugar**: ni en botones, ni en links, ni en el logo en
+contexto de interfaz. Reservarlo por completo es lo que hace que accionar el toggle inunde la
+pantalla de un color que no estaba.
+
+> Los ratios de contraste hay que verificarlos en el draft. `#8A8A84` sobre `#FAF8F5` no llega a
+> 4.5:1, así que sirve para trazos de gráfico pero **no** para texto. El texto secundario necesita
+> bajar a algo del orden de `#5F5F59`.
+
+### Lenguaje de forma
+
+Contra las cajas duras de Vista, el registro impreso pide lo contrario:
+
+- **Reglas finas en vez de bordes.** Una tabla se estructura con hairlines horizontales, no con
+  cajas cerradas.
+- **Radio de esquina mínimo o nulo, pero sin peso.** Lo cuadrado no es el problema; el problema es
+  lo cuadrado *grueso*. Un borde de 1 px al 12 % de opacidad es cuadrado y no es Vista.
+- **Nada de sombras de elevación, glow, vidrio ni gradientes.** Un instrumento es plano.
+- **La densidad se logra con alineación, no con líneas.** Si todo alinea a una grilla, hacen falta
+  muchas menos reglas.
 
 ### Modo claro y oscuro
 
-Los dos, y está en el plan. La consecuencia real no es duplicar tokens: es que **el sombreado de
-quiebre tiene que funcionar en ambos**. Un gris translúcido que se lee bien sobre blanco desaparece
-sobre fondo oscuro. Ese sombreado hay que resolverlo dos veces, no escalarlo.
+El claro es la **expresión canónica**: es el que va a las capturas, al case study y a las slides.
+El oscuro existe porque el plan lo pide y porque un operador que mira el panel todo el día lo va a
+querer, pero no es la cara de la marca.
+
+Consecuencia real, y no es duplicar tokens: **el lavado de quiebre hay que resolverlo dos veces.**
+Un translúcido neutro que funciona sobre papel desaparece sobre fondo oscuro. Y en oscuro el
+vermellón necesita subir en luminosidad para no apagarse.
 
 ---
 
@@ -175,8 +257,16 @@ La elección es tuya. Las restricciones no:
   dataset está normalizado.
 - **Separar la cara de interfaz de la cara de datos** ayuda mucho en un panel denso, pero no es
   obligatorio. Si se usa una sola, tiene que tener cifras tabulares buenas.
-- **Sin monoespaciada como recurso estético.** Tu sitio ya usa el registro de terminal (`$ whoami`,
-  `franco@prod:~`). Repetirlo acá diluye los dos.
+- **Sin monoespaciada como recurso estético, y esto es firme.** El registro de terminal ya aparece
+  dos veces en el portfolio: WhisperDocs es consola monocromática y francocazal.com usa `$ whoami`
+  y `franco@prod:~`. Una tercera vez deja de ser una firma y pasa a ser un tic.
+
+  La distinción que importa: **monoespaciada para código sí, monoespaciada como estética no.** Un
+  bloque de `make backtest` en el README va en mono porque es código. Los números de la tabla de
+  reposición van en cifras tabulares de una proporcional, no en mono.
+- **Dirección que acompaña al registro impreso:** una proporcional con buenas cifras tabulares para
+  los datos, y si se usan dos caras, una con algo de personalidad editorial para los títulos. Serif
+  o sans es decisión tuya; lo que no va es la estética de consola.
 
 ---
 
@@ -241,17 +331,41 @@ superficies se parecen, la de React deja de justificar su existencia.
 
 ---
 
-## 10. Lo que falta para cerrar
+## 10. Contraste contra el portfolio, resumido
 
-**Necesito un dato tuyo.** WhisperDocs no tiene homepage ni notas de diseño en el README, así que
-no puedo ver su identidad. Para poner una lista dura de «no usar», decime su paleta y su tipografía,
-o mandame una captura. Mi sospecha es que va a violeta, índigo o teal sobre casi negro, que es el
-default de las apps de LLM; si es así, la dirección de ámbar sobre pizarra fría ya resuelve el
-cruce. Si WhisperDocs usa ámbar o naranja, hay que rotar el acento.
+La tabla que conviene tener al lado mientras se diseña:
 
-**Decisiones abiertas para el draft:**
+| Eje | WhisperDocs | Blindside |
+|---|---|---|
+| Fondo canónico | Azul oscuro, casi negro | Papel cálido |
+| Croma | Monocromático | Neutro + **un** acento reservado |
+| Registro | Consola futurista | Registro de medición impreso |
+| Forma | Cuadrado grueso, Vista | Reglas finas, plano |
+| Tipografía | Monoespaciada estética | Proporcional con cifras tabulares |
+| Interacción central | Conversar | Accionar un toggle y ver cambiar todo |
+| Densidad | Columna de lectura | Grilla a todo el ancho |
 
-1. ¿Cuál de las tres salidas del sombreado de quiebre (sección 5)?
+Si el draft cumple esa tabla, no hay forma de confundirlos.
+
+## 11. Decisiones abiertas para el draft
+
+1. ¿Cuál de las tres salidas del sombreado de quiebre de la sección 5? Mi voto: ancho mínimo en el
+   gráfico hero, más la franja de horas de quiebre debajo.
 2. ¿Una cara tipográfica o dos?
-3. ¿Modo claro y oscuro desde el arranque, o claro primero?
+3. ¿El vermellón `#D6451A` o rotar el acento? Lo que no se negocia es que sea uno solo, cálido y
+   exclusivo de la demanda recuperada.
 4. ¿La marca se anima en el toggle, o queda estática?
+5. ¿El oscuro entra en la primera versión o queda para después? El claro es el canónico de todos
+   modos.
+
+## 12. Riesgo de esta dirección, dicho de entrada
+
+Un panel claro para uso operativo diario tiene un contra real: mucha gente de operaciones prefiere
+oscuro, y hay quien lee «claro» como menos técnico. La mitigación es que el oscuro exista, y el
+argumento de fondo es que la marca no se elige por preferencia de uso sino por legibilidad en el
+portfolio: la expresión canónica tiene que distinguirse de WhisperDocs a primera vista, y ahí el
+claro gana sin discusión.
+
+Si en el draft el claro no cierra, la alternativa **no** es volver a oscuro-azul. Es oscuro cálido,
+tinta casi negra con matiz cálido y el mismo vermellón, que mantiene la separación por temperatura
+aunque pierda el contraste de valor.
