@@ -68,7 +68,9 @@ MANIFEST_FILE = "subsample_manifest.json"
 # --------------------------------------------------------------------------
 # Descarga
 # --------------------------------------------------------------------------
-def ensure_raw(*, raw_dir: Path | None = None, splits: Sequence[str] = ("train", "eval")) -> dict[str, Path]:
+def ensure_raw(
+    *, raw_dir: Path | None = None, splits: Sequence[str] = ("train", "eval")
+) -> dict[str, Path]:
     """Descarga los parquet a `data/raw/` si no estan. Devuelve las rutas.
 
     Usa la cache de `huggingface_hub`, asi que repetir la llamada no re-descarga.
@@ -345,7 +347,9 @@ def make_sample(*, interim_dir: Path, out_dir: Path, n_series: int, seed: int) -
 # CLI
 # --------------------------------------------------------------------------
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--out", type=Path, default=cfg.DATA_INTERIM, help="directorio de salida")
     p.add_argument("--seed", type=int, default=cfg.SUBSAMPLE.seed)
     p.add_argument("--n-series", type=int, default=cfg.SUBSAMPLE.n_series)

@@ -41,10 +41,33 @@ src = ["src", "tests"]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "PD"]
 ignore = [
     "PD901", # permitir `df` como nombre de variable
+    # Los tres alias de abajo son convencion del proyecto y estan en todos los
+    # modulos: `schema as S`, `metrics as M`, `contracts as C`. Los nombres de
+    # columna se referencian cientos de veces (`S.SERIES_ID`, `C.Y_PRED`), y un
+    # alias de una letra los deja legibles sin ocupar media linea.
+    "N812", # modulo importado con alias en mayuscula
+    # `X` para la matriz de features e `y` para el target es la convencion
+    # universal de scikit-learn. Renombrarlos a `x` volveria el codigo mas
+    # extrano de leer para cualquiera que venga del ecosistema.
+    "N803", # argumento en mayuscula
+    "N806", # variable en mayuscula dentro de funcion
+    # `nunique() > 1` es exactamente lo que se quiere en los asserts antifugas:
+    # detectar si una feature varia dentro de un grupo. La alternativa que
+    # sugiere la regla no expresa lo mismo.
+    "PD101",
+    # `pivot` es preferible a `pivot_table` en este proyecto, al revés de lo que
+    # sugiere la regla. Hay exactamente un valor por (origen, modelo): si
+    # apareciera un duplicado, `pivot` falla y `pivot_table` promediaría en
+    # silencio. Se quiere el que falla.
+    "PD010",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "notebooks/*" = ["E402"]
+# Los tests acceden a helpers privados a proposito: `cal._easter` se verifica
+# contra fechas conocidas porque un algoritmo de Pascua mal implementado no falla
+# de forma visible en ningun otro lugar.
+"tests/*" = ["SLF001"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

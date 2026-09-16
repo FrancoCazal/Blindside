@@ -1,0 +1,18 @@
+{
+  "derived_from": "data\\interim\\panel.parquet",
+  "source": "Dingdong-Inc/FreshRetailNet-50K",
+  "license": "CC BY 4.0 - atribucion a Dingdong-Inc",
+  "seed": 42,
+  "n_series": 60,
+  "n_rows": 5820,
+  "selection": "series con entre 5 % y 80 % de dias censurados",
+  "censoring_summary": {
+    "n_rows": 5820.0,
+    "n_series": 60.0,
+    "n_days": 97.0,
+    "share_censored_days": 0.4579037800687285,
+    "share_zero_sale_days": 0.02542955326460481,
+    "share_censored_and_zero": 0.020103092783505156,
+    "mean_oos_hours_when_censored": 6.721575984990619
+  }
+}

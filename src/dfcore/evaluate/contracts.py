@@ -56,6 +56,10 @@ BACKTEST_REQUIRED: Final[tuple[str, ...]] = (
     Y_PRED,
     Y_OBSERVED,
     S.IS_CENSORED,
+    # Fraccion del dia comercial sin quiebre. Viaja en el resultado porque es lo
+    # que permite **re-censurar** la prediccion y medir el sesgo de censura. Es
+    # informacion de evaluacion, del mismo tipo que `y_true`: el modelo no la ve.
+    S.AVAILABLE_WEIGHT,
     NAIVE_SCALE,
 )
 
@@ -72,6 +76,7 @@ BACKTEST_DTYPES: Final[dict[str, str]] = {
     Y_PRED: "float64",
     Y_OBSERVED: "float64",
     S.IS_CENSORED: "bool",
+    S.AVAILABLE_WEIGHT: "float64",
     NAIVE_SCALE: "float64",
     PRED_LO: "float64",
     PRED_HI: "float64",

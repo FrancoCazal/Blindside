@@ -247,8 +247,7 @@ def validate_panel(
         inconsistent = int((df[IS_CENSORED] != (df[OOS_HOURS_OPEN] > 0)).sum())
         if inconsistent:
             raise SchemaError(
-                f"{inconsistent} filas donde {IS_CENSORED} no coincide con "
-                f"{OOS_HOURS_OPEN} > 0"
+                f"{inconsistent} filas donde {IS_CENSORED} no coincide con " f"{OOS_HOURS_OPEN} > 0"
             )
 
     if AVAILABLE_WEIGHT in df.columns:

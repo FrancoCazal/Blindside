@@ -326,34 +326,80 @@ def _stack(col: pd.Series, dtype: str) -> np.ndarray:
 # Medicion: sesgo de demanda re-censurada
 # --------------------------------------------------------------------------
 def recensored_bias(
-    y_true_observed: np.ndarray | pd.Series,
+    y_observed: np.ndarray | pd.Series,
+    y_pred_latent: np.ndarray | pd.Series,
+    *,
+    available_weight: np.ndarray | pd.Series,
+) -> float:
+    """Sesgo de demanda **re-censurada**. Es la metrica de la pieza de censura.
+
+    El nombre dice el procedimiento: se toma la prediccion de demanda **latente**,
+    se le vuelve a aplicar la censura que realmente ocurrio, y se compara contra
+    la venta que realmente se registro.
+
+        pred_recensurada = pred_latente x peso_disponible
+        bias = (mean(pred_recensurada) - mean(observada)) / mean(observada)
+
+    donde ``peso_disponible`` es la fraccion del dia comercial que no estuvo en
+    quiebre: 1,0 en un dia limpio, 0,0 en un dia entero sin stock.
+
+    Por que funciona. Si el modelo predijera la demanda latente verdadera, al
+    re-censurarla daria exactamente la venta observada, porque la venta observada
+    **es** la demanda latente por la fraccion de dia disponible. Un modelo
+    entrenado sobre la venta cruda aprendio un nivel deprimido, asi que su
+    prediccion re-censurada queda por debajo de la venta real y el sesgo sale
+    **negativo**. Ese negativo es el efecto spiral-down, medido.
+
+    Usar el patron real de quiebres para evaluar no es fuga: es informacion de
+    evaluacion, del mismo tipo que ``y_true``. El modelo nunca la ve.
+
+    Referencia de calibracion: CADRE reporta -8,1 % sin correccion y -1,3 % con
+    correccion sobre este mismo dataset
+    (https://www.mdpi.com/2071-1050/18/15/7642).
+
+    Ver tambien `clean_day_bias`, que mide otra cosa y no hay que confundir.
+    """
+    obs = np.asarray(y_observed, dtype="float64").reshape(-1)
+    pred = np.asarray(y_pred_latent, dtype="float64").reshape(-1)
+    weight = np.clip(np.asarray(available_weight, dtype="float64").reshape(-1), 0.0, 1.0)
+
+    denom = obs.mean()
+    if denom <= 0:
+        return float("nan")
+    recensored = pred * weight
+    return float((recensored.mean() - denom) / denom)
+
+
+def clean_day_bias(
+    y_observed: np.ndarray | pd.Series,
     y_pred: np.ndarray | pd.Series,
     *,
     is_censored: np.ndarray | pd.Series,
 ) -> float:
-    """Sesgo relativo medido **solo en dias limpios**, donde la verdad se conoce.
+    """Sesgo medido solo en los dias sin ninguna hora de quiebre.
 
-    Definicion operativa: en los dias sin ninguna hora de quiebre la venta
-    observada es la demanda real. Ahi se mide
+    Es intuitivo — ahi la venta observada **es** la demanda real, asi que hay
+    verdad de terreno — y por eso fue la primera definicion que se implemento en
+    este proyecto. Tiene un problema, y conviene tenerlo claro porque cambia como
+    se lee el numero.
 
-        bias = (mean(y_pred) - mean(y_obs)) / mean(y_obs)
+    **Los dias limpios no son una muestra aleatoria.** Un dia queda sin quiebre en
+    parte porque la demanda fue baja: se agota el stock cuando la gente compra
+    mucho. Asi que condicionar en "dia limpio" selecciona dias de demanda menor, y
+    un modelo que predice correctamente la demanda latente esperada va a
+    **sobrepredecir** en ese subconjunto sin estar equivocado.
 
-    Un modelo entrenado sobre la venta cruda da un valor **negativo**: aprendio
-    de una demanda deprimida por los quiebres y predice de menos incluso en los
-    dias en los que no hubo ninguno. Un modelo entrenado sobre demanda latente
-    recuperada deberia acercarse a cero.
+    Medido sobre las 3066 series: el modelo entrenado sobre venta cruda da -4,5 %
+    y el entrenado sobre demanda latente +7,0 %. Leido ingenuamente parece que la
+    correccion empeora las cosas; lo que pasa es que la metrica esta midiendo el
+    efecto de seleccion y no el de la censura.
 
-    Es la forma que tienen los numeros publicados de CADRE sobre este mismo
-    dataset, -8,1 % a -1,3 % (https://www.mdpi.com/2071-1050/18/15/7642), asi
-    que el resultado propio es comparable con un tercero en vez de autoevaluado.
-
-    Se mide en dias limpios a proposito: en los dias censurados no hay verdad de
-    terreno, y compararse contra la venta observada ahi premiaria justamente al
-    modelo sesgado.
+    Se conserva porque es informativa como diagnostico y porque hace explicito el
+    confundidor. La metrica que se reporta como resultado es `recensored_bias`.
     """
-    obs = np.asarray(y_true_observed, dtype="float64")
-    pred = np.asarray(y_pred, dtype="float64")
-    clean = ~np.asarray(is_censored, dtype=bool)
+    obs = np.asarray(y_observed, dtype="float64").reshape(-1)
+    pred = np.asarray(y_pred, dtype="float64").reshape(-1)
+    clean = ~np.asarray(is_censored, dtype=bool).reshape(-1)
     if clean.sum() == 0:
         return float("nan")
     denom = obs[clean].mean()
@@ -407,6 +453,7 @@ __all__ = [
     "HourlyProfileRecovery",
     "TobitEWMARecovery",
     "censoring_report",
+    "clean_day_bias",
     "get_recovery",
     "recensored_bias",
 ]

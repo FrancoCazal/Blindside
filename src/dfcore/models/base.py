@@ -112,9 +112,7 @@ class Forecaster(ABC):
         out = self._predict(future)
         return self._as_series(out, future)
 
-    def predict_quantile(
-        self, future: pd.DataFrame, quantiles: Sequence[float]
-    ) -> pd.DataFrame:
+    def predict_quantile(self, future: pd.DataFrame, quantiles: Sequence[float]) -> pd.DataFrame:
         """Cuantiles predichos, una columna por cuantil.
 
         Implementacion por defecto para modelos sin cuantiles nativos: devuelve
@@ -208,13 +206,27 @@ class SeriesLevelForecaster(Forecaster):
         # orden original por posiciones para no depender del indice.
         order = np.empty(len(future), dtype="int64")
         for sid, grp in future.groupby(S.SERIES_ID, observed=True, sort=False):
-            state = self._state.get(str(sid))
             steps = grp["h"].to_numpy(dtype="int64")
-            if state is None:
-                vals = np.full(steps.shape[0], self._global_fallback)
-            else:
-                vals = self._predict_series(state, steps)
             n = steps.shape[0]
+            # La pertenencia se pregunta con `in` y no con `.get() is None`.
+            # Un `_fit_series` puede devolver `None` legitimamente cuando la serie
+            # no necesita estado — `ZeroForecaster` es el caso — y con `.get()`
+            # eso seria indistinguible de "serie nunca vista", asi que el modelo
+            # caeria al promedio global en vez de a su propia prediccion. El bug
+            # es silencioso: el modelo devuelve numeros plausibles y equivocados.
+            if str(sid) not in self._state:
+                vals = np.full(n, self._global_fallback, dtype="float64")
+            else:
+                vals = np.asarray(
+                    self._predict_series(self._state[str(sid)], steps), dtype="float64"
+                ).reshape(-1)
+                if vals.shape[0] != n:
+                    # Sin este chequeo numpy difunde un array de largo 1 sobre los
+                    # `n` pasos y el error pasa desapercibido.
+                    raise ValueError(
+                        f"{self.name}: _predict_series devolvio {vals.shape[0]} "
+                        f"valores para {n} pasos de la serie {sid}"
+                    )
             out[pos : pos + n] = vals
             order[pos : pos + n] = grp.index.to_numpy()
             pos += n

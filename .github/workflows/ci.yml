@@ -1,0 +1,112 @@
+name: CI
+
+# La CI corre **sin descargar el dataset**. Todo lo que necesita esta en
+# data/sample/, que va commiteado, y los tests generan su propio panel sintetico.
+# Un pipeline que depende de bajar 115 MB de HuggingFace en cada push falla el dia
+# que el repo remoto cambia de nombre, y falla por algo que no es el codigo.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONUTF8: "1"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar ruff con la version fija
+        run: pip install "ruff==0.6.9"
+
+      - run: ruff check src tests api
+      - run: ruff format --check src tests api
+
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 y 3.12: los pines de requirements.txt tienen wheels en las dos.
+        # 3.13 y 3.14 quedan fuera a proposito, no por comodidad: numpy 2.0.2,
+        # torch 2.4.1 y numba (via umap-learn) no publican wheels ahi, y
+        # desfijar versiones para que la CI pase rompe la reproducibilidad, que
+        # es justamente lo que el requirements.txt fijo esta protegiendo.
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Instalar dependencias fijas
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e . --no-deps
+
+      - name: Verificar que la muestra commiteada existe
+        # Si esto falla, el repo dejo de poder correrse sin descargar datos, que
+        # es una promesa del README.
+        run: |
+          test -f data/sample/panel.parquet
+          test -f data/sample/demand.parquet
+          test -f data/sample/subsample_manifest.json
+
+      - name: Tests antifugas
+        # Se corren aparte y primero. Son los que sostienen la afirmacion central
+        # del proyecto, asi que conviene verlos fallar solos en vez de mezclados.
+        run: pytest -m leakage -v
+
+      - name: Suite completa
+        run: pytest -m "not slow" -q
+
+      - name: Camino critico de punta a punta sobre la muestra
+        # Verifica que `make backtest` produzca un MASE de baseline. Con 60 series
+        # y 3 origenes: es una prueba de humo del pipeline, no un resultado.
+        run: |
+          python -m dfcore.evaluate.backtest \
+            --prefer-sample --n-origins 3 --min-train-days 42 \
+            --out /tmp/metrics.md
+          grep -q "MASE" /tmp/metrics.md
+          grep -q "seasonal_naive" /tmp/metrics.md
+
+  slow:
+    name: Tests lentos (modelos)
+    runs-on: ubuntu-latest
+    # Solo en push a main: entrenan LightGBM y no aportan en cada iteracion de PR.
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e . --no-deps
+
+      - run: pytest -m slow -v
