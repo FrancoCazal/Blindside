@@ -326,6 +326,48 @@ verificado dentro del contenedor, avisa «el modelo conoce 60 de las 3066 series
 
 ---
 
+## D16 · El proyecto se llama Blindside
+
+**Decisión.** El nombre es **Blindside**. El paquete Python pasa de `dfcore` a `blindside`, y el
+repo de `demand-forecasting-core` a `blindside-core`.
+
+**Por qué ese nombre.** Los quiebres de stock te toman del lado ciego: la venta cae a cero y el
+ERP no registra que hubo demanda. El nombre apunta al punto ciego de los datos, que es el
+diferencial del proyecto, y no al pronóstico, que es la parte commodity donde ya compiten Prophet,
+Chronos, Nixtla y Darts.
+
+Frase de defensa, que sale sola y es el test que el nombre tiene que pasar:
+
+> «Los quiebres de stock te toman del lado ciego: la venta cae a cero y tu ERP no registra que
+> hubo demanda. Blindside recupera esa demanda antes de pronosticar.»
+
+**Alternativas descartadas, y por qué.**
+
+| Nombre | Motivo del descarte |
+|---|---|
+| `trAIl` | El infijo `AI` no sobrevive en minúsculas, o sea que desaparece en imports, URLs, pip y al pronunciarlo. Y grita AI en un proyecto sin un solo LLM ni agente, lo que lee como sobreventa |
+| Vestige | Colisión triple: `samvallad33/vestige` tiene 624 estrellas, está activo, y vive en agentic AI y MCP, que es la audiencia declarada del portfolio |
+| Blindsight | Mejor metáfora que Blindside (el fenómeno neurológico real), pero el paquete está tomado por un proyecto activo de MCP e incident response. Misma trampa que Vestige |
+| Sonar | La mejor metáfora de todas y el nombre más inusable: SonarQube y SonarSource dominan el término en software. Un revisor asume análisis estático antes de leer la descripción |
+| Tobit | Es *el* modelo econométrico para datos censurados, pero atrae justo a quien va a notar que `TobitEWMARecovery` es una heurística con EWMA y no una verosimilitud censurada. Prometer precisión técnica que el código no entrega |
+| Penumbra | Buena metáfora, PyPI squatteado desde 2019 y ruido de marca con penumbra.zone |
+| Occlude | El paquete está activo con una herramienta de blur de video por recato religioso. Adyacencia incómoda |
+
+**Un patrón que apareció en la búsqueda y conviene registrar.** La escena de observabilidad
+agéntica está consumiendo rápido todo el territorio semántico de «conocimiento oculto»: Vestige y
+Blindsight cayeron por lo mismo, los dos tomados por proyectos de MCP que razonan sobre lo que no
+se puede ver. Si en el futuro hace falta otro nombre de esa familia, hay que verificar antes.
+
+**Nota sobre PyPI, que no fue un filtro.** Publicar en PyPI es Fase 2, después de la defensa
+(sección 16 del plan, bajo «no empezar antes»). Lo que sí hace falta y ya está es `pyproject.toml`
+más `pip install -e .`, que es instalación editable local y nunca toca internet: es lo que permite
+que tests, notebooks, API, app y contenedor importen el paquete sin manipular `sys.path` (ver D3).
+Casi toda palabra inglesa común está squatteada en PyPI por algo muerto de 2010-2014, así que el
+filtro real nunca fue el paquete sino la existencia de un proyecto activo y prominente en la misma
+audiencia. `blindside` está libre en PyPI de todos modos.
+
+---
+
 ## Roadmap
 
 Fuera del alcance de la entrega, en orden de valor:
