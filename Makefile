@@ -1,4 +1,4 @@
-.PHONY: help setup data recover sample lint format test test-leakage backtest models train ablation app api clean \
+.PHONY: help setup data recover sample lint format test test-leakage backtest models models-fast train ablation notebooks app api clean \
         front front-setup front-build front-test api-schema \
         docker-build docker-build-full docker-up docker-down docker-logs docker-ps docker-shell docker-test docker-data
 
@@ -20,9 +20,11 @@ help:
 	@echo "test          - pytest (excluye los marcados slow)"
 	@echo "test-leakage  - solo los tests antifugas (los de la defensa)"
 	@echo "backtest      - baselines -> reports/metrics.md, imprime el MASE"
-	@echo "models        - baselines + LightGBM + lineales -> reports/metrics.md"
+	@echo "models        - baselines + LightGBM + lineales + CQR -> reports/metrics.md (~45 min)"
+	@echo "models-fast   - idem sin los modelos cuantilicos, para iterar"
 	@echo "train         - entrena y serializa los DOS artefactos (observado y recuperado)"
 	@echo "ablation      - ablacion de censura: venta observada vs demanda latente"
+	@echo "notebooks     - ejecuta los 6 notebooks en el lugar (~12 min)"
 	@echo "app           - levanta el dashboard Streamlit en localhost"
 	@echo "api           - levanta la API FastAPI en localhost"
 	@echo "clean         - borra caches y artefactos intermedios"
@@ -76,7 +78,22 @@ backtest:
 	$(PY) -m blindside.evaluate.backtest --out reports/metrics.md \
 		--save-result reports/backtest_baselines.parquet
 
+# Los dos modelos con intervalo van adentro a proposito. La cobertura empirica es
+# una de las tres metricas de exito declaradas del proyecto, y sin un modelo que
+# emita intervalos el reporte no la puede medir: quedaba como "sin medir" en la
+# interfaz. Van los dos y no solo el que se sirve porque la comparacion entre CQR
+# y el conformal de residuos es la evidencia de D21.
+# Cuesta: ~144 s por origen y por modelo cuantilico, o sea ~45 min en total.
 models:
+	$(PY) -m blindside.evaluate.backtest --out reports/metrics.md \
+		--models seasonal_naive naive croston_sba moving_average \
+		         seasonal_moving_average lgbm_global ridge \
+		         cqr_lgbm conformal_lgbm \
+		--save-result reports/backtest_models.parquet
+
+# Variante rapida, sin los modelos cuantilicos. Para iterar sobre el reporte sin
+# pagar los 45 minutos.
+models-fast:
 	$(PY) -m blindside.evaluate.backtest --out reports/metrics.md \
 		--models seasonal_naive naive croston_sba moving_average \
 		         seasonal_moving_average lgbm_global ridge \
@@ -87,6 +104,20 @@ train:
 
 ablation:
 	$(PY) -m blindside.evaluate.ablation --out reports/censoring_ablation.md
+
+# Ejecuta los seis notebooks en el lugar, en orden. Las salidas se commitean: un
+# notebook sin outputs obliga a correrlo para saber que muestra, y el punto de
+# tenerlos en el repo es que se puedan leer.
+# Tardan ~12 min en total; el 05 solo son 6, porque entrena tres variantes
+# conformales sobre la submuestra.
+notebooks:
+	$(PY) -m jupyter nbconvert --to notebook --execute --inplace \
+		notebooks/01_eda.ipynb \
+		notebooks/02_features_validacion.ipynb \
+		notebooks/03_modelos_backtest.ipynb \
+		notebooks/04_no_supervisado.ipynb \
+		notebooks/05_decision_conformal.ipynb \
+		notebooks/06_roi.ipynb
 
 app:
 	$(PY) -m streamlit run app/streamlit_app.py --server.address 127.0.0.1

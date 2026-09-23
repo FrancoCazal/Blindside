@@ -125,6 +125,44 @@ Ese default está elegido por medición y no por gusto; las cinco variantes eval
 `docs/decisiones.md` D19. Antes de esto las tres covariables llegaban en **NaN**, y el costo
 medido de eso era grande: ver la sección de antifugas.
 
+## Notebooks
+
+Seis, ejecutados y con salidas commiteadas, en `notebooks/`. Se leen en orden y cada uno cierra
+con qué consecuencia tiene lo que muestra sobre el resto del proyecto.
+
+| Notebook | Qué responde |
+|---|---|
+| `01_eda` | Qué hay en el panel, cómo se distribuye la demanda, cuánta censura hay, y la **verificación** de que la ventana comercial de 16 franjas reproduce el ≈20 % de la ficha |
+| `02_features_validacion` | Los ocho asserts antifugas corriendo, **cada uno con su fuga inyectada** para probar que la detecta |
+| `03_modelos_backtest` | El backtest de origen móvil, MASE con dispersión entre orígenes, y por qué el naive estacional da 1,10 y no 1,00 |
+| `04_no_supervisado` | PCA del catálogo, con la varianza explicada al lado. Y los dos huecos de M4 declarados |
+| `05_decision_conformal` | El óptimo del costo esperado cayendo en `q*`, y CQR contra el conformal de residuos |
+| `06_roi` | El ahorro en porcentaje, contra cuatro políticas, sin traducir a moneda |
+
+```bash
+make notebooks        # ejecuta los seis en orden, en el lugar
+```
+
+**La regla del directorio: los notebooks importan de `src/blindside` y no contienen lógica.** Si
+un cálculo vive en una celda, no tiene test y no llega a producción; cuando hace falta, va al
+paquete y el notebook lo llama. Es la razón por la que las celdas son cortas.
+
+Corren sobre una **submuestra declarada de 400 series** con la semilla del proyecto, salvo `01` y
+`04` que usan el panel completo. Los números oficiales salen de `make models` sobre las 3.066
+series con 8 orígenes; los notebooks muestran el mecanismo y dicen cuál es su alcance. Cuando el
+reporte oficial existe en `reports/`, `03` lo carga y compara las dos corridas.
+
+Dos cosas que aparecieron **al escribirlos**, y que quedaron dentro:
+
+- El test de alineación del target pasa con LightGBM y falla por poco con Ridge. No es un
+  desalineamiento —el pipeline es el mismo— sino que correr el target hacia atrás acerca la tarea
+  a una autorregresión pura, que para un modelo lineal es *más fácil*. La lección es que la
+  sensibilidad de ese test depende del modelo con el que se corre.
+- En la comparación de políticas, el stock de seguridad fijo **le gana al modelo** por 6 puntos.
+  Usa el cuantil real de cada serie, o sea conocimiento de oráculo, así que no es implementable ni
+  es una cota superior — pero acota cuánto del ahorro se puede atribuir al pronóstico diario en
+  vez de a haber elegido bien el cuantil.
+
 ## Resultados
 
 Medidos sobre **3066 series** tienda-producto (38 tiendas, 97 días), backtesting de origen
@@ -253,7 +291,7 @@ blindside-app   Up (healthy)   127.0.0.1:8501->8501/tcp
 `/_stcore/health`, y la suite corre dentro del contenedor:
 
 ```bash
-make docker-test    # 188 tests en la imagen del pipeline
+make docker-test    # 195 tests en la imagen del pipeline
 ```
 
 ### Seguridad del despliegue
@@ -320,8 +358,8 @@ blindside-core/
 │   ├── decision/      # censoring, conformal, newsvendor, policy
 │   ├── evaluate/      # contracts.py (CONTRATO 3), metrics, backtest, ablation
 │   └── explain/       # SHAP  [pendiente]
-├── notebooks/         # analisis; importan de src/, no contienen logica
-├── tests/             # 188 tests; test_leakage.py son los 8 items del checklist
+├── notebooks/         # 6 notebooks ejecutados; importan de src/, no contienen logica
+├── tests/             # 195 tests; test_leakage.py son los 8 items del checklist
 ├── app/               # streamlit_app.py, 7 pantallas
 ├── api/               # schemas.py (CONTRATO 4), main.py
 ├── frontend/          # React + Vite + TS; schema.d.ts generado del OpenAPI
