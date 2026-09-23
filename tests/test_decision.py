@@ -15,7 +15,7 @@ import pytest
 from blindside import config as cfg
 from blindside.data import schema as S
 from blindside.decision import newsvendor as nv
-from blindside.decision.conformal import ConformalForecaster
+from blindside.decision.conformal import ConformalForecaster, CQRForecaster
 from blindside.evaluate import contracts as C
 from blindside.evaluate import metrics as M
 from blindside.evaluate.backtest import run_backtest
@@ -649,3 +649,161 @@ def test_el_conformal_sigue_interpolando_si_el_base_es_puntual(
     intervalo = modelo.predict_interval(futuro)
     assert salida[quantile_col(0.5)].iloc[0] == pytest.approx(intervalo["y_pred"].iloc[0])
     assert salida[quantile_col(0.95)].iloc[0] == pytest.approx(intervalo["pred_hi"].iloc[0])
+
+
+# --- CQR ----------------------------------------------------------------
+# La cobertura empirica es una de las tres metricas de exito declaradas en el
+# formulario del proyecto, y el conformal de residuos la incumplia por exceso:
+# sobre el panel real cubria 98,7 % con un ancho de 7,8 veces el MAE. Estos tests
+# fijan la mecanica que lo corrige.
+
+
+class _CuantilicoSesgado(SeasonalNaiveForecaster):
+    """Base cuantilico cuyos cuantiles se pueden inflar o apretar a voluntad.
+
+    Sirve para probar las dos direcciones de la correccion de CQR sin depender de
+    que un LightGBM entrenado salga sobre o sub-cubriendo.
+    """
+
+    supports_quantiles = True
+    quantiles = (0.05, 0.5, 0.95)
+
+    def __init__(self, factor: float = 1.0) -> None:
+        super().__init__()
+        self.factor = factor
+        self.name = f"cuantilico_sesgado_{factor}"
+
+    def predict_quantile(self, future: pd.DataFrame, quantiles) -> pd.DataFrame:  # noqa: ANN001
+        punto = self.predict(future).to_numpy(dtype="float64")
+        salida = {}
+        for q in sorted(quantiles):
+            # Banda simetrica alrededor del punto, escalada por `factor`. Con
+            # factor grande la banda cubre de mas y CQR tiene que apretarla.
+            salida[quantile_col(q)] = np.clip(punto + (q - 0.5) * 2.0 * self.factor, 0.0, None)
+        return pd.DataFrame(salida, index=future.index)
+
+
+def test_cqr_canoniza_los_niveles_del_intervalo() -> None:
+    """Regresion de un fallo que aparecio en la primera corrida del backtest.
+
+    `1 - cfg.FORECAST.coverage` da 0,09999999999999998, asi que `alpha/2` sale
+    0,04999999999999999 y el LightGBM cuantilico rechaza el pedido porque entreno
+    en 0,05 exacto. El nivel viene de la config y es nominal, no el resultado de un
+    calculo, asi que se redondea.
+    """
+    modelo = CQRForecaster(_CuantilicoSesgado(), alpha=1 - 0.90, horizon=7)
+    assert modelo.q_lo == 0.05
+    assert modelo.q_hi == 0.95
+    assert 0.05 in modelo.quantiles
+    assert 0.95 in modelo.quantiles
+
+
+def test_cqr_exige_un_base_cuantilico() -> None:
+    """Con un base puntual no hay cuantiles de los que partir: falla al construir.
+
+    Es un error de programacion, no una condicion de operacion, asi que levanta en
+    vez de degradar a la variante de residuos en silencio.
+    """
+    with pytest.raises(TypeError, match="cuantilico"):
+        CQRForecaster(SeasonalNaiveForecaster())
+
+
+def test_cqr_aprieta_el_intervalo_cuando_el_base_cubre_de_mas(
+    recovered_panel: pd.DataFrame,
+) -> None:
+    """La correccion negativa. Es lo que el conformal de residuos no puede hacer.
+
+    Su score es un valor absoluto, asi que solo sabe ensanchar. Por eso una
+    sobre-cobertura de 99 % era incorregible: la mecanica no tenia forma de
+    expresar "esto esta demasiado ancho".
+    """
+    dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
+    origin = dates[-8]
+    history = recovered_panel[recovered_panel[S.DATE] <= origin]
+    futuro = _future_from(recovered_panel, origin)
+
+    # Banda absurdamente ancha: cubre casi todo, asi que el score de conformidad
+    # va a ser negativo en casi todos los puntos de calibracion.
+    modelo = CQRForecaster(_CuantilicoSesgado(factor=50.0), alpha=0.1, horizon=7)
+    modelo.fit(history, target=S.DEMAND_LATENT)
+
+    assert modelo.adjustment_, "no calibro"
+    assert min(modelo.adjustment_.values()) < 0, (
+        "con un base que cubre de mas la correccion tiene que ser negativa, "
+        f"llegaron {modelo.adjustment_}"
+    )
+    iv = modelo.predict_interval(futuro)
+    crudo = modelo.base.predict_quantile(futuro, (0.05, 0.95))
+    ancho_crudo = float((crudo[quantile_col(0.95)] - crudo[quantile_col(0.05)]).mean())
+    ancho_cqr = float((iv["pred_hi"] - iv["pred_lo"]).mean())
+    assert ancho_cqr < ancho_crudo, f"CQR no apreto: {ancho_cqr:.3f} contra {ancho_crudo:.3f}"
+
+
+def test_cqr_ensancha_cuando_el_base_cubre_de_menos(recovered_panel: pd.DataFrame) -> None:
+    """La otra direccion, para que el test anterior no pase por un signo al reves."""
+    dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
+    origin = dates[-8]
+    history = recovered_panel[recovered_panel[S.DATE] <= origin]
+
+    modelo = CQRForecaster(_CuantilicoSesgado(factor=0.01), alpha=0.1, horizon=7)
+    modelo.fit(history, target=S.DEMAND_LATENT)
+    assert max(modelo.adjustment_.values()) > 0, (
+        "con un base que cubre de menos la correccion tiene que ser positiva, "
+        f"llegaron {modelo.adjustment_}"
+    )
+
+
+def test_cqr_no_devuelve_intervalos_invertidos(recovered_panel: pd.DataFrame) -> None:
+    """Una correccion negativa grande podria cruzar los limites. No puede salir asi."""
+    dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
+    origin = dates[-8]
+    history = recovered_panel[recovered_panel[S.DATE] <= origin]
+    futuro = _future_from(recovered_panel, origin)
+
+    modelo = CQRForecaster(_CuantilicoSesgado(factor=500.0), alpha=0.1, horizon=7)
+    modelo.fit(history, target=S.DEMAND_LATENT)
+    iv = modelo.predict_interval(futuro)
+
+    assert (iv["pred_hi"] >= iv["pred_lo"]).all(), "hay intervalos invertidos"
+    assert (iv["pred_lo"] >= 0).all(), "la demanda no es negativa"
+
+
+def test_cqr_no_toca_la_cantidad_a_pedir(recovered_panel: pd.DataFrame) -> None:
+    """La orden sale del booster de q*, no del intervalo. Es la leccion de D20.
+
+    Mezclar las dos cosas fue el defecto anterior: la cantidad servida salia de
+    interpolar la banda conformal y era 21,5 % mas alta que la del cuantil
+    entrenado. CQR corrige el intervalo y **no** la decision.
+    """
+    dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
+    origin = dates[-8]
+    history = recovered_panel[recovered_panel[S.DATE] <= origin]
+    futuro = _future_from(recovered_panel, origin)
+
+    base = _CuantilicoSesgado(factor=50.0)
+    modelo = CQRForecaster(base, alpha=0.1, horizon=7)
+    modelo.fit(history, target=S.DEMAND_LATENT)
+
+    niveles = (0.05, 0.5, 0.95)
+    del_base = modelo.base.predict_quantile(futuro, niveles)
+    del_wrapper = modelo.predict_quantile(futuro, niveles)
+    pd.testing.assert_frame_equal(del_base, del_wrapper)
+
+
+def test_cqr_alcanza_su_cobertura_nominal(recovered_panel: pd.DataFrame) -> None:
+    """La promesa, medida sobre el arnes completo y no sobre un fold suelto."""
+    forecast = cfg.ForecastConfig(
+        horizon=7, season_length=7, n_origins=4, step=3, min_train_days=42, coverage=0.90
+    )
+    modelo = CQRForecaster(
+        _CuantilicoSesgado(factor=1.0), alpha=1 - forecast.coverage, horizon=forecast.horizon
+    )
+    result = _backtest_with_intervals(recovered_panel, modelo, forecast)
+
+    cobertura = M.empirical_coverage(result[C.Y_TRUE], result[C.PRED_LO], result[C.PRED_HI])
+    assert cobertura >= forecast.coverage - 0.10, (
+        f"cobertura empirica {cobertura:.1%} contra un nominal de {forecast.coverage:.0%}"
+    )
+    # Y el ancho tiene que ser finito: cubrir por ser enorme no es cubrir.
+    ancho = M.mean_interval_width(result[C.PRED_LO], result[C.PRED_HI])
+    assert 0 < ancho < 20 * result[C.Y_TRUE].mean()

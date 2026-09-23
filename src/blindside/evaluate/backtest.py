@@ -465,13 +465,31 @@ def _model_factories() -> dict[str, object]:
 
         return ElasticNetForecaster()
 
-    def conformal_lgbm():
-        """El modelo que la API sirve, medido con el mismo arnes que el resto.
+    def cqr_lgbm():
+        """El modelo que la API sirve. Es el que llena la seccion de cobertura.
 
-        Es el unico del registro que produce intervalos, asi que es el que llena
-        la seccion de cobertura del reporte. El cuantil critico entra a la lista
-        de cuantiles entrenados igual que en `blindside.models train`, para que lo
-        que se mide sea el artefacto que se sirve y no un primo cercano.
+        CQR parte de los cuantiles que el LightGBM ya estima y les aplica una
+        correccion conformal escalar. Queda al lado de `conformal_lgbm` en el
+        registro a proposito: la comparacion de los dos en el mismo reporte es la
+        evidencia de D21, y una tabla con las dos filas dice mas que afirmar que
+        una es mejor.
+        """
+        from blindside.decision.conformal import CQRForecaster
+        from blindside.models.gbdt import LightGBMQuantileForecaster
+
+        quantiles = tuple(sorted({*cfg.FORECAST.quantiles, cfg.ECONOMICS.critical_fraction}))
+        return CQRForecaster(
+            LightGBMQuantileForecaster(quantiles=quantiles),
+            alpha=1 - cfg.FORECAST.coverage,
+            horizon=cfg.FORECAST.horizon,
+        )
+
+    def conformal_lgbm():
+        """Variante anterior: semiamplitud de residuos absolutos sobre el cuantilico.
+
+        Ya **no** es el modelo que se sirve. Se conserva en el registro porque es
+        el contrafactual de CQR: sobre este panel sobre-cubre de forma sistematica
+        y el reporte lo tiene que mostrar, no solo el README.
         """
         from blindside.decision.conformal import ConformalForecaster
         from blindside.models.gbdt import LightGBMQuantileForecaster
@@ -505,6 +523,7 @@ def _model_factories() -> dict[str, object]:
     return {
         "lgbm_global": lgbm,
         "lgbm_quantile": lgbm_quantile,
+        "cqr_lgbm": cqr_lgbm,
         "conformal_lgbm": conformal_lgbm,
         "conformal_lgbm_point": conformal_lgbm_point,
         "xgb_global": xgb,

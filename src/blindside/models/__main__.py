@@ -117,14 +117,27 @@ def train_basis(
     target = TARGET_BY_BASIS[basis]
     model = build_model(model_name, quantiles=quantiles)
     if conformal:
-        from blindside.decision.conformal import ConformalForecaster
+        from blindside.decision.conformal import ConformalForecaster, CQRForecaster
 
-        model = ConformalForecaster(
-            model,
-            alpha=1 - cfg.FORECAST.coverage,
-            horizon=cfg.FORECAST.horizon,
-            adaptive=True,
-        )
+        # CQR cuando el base sabe dar cuantiles, que es el caso del artefacto que
+        # se sirve. Parte de los cuantiles estimados en vez de pegarle una
+        # semiamplitud constante a la prediccion puntual, y por eso su ancho es
+        # adaptativo por dia y no solo por serie. Medido sobre un fold real:
+        # cobertura 0,886 con ancho 4,0 veces el MAE, contra 0,987 y 7,8 del
+        # conformal de residuos adaptativo. Ver docs/decisiones.md D21.
+        if getattr(model, "supports_quantiles", False):
+            model = CQRForecaster(
+                model,
+                alpha=1 - cfg.FORECAST.coverage,
+                horizon=cfg.FORECAST.horizon,
+            )
+        else:
+            model = ConformalForecaster(
+                model,
+                alpha=1 - cfg.FORECAST.coverage,
+                horizon=cfg.FORECAST.horizon,
+                adaptive=True,
+            )
 
     log.info(
         "entrenando '%s' sobre base '%s' (target %s) con %d series hasta %s",
