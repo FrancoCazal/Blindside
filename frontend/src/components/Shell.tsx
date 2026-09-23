@@ -1,49 +1,50 @@
 /**
- * Shell: 119 px de cromo fijo en tres regiones.
+ * Shell de aplicación: barra lateral, barra superior, barra de filtros, contenido.
  *
- *   franja de estado  44 px  · logo, serie, toggle. Fondo superficie
- *   navegación        42 px  · dos pantallas hero destacadas, resto agrupado
- *   franja de contexto 33 px · cinco datos de confianza en 11,5 px
+ * Reemplaza al cromo horizontal de 119 px en tres bandas. El audit visual mostró
+ * por qué: con el cromo a ancho completo y el cuerpo en una columna de 1180 px, la
+ * interfaz usaba el 61 % del viewport a 1920 px y se leía como un informe impreso
+ * con una barra de aplicación encima. Y los nueve destinos en una tira horizontal
+ * no se leían como dos grupos, que era justamente lo que el agrupado buscaba.
  *
- * El estado global y la navegación son dos contenedores visualmente distintos.
- * El toggle y el selector no son navegación y no pueden compartir contenedor con
- * ella: los separa el cambio de fondo (superficie contra papel) más la regla.
- *
- * Los KPIs de exactitud viven en la franja de contexto, en 11,5 px. Son estado,
- * no titular: la decisión es el titular y la evidencia va embebida en los
- * números que importan.
+ * La jerarquía del handoff se conserva y se refuerza: las dos pantallas hero pesan
+ * más que el resto — otra familia tipográfica y mayor tamaño —, los KPI de
+ * exactitud siguen siendo estado y no titular, y la decisión es lo primero que el
+ * ojo encuentra. Lo que cambia es la estructura, no la jerarquía.
  */
+
+import { useState } from "react";
 
 import type { BacktestResponse, Health } from "../api/client";
 import { conteoDeTotal, errorConDispersion, etiquetaFecha, porcentajeSimple } from "../format";
 import { useEstado, type Pantalla } from "../state";
 import { IconoAdvertencia, Logo, ToggleCensura } from "./piezas";
 
-const PRIMARIAS: { id: Pantalla; rotulo: string }[] = [
-  { id: "reorder", rotulo: "Reposición" },
-  { id: "series", rotulo: "Serie individual" },
+interface Item {
+  id: Pantalla;
+  rotulo: string;
+  inicial: string;
+}
+
+const HERO: Item[] = [
+  { id: "reorder", rotulo: "Reposición", inicial: "R" },
+  { id: "series", rotulo: "Serie individual", inicial: "S" },
 ];
 
-/**
- * La navegación tiene dos niveles. Primario: las dos pantallas hero. Secundario:
- * el resto agrupado bajo Evidencia y Diagnóstico. Un sidebar de siete ítems
- * iguales sería la estructura equivocada — repite el error del Streamlit, donde
- * todo pesa lo mismo y la decisión queda al lado de una métrica de diagnóstico.
- */
-const GRUPOS: { rotulo: string; items: { id: Pantalla; rotulo: string }[] }[] = [
+const GRUPOS: { rotulo: string; items: Item[] }[] = [
   {
     rotulo: "Evidencia",
     items: [
-      { id: "overview", rotulo: "Vista general" },
-      { id: "compare", rotulo: "Comparativa" },
+      { id: "overview", rotulo: "Vista general", inicial: "VG" },
+      { id: "compare", rotulo: "Comparativa", inicial: "C" },
     ],
   },
   {
     rotulo: "Diagnóstico",
     items: [
-      { id: "explain", rotulo: "Explicabilidad" },
-      { id: "health", rotulo: "Salud del modelo" },
-      { id: "map", rotulo: "Mapa" },
+      { id: "explain", rotulo: "Explicabilidad", inicial: "E" },
+      { id: "health", rotulo: "Salud del modelo", inicial: "SM" },
+      { id: "map", rotulo: "Mapa", inicial: "M" },
     ],
   },
 ];
@@ -51,19 +52,20 @@ const GRUPOS: { rotulo: string; items: { id: Pantalla; rotulo: string }[] }[] = 
 export function Shell({
   health,
   backtest,
+  backtestCargando,
   serieRotulo,
   onAbrirSelector,
-  cantidades,
   children,
 }: {
   health: Health | null;
   backtest: BacktestResponse | null;
+  backtestCargando?: boolean;
   serieRotulo: string | null;
   onAbrirSelector: () => void;
-  cantidades?: { antes: number; despues: number };
   children: React.ReactNode;
 }) {
-  const { pantalla, irA, basis, tema, alternarTema, anuncio } = useEstado();
+  const { pantalla, irA, basis, tema, alternarTema, anuncio, serie } = useEstado();
+  const [colapsada, setColapsada] = useState(false);
   const panel = health?.panel ?? null;
   const modelo = health?.models.find((m) => m.basis === basis) ?? null;
 
@@ -78,138 +80,227 @@ export function Shell({
 
   return (
     <>
-      {/* Región que anuncia el cambio de valor a los lectores de pantalla. */}
-      <div aria-live="polite" role="status" style={posicionFueraDePantalla}>
+      <div aria-live="polite" role="status" style={fueraDePantalla}>
         {anuncio}
       </div>
 
-      <header className="shell">
-        <div className="franja-estado">
-          <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-            <Logo />
-            <span
-              style={{
-                fontFamily: "var(--fuente-titulo)",
-                fontWeight: 700,
-                fontSize: 16,
-                letterSpacing: "-.012em",
-                color: "var(--tinta)",
-              }}
-            >
-              blindside
-            </span>
+      <div className="app">
+        <nav className="lateral" data-colapsada={colapsada} aria-label="Pantallas">
+          <div className="marca">
+            <Logo ancho={colapsada ? 22 : 30} />
+            <span className="marca-nombre lateral-texto">blindside</span>
           </div>
 
-          {/* El sello de muestra no se puede cerrar. Presentar 60 series como
-              3.066 es el error que arruina una defensa. */}
-          {panel?.is_sample && <span className="sello-muestra">Muestra</span>}
-
-          <button
-            type="button"
-            onClick={onAbrirSelector}
-            style={{
-              fontSize: 12.5,
-              color: "var(--secundaria)",
-              borderBottom: "1px solid var(--regla-control)",
-              paddingBottom: 1,
-            }}
-            aria-keyshortcuts="Control+K"
-          >
-            {serieRotulo ?? "Elegir serie"}
-          </button>
-
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-            <button
-              type="button"
-              className="rotulo"
-              onClick={alternarTema}
-              aria-label={`Cambiar a modo ${tema === "claro" ? "oscuro" : "claro"}`}
-            >
-              {tema === "claro" ? "Oscuro" : "Claro"}
-            </button>
-            <span className="rotulo">Viendo</span>
-            <ToggleCensura cantidadAntes={cantidades?.antes} cantidadDespues={cantidades?.despues} />
-          </div>
-        </div>
-
-        {panel?.is_sample && <BandaMuestra panel={panel} />}
-
-        <nav className="nav" aria-label="Pantallas">
-          <div className="nav-primario">
-            {PRIMARIAS.map((p) => (
+          <div className="lateral-seccion">
+            {HERO.map((item) => (
               <button
-                key={p.id}
+                key={item.id}
                 type="button"
-                onClick={() => irA(p.id)}
-                aria-current={pantalla === p.id ? "page" : undefined}
+                className="lateral-item"
+                data-hero="true"
+                aria-current={pantalla === item.id ? "page" : undefined}
+                onClick={() => irA(item.id)}
+                title={item.rotulo}
               >
-                {p.rotulo}
+                <span className="lateral-inicial">{item.inicial}</span>
+                <span className="lateral-texto">{item.rotulo}</span>
               </button>
             ))}
           </div>
-          <div className="nav-separador" />
+
           {GRUPOS.map((grupo) => (
-            <div className="nav-grupo" key={grupo.rotulo}>
-              <span className="rotulo">{grupo.rotulo}</span>
+            <div className="lateral-seccion" key={grupo.rotulo}>
+              <span className="rotulo lateral-texto">{grupo.rotulo}</span>
               {grupo.items.map((item) => (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => irA(item.id)}
+                  className="lateral-item"
                   aria-current={pantalla === item.id ? "page" : undefined}
+                  onClick={() => irA(item.id)}
+                  title={item.rotulo}
                 >
-                  {item.rotulo}
+                  <span className="lateral-inicial">{item.inicial}</span>
+                  <span className="lateral-texto">{item.rotulo}</span>
                 </button>
               ))}
             </div>
           ))}
+
+          <div className="lateral-pie">
+            <button
+              type="button"
+              className="rotulo"
+              onClick={() => setColapsada((c) => !c)}
+              aria-expanded={!colapsada}
+            >
+              {colapsada ? "»" : "« Colapsar"}
+            </button>
+          </div>
         </nav>
 
-        <div className="franja-contexto">
-          {mase ? (
+        <div className="principal">
+          <div className="barra-superior">
+            {/* El sello de muestra no se puede cerrar: presentar 60 series como
+                3.066 es el error que arruina una defensa. */}
+            {panel?.is_sample && <span className="sello-muestra">Muestra</span>}
+
+            <button
+              type="button"
+              className="selector-disparador"
+              onClick={onAbrirSelector}
+              aria-keyshortcuts="Control+K"
+              aria-haspopup="dialog"
+            >
+              <span className="rotulo" style={{ flex: "none" }}>
+                Serie
+              </span>
+              <span className="codigo">{serie ?? "—"}</span>
+              <span className="descripcion">{serieRotulo ?? "elegir"}</span>
+              <span aria-hidden="true" style={{ marginLeft: "auto", color: "var(--apagada)" }}>
+                ⌄
+              </span>
+            </button>
+
+            <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 14 }}>
+              <button
+                type="button"
+                className="selector-disparador"
+                style={{ maxWidth: "none" }}
+                onClick={alternarTema}
+                aria-label={`Cambiar a modo ${tema === "claro" ? "oscuro" : "claro"}`}
+              >
+                {tema === "claro" ? "Modo oscuro" : "Modo claro"}
+              </button>
+              <span className="rotulo">Viendo</span>
+              <ToggleCensura />
+            </div>
+          </div>
+
+          {panel?.is_sample && <BandaMuestra panel={panel} />}
+
+          <BarraFiltros />
+
+          <div className="franja-contexto">
+            {mase ? (
+              <span>
+                MASE <strong className="tinta">{errorConDispersion(mase.mean, mase.std)}</strong> ·
+                peor origen {mase.worst_origin.toFixed(3).replace(".", ",")} ({mase.model_name})
+              </span>
+            ) : (
+              <span>
+                {backtestCargando ? "MASE · cargando…" : "MASE sin medir · falta correr el backtest"}
+              </span>
+            )}
+
+            {coberturaMedia != null ? (
+              <span>
+                Cobertura empírica {porcentajeSimple(coberturaMedia * 100)} · nominal{" "}
+                {porcentajeSimple((health?.coverage_nominal ?? 0.9) * 100)}
+              </span>
+            ) : (
+              <span title={health?.coverage_note ?? undefined}>
+                Cobertura empírica sin medir · nominal{" "}
+                {porcentajeSimple((health?.coverage_nominal ?? 0.9) * 100)}
+              </span>
+            )}
+
             <span>
-              MASE <strong className="tinta">{errorConDispersion(mase.mean, mase.std)}</strong> · peor
-              origen {mase.worst_origin.toFixed(3).replace(".", ",")} ({mase.model_name})
+              Entrenado hasta {modelo?.trained_until ? etiquetaFecha(modelo.trained_until) : "—"}
             </span>
-          ) : (
-            <span>MASE sin medir · falta correr el backtest</span>
-          )}
 
-          {coberturaMedia != null ? (
+            {/* Esta línea evita una demo fallida: durante el desarrollo se sirvió
+                un artefacto entrenado sobre 60 series contra el panel completo. */}
+            <span
+              style={panel?.is_sample ? { color: "var(--advertencia)", fontWeight: 600 } : undefined}
+            >
+              {modelo?.n_series_in_panel != null && panel
+                ? `${conteoDeTotal(modelo.n_series_in_panel, panel.n_series)} series conocidas por el modelo`
+                : "El modelo cargado no declara series"}
+            </span>
+
             <span>
-              Cobertura empírica {porcentajeSimple(coberturaMedia * 100)} · nominal{" "}
-              {porcentajeSimple((health?.coverage_nominal ?? 0.9) * 100)}
+              Datos {panel?.is_sample ? "de la muestra" : "del panel"} ·{" "}
+              {panel ? `${panel.date_min} → ${panel.date_max}` : "—"}
             </span>
-          ) : (
-            <span title={health?.coverage_note ?? undefined}>
-              Cobertura empírica sin medir · nominal{" "}
-              {porcentajeSimple((health?.coverage_nominal ?? 0.9) * 100)}
-            </span>
-          )}
+          </div>
 
-          <span>
-            Entrenado hasta {modelo?.trained_until ? etiquetaFecha(modelo.trained_until) : "—"}
-          </span>
-
-          {/* Esta línea evita una demo fallida: durante el desarrollo se sirvió un
-              artefacto entrenado sobre 60 series contra el panel completo. */}
-          <span style={panel?.is_sample ? { color: "var(--advertencia)", fontWeight: 600 } : undefined}>
-            {modelo?.n_series_in_panel != null && panel
-              ? `${conteoDeTotal(modelo.n_series_in_panel, panel.n_series)} series conocidas por el modelo`
-              : "El modelo cargado no declara series"}
-          </span>
+          <main className="contenido">
+            <div className="solo-angosto">
+              <h2>Hace falta más ancho</h2>
+              <p className="nota" style={{ maxWidth: "60ch" }}>
+                Esta interfaz está diseñada a 1180 px de contenido y soportada hasta 1024. Abajo de
+                eso las cifras de decisión bajarían de 19 px y la tabla perdería columnas que
+                sostienen la comparación.
+              </p>
+            </div>
+            <div className="solo-ancho">{children}</div>
+          </main>
         </div>
-      </header>
-
-      <div className="solo-angosto" style={{ padding: "var(--e6) var(--e5)" }}>
-        <h2>Hace falta más ancho</h2>
-        <p className="nota" style={{ maxWidth: "60ch" }}>
-          Esta interfaz está diseñada a 1180 px y soportada hasta 1024. Abajo de eso las cifras de
-          decisión bajarían de 19 px y la tabla perdería columnas que sostienen la comparación.
-        </p>
       </div>
-      <div className="solo-ancho">{children}</div>
     </>
+  );
+}
+
+/**
+ * Barra de filtros. Es lo que faltaba para que esto se pueda usar: antes solo se
+ * podía elegir *una* serie o ver las primeras 25 de 3.066, así que no había forma
+ * de responder «qué pido para la tienda 12».
+ *
+ * Los filtros viven en la URL como el resto del estado, así que un enlace
+ * reproduce la vista exacta.
+ */
+function BarraFiltros() {
+  const { tienda, setTienda, clase, setClase, health } = useEstado();
+  const tiendas = health?.panel ? Array.from({ length: health.panel.n_stores }, (_, i) => i) : [];
+
+  return (
+    <div className="barra-filtros">
+      <span className="rotulo">Filtros</span>
+
+      <label className="filtro">
+        Tienda
+        <select
+          value={tienda ?? ""}
+          onChange={(e) => setTienda(e.target.value === "" ? null : Number(e.target.value))}
+        >
+          <option value="">todas</option>
+          {tiendas.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="filtro">
+        Clase de rotación
+        <select value={clase ?? ""} onChange={(e) => setClase(e.target.value || null)}>
+          <option value="">todas</option>
+          <option value="alta">alta</option>
+          <option value="media">media</option>
+          <option value="baja">baja</option>
+        </select>
+      </label>
+
+      {(tienda != null || clase != null) && (
+        <button
+          type="button"
+          className="nota"
+          onClick={() => {
+            setTienda(null);
+            setClase(null);
+          }}
+          style={{ textDecoration: "underline" }}
+        >
+          limpiar
+        </button>
+      )}
+
+      <span className="nota" style={{ marginLeft: "auto" }}>
+        Los filtros afectan la lista de reposición, no el modelo.
+      </span>
+    </div>
   );
 }
 
@@ -258,7 +349,7 @@ function BandaMuestra({ panel }: { panel: NonNullable<Health["panel"]> }) {
 }
 
 /** Oculta visualmente sin sacar del árbol de accesibilidad. */
-const posicionFueraDePantalla: React.CSSProperties = {
+const fueraDePantalla: React.CSSProperties = {
   position: "absolute",
   width: 1,
   height: 1,

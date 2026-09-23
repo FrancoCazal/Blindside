@@ -22,6 +22,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { api, type Health as Salud } from "./api/client";
 import { RATIO_POR_DEFECTO } from "./domain";
 
 export type Pantalla = "reorder" | "series" | "overview" | "compare" | "explain" | "health" | "map";
@@ -33,11 +34,27 @@ export interface AppState {
   basis: Basis;
   serie: string | null;
   ratio: number;
+  /** Filtro de tienda. `null` es todas. Vive en la URL como el resto. */
+  tienda: number | null;
+  /** Filtro de clase de rotación: baja, media o alta. */
+  clase: string | null;
   tema: Tema;
+  /**
+   * Estado del panel y de los artefactos. Es estado **global**: de acá salen la
+   * barra de filtros, el sello de muestra, la franja de contexto y la decisión de
+   * mostrar la pantalla de «sin artefacto». Por eso lo posee el proveedor y no una
+   * pantalla.
+   */
+  health: Salud | null;
+  healthCargando: boolean;
+  healthError: unknown;
+  recargarHealth: () => void;
   irA: (pantalla: Pantalla) => void;
   setBasis: (basis: Basis) => void;
   setSerie: (serie: string) => void;
   setRatio: (ratio: number) => void;
+  setTienda: (tienda: number | null) => void;
+  setClase: (clase: string | null) => void;
   alternarTema: () => void;
   /** Texto que lee el lector de pantalla cuando cambia un valor. */
   anuncio: string;
@@ -61,11 +78,15 @@ function leerUrl() {
   const pantalla = p.get("screen");
   const basis = p.get("basis");
   const ratio = Number(p.get("ratio"));
+  const tienda = p.get("store");
+  const clase = p.get("class");
   return {
     pantalla: (PANTALLAS.includes(pantalla as Pantalla) ? pantalla : "reorder") as Pantalla,
     basis: (basis === "recovered" ? "recovered" : "observed") as Basis,
     serie: p.get("series"),
     ratio: Number.isFinite(ratio) && ratio > 0 ? ratio : RATIO_POR_DEFECTO,
+    tienda: tienda != null && tienda !== "" && Number.isFinite(Number(tienda)) ? Number(tienda) : null,
+    clase: clase === "baja" || clase === "media" || clase === "alta" ? clase : null,
   };
 }
 
@@ -79,6 +100,7 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
   const [url, setUrl] = useState(leerUrl);
   const [tema, setTema] = useState<Tema>(temaInicial);
   const [anuncio, setAnuncio] = useState("");
+  const salud = useAsincrono(() => api.health(), []);
 
   // El estado se refleja en la URL sin recargar, y el botón «atrás» del
   // navegador vuelve al estado anterior en vez de salir de la app.
@@ -88,6 +110,8 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
     p.set("basis", url.basis);
     if (url.serie) p.set("series", url.serie);
     if (url.ratio !== RATIO_POR_DEFECTO) p.set("ratio", String(url.ratio));
+    if (url.tienda != null) p.set("store", String(url.tienda));
+    if (url.clase) p.set("class", url.clase);
     const nueva = `${window.location.pathname}?${p.toString()}`;
     if (nueva !== `${window.location.pathname}${window.location.search}`) {
       window.history.pushState(null, "", nueva);
@@ -109,15 +133,21 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
     () => ({
       ...url,
       tema,
+      health: salud.datos,
+      healthCargando: salud.cargando,
+      healthError: salud.error,
+      recargarHealth: salud.recargar,
       irA: (pantalla) => setUrl((u) => ({ ...u, pantalla })),
       setBasis: (basis) => setUrl((u) => ({ ...u, basis })),
       setSerie: (serie) => setUrl((u) => ({ ...u, serie })),
       setRatio: (ratio) => setUrl((u) => ({ ...u, ratio })),
+      setTienda: (tienda) => setUrl((u) => ({ ...u, tienda })),
+      setClase: (clase) => setUrl((u) => ({ ...u, clase })),
       alternarTema: () => setTema((t) => (t === "claro" ? "oscuro" : "claro")),
       anuncio,
       anunciar: setAnuncio,
     }),
-    [url, tema, anuncio],
+    [url, tema, anuncio, salud.datos, salud.cargando, salud.error, salud.recargar],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

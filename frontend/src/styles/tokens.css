@@ -25,6 +25,12 @@
      dos fondos, y el grosor ya lo distingue de la línea recuperada. */
   --observado: #8a8a84;
   --recuperado: #d6451a;
+  /* El acento **para texto chico**. El vermellón de marca da 4,6:1 sobre papel
+     pero 3,84:1 sobre superficie, medido con axe, así que no llega a AA cuando
+     una cifra de 12 px cae sobre una fila abierta o una nota al pie. Este tono
+     da 4,98:1 sobre papel y 4,57:1 sobre superficie. El de marca se sigue usando
+     para trazos y rellenos, donde el umbral es 3:1 y no 4,5:1. */
+  --recuperado-texto: #c23d14;
   --advertencia: #7a5c10;
   --advertencia-texto: #5c4508;
 
@@ -77,12 +83,16 @@
   --tinta: #f2eee8;
   --secundaria: #c9c4bb;
   --apagada: #9a958c;
-  --rotulo: #86817a;
+  /* Medido: #86817A sobre superficie daba 4,40:1, un pelo abajo de AA. Este da
+     5,03:1. Es el token que usan todos los rótulos en versalitas de 10,5 px, o
+     sea el texto más chico de la interfaz, así que no puede quedar al límite. */
+  --rotulo: #908b83;
 
   --observado: #8a8a84;
   /* El vermellón sube ~10 puntos de luminosidad para mantener 4,5:1 contra el
-     fondo oscuro. */
+     fondo oscuro. En oscuro el mismo tono sirve para trazo y para texto. */
   --recuperado: #f0602e;
+  --recuperado-texto: #f0602e;
   --advertencia: #d9a93a;
   --advertencia-texto: #e8c977;
 

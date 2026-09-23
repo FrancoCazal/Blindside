@@ -145,16 +145,23 @@ export function Sparkline({ valores, maximo }: { valores: number[]; maximo: numb
       aria-hidden="true"
     >
       {valores.map((v, i) => {
-        const h = maximo > 0 ? Math.max(v > 0 ? 1 : 0, (v / maximo) * alto) : 0;
+        const h = maximo > 0 ? (v / maximo) * alto : 0;
         return (
-          <rect
-            key={i}
-            x={i * (ancho + gap)}
-            y={alto - h}
-            width={ancho}
-            height={h}
-            fill="var(--horas-quiebre)"
-          />
+          <g key={i}>
+            {/* Pista de fondo: sin ella un día sin quiebre se lee como un dato
+                que falta, y la serie parece fragmentos sueltos en vez de una
+                secuencia de catorce días. Lo vi en las capturas del audit. */}
+            <rect x={i * (ancho + gap)} y={alto - 1} width={ancho} height={1} fill="var(--guia)" />
+            {v > 0 && (
+              <rect
+                x={i * (ancho + gap)}
+                y={alto - Math.max(1.5, h)}
+                width={ancho}
+                height={Math.max(1.5, h)}
+                fill="var(--horas-quiebre)"
+              />
+            )}
+          </g>
         );
       })}
     </svg>

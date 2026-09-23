@@ -97,14 +97,295 @@ button {
 }
 
 .acento {
-  color: var(--recuperado);
+  color: var(--recuperado-texto);
 }
 
-/* --- Layout de página ---------------------------------------------------- */
+/* --- Layout de aplicación ------------------------------------------------ */
+/*
+ * Tres regiones fijas — barra lateral, barra superior, barra de filtros — y el
+ * contenido ocupando el resto del viewport.
+ *
+ * La versión anterior era una columna centrada de 1180 px **con el cromo a
+ * ancho completo**, y esa mezcla era el problema: el encabezado ocupaba los 1920
+ * px y el cuerpo el 61 %, así que se leía como un informe impreso con una barra
+ * de aplicación encima. Medido con Playwright antes de cambiarlo.
+ *
+ * El tope de 1600 px existe igual: una tabla de 1900 px de ancho obliga a mover
+ * la cabeza para seguir una fila.
+ */
+.app {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.lateral {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+  padding: 14px 0;
+  background: var(--superficie);
+  border-right: 1px solid var(--regla-seccion);
+  transition: width var(--t-relleno) var(--curva);
+}
+
+/* Colapsada a riel: los rótulos de sección desaparecen y quedan las iniciales.
+   No es un menú hamburguesa — la navegación sigue visible, que es la ventaja de
+   la vertical sobre la horizontal. */
+.lateral[data-colapsada="true"] {
+  width: 56px;
+}
+
+.lateral[data-colapsada="true"] .lateral-texto {
+  display: none;
+}
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  min-height: 22px;
+}
+
+.marca-nombre {
+  font-family: var(--fuente-titulo);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.012em;
+  color: var(--tinta);
+}
+
+.lateral-seccion {
+  display: flex;
+  flex-direction: column;
+}
+
+.lateral-seccion > .rotulo {
+  padding: 0 14px 6px;
+}
+
+/* Un ítem de navegación es una fila de 32 px con una barra de 2 px a la
+   izquierda cuando está activo. La barra reemplaza al subrayado de la versión
+   horizontal y funciona igual en el riel colapsado. */
+.lateral-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+  color: var(--apagada);
+  border-left: 2px solid transparent;
+  text-align: left;
+  width: 100%;
+}
+
+.lateral-item:hover {
+  color: var(--tinta);
+}
+
+.lateral-item[aria-current="page"] {
+  color: var(--tinta);
+  font-weight: 600;
+  border-left-color: var(--tinta);
+  background: var(--papel);
+}
+
+/* Las dos pantallas hero pesan más que el resto: Archivo en vez de Plex y 14,5
+   px en vez de 13. Un sidebar de ocho ítems iguales repetiría el error del
+   Streamlit, donde la decisión pesa lo mismo que un diagnóstico. */
+.lateral-item[data-hero="true"] {
+  font-family: var(--fuente-titulo);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  height: 36px;
+  color: var(--secundaria);
+}
+
+.lateral-item[data-hero="true"][aria-current="page"] {
+  color: var(--tinta);
+}
+
+.lateral-inicial {
+  width: 18px;
+  flex: none;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rotulo);
+}
+
+.lateral-pie {
+  margin-top: auto;
+  padding: 0 14px;
+}
+
+.principal {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.barra-superior {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 52px;
+  padding: 0 var(--e5);
+  background: var(--papel);
+  border-bottom: 1px solid var(--regla-seccion);
+}
+
+.barra-filtros {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  min-height: 40px;
+  padding: 6px var(--e5);
+  background: var(--superficie);
+  border-bottom: 1px solid var(--regla-fina);
+}
+
+.filtro {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.filtro > select {
+  font: inherit;
+  font-size: 12px;
+  color: var(--tinta);
+  background: var(--papel);
+  border: 1px solid var(--regla-control);
+  padding: 4px 6px;
+}
+
+/* Control que abre el selector de series. Antes era un texto subrayado y nadie
+   podía saber que se clickeaba; ahora tiene caja y cheurón, que es lo que la
+   convención asocia con "esto se abre". */
+.selector-disparador {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 420px;
+  padding: 5px 10px;
+  border: 1px solid var(--regla-control);
+  background: var(--papel);
+  font-size: 12.5px;
+  color: var(--secundaria);
+}
+
+.selector-disparador:hover {
+  border-color: var(--regla-cabecera);
+}
+
+.selector-disparador .codigo {
+  font-weight: 600;
+  color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+}
+
+.selector-disparador .descripcion {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--apagada);
+}
+
+.contenido {
+  flex: 1;
+  width: 100%;
+  max-width: 1600px;
+  padding: var(--e5) var(--e5) var(--e6);
+}
+
+/* --- Tarjetas de KPI ---------------------------------------------------- */
+/*
+ * La regla de los cinco segundos: en cinco segundos el lector tiene que
+ * identificar de qué es la pantalla y los dos o tres números que importan. La
+ * versión anterior tenía esos números en 11,5 px dentro de una franja de 33 px,
+ * y la cifra grande estaba arriba a la derecha.
+ *
+ * La primera tarjeta **es la decisión**, así que la jerarquía del handoff se
+ * mantiene: no es que los KPI le compitan al titular, es que el titular ahora
+ * está donde el ojo llega primero.
+ */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--regla-fina);
+  border: 1px solid var(--regla-seccion);
+  margin-bottom: var(--e5);
+}
+
+.kpi {
+  background: var(--papel);
+  padding: 12px 16px;
+}
+
+.kpi[data-primario="true"] {
+  background: var(--superficie);
+}
+
+.kpi-valor {
+  font-family: var(--fuente-titulo);
+  font-weight: 600;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  margin-top: 2px;
+}
+
+.kpi[data-primario="true"] .kpi-valor {
+  font-size: 34px;
+}
+
+.kpi-pie {
+  font-size: 11.5px;
+  color: var(--apagada);
+  margin-top: 2px;
+}
+
+/* --- Cuerpo de la reposición ------------------------------------------- */
+/* La grilla vive acá y no en un `style` inline. Lo inline le gana a la media
+   query, y por eso el reflow declarado no se aplicaba: a 1024 px la tabla
+   quedaba en la columna de 300 px y desbordaba el viewport 33 px. Lo encontró
+   el audit midiendo `scrollWidth`. */
+.cuerpo-reposicion {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 26px;
+  align-items: start;
+}
+
+.cuerpo-serie {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 268px;
+}
+
+/* --- Layout de página --------------------------------------------------- */
+/* Sin tope propio: el ancho lo gobierna `.contenido`, que corta en 1600 px. Una
+   pantalla que necesita ancho de lectura — prosa, no tablas — se lo pone en su
+   propia tarjeta, como hacen salud y mapa. */
 .pagina {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: var(--e6) var(--e5);
+  max-width: none;
+  padding: 0;
 }
 
 .tarjeta {
@@ -452,8 +733,12 @@ button {
 }
 
 .ratios .cuantil {
-  font-size: 10px;
-  opacity: 0.72;
+  /* El handoff especifica 10 px al 72 % de opacidad. Medido, eso da 3,27:1 sobre
+     papel y 3,81:1 en oscuro: no pasa AA a ningún tamaño de texto. Se sube a
+     11,5 px, que es el mínimo que el propio handoff declara, y se saca la
+     opacidad — el color apagado ya da 6,05:1. */
+  font-size: 11.5px;
+  color: var(--apagada);
 }
 
 /* --- Gráfico ------------------------------------------------------------ */
@@ -601,8 +886,8 @@ button {
 }
 
 /* --- Aviso de ancho mínimo --------------------------------------------- */
-/* Diseñado a 1180 px, soportado hasta 1024. La demo va a proyector: ningún
-   texto baja de 11,5 px y las cifras de decisión no bajan de 19 px. */
+/* Diseñado a 1180 px de contenido, soportado hasta 1024. La demo va a proyector:
+   ningún texto baja de 11,5 px y las cifras de decisión no bajan de 19 px. */
 .solo-angosto {
   display: none;
 }
@@ -616,21 +901,31 @@ button {
   }
 }
 
-/* Entre 1024 y 1179 el panel lateral pasa arriba de la tabla en una tira de
-   tres bloques, y se ocultan las columnas de clase y de quiebre: la evidencia
-   queda en la fila abierta. */
-@media (max-width: 1179px) {
+/* Abajo de 1340 px la barra lateral se vuelve riel y el panel lateral de la
+   reposición pasa arriba de la tabla, en tira de tres bloques. Las columnas de
+   clase y de quiebre se ocultan: la evidencia queda en la fila abierta. */
+@media (max-width: 1340px) {
   .cuerpo-reposicion {
     grid-template-columns: minmax(0, 1fr);
   }
   .panel-reposicion {
     grid-row: 1;
+    grid-column: 1;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 24px;
     align-items: start;
   }
+  .kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1179px) {
   .col-opcional {
     display: none;
+  }
+  .cuerpo-serie {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

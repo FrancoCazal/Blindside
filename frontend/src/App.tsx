@@ -14,17 +14,22 @@ import { PantallaVistaGeneral } from "./screens/PantallaVistaGeneral";
 import { useAsincrono, useAtajo, useEstado } from "./state";
 
 export default function App() {
-  const { pantalla, serie, setSerie, irA, basis, setBasis } = useEstado();
+  const {
+    pantalla,
+    serie,
+    setSerie,
+    irA,
+    basis,
+    setBasis,
+    health,
+    healthCargando,
+    healthError,
+    recargarHealth,
+  } = useEstado();
   const [selectorAbierto, setSelectorAbierto] = useState(false);
   const [rotuloSerie, setRotuloSerie] = useState<string | null>(null);
 
-  // /health es el estado global de la app: de acá salen panel-vs-muestra, si el
-  // toggle tiene las dos bases y si la API está en pie.
-  const salud = useAsincrono(() => api.health(), []);
-  const backtest = useAsincrono(
-    () => api.backtest().catch(() => null),
-    [],
-  );
+  const backtest = useAsincrono(() => api.backtest().catch(() => null), []);
 
   useAtajo("k", () => setSelectorAbierto(true), true);
   useAtajo("Escape", () => setSelectorAbierto(false));
@@ -36,7 +41,7 @@ export default function App() {
   // Sin serie elegida se toma la primera del panel, para que la pantalla de
   // serie individual nunca aparezca vacía.
   useEffect(() => {
-    if (serie || salud.datos == null) return;
+    if (serie || health == null) return;
     api
       .series({ limit: 1 })
       .then((p) => {
@@ -47,17 +52,17 @@ export default function App() {
         }
       })
       .catch(() => undefined);
-  }, [serie, salud.datos, setSerie]);
+  }, [serie, health, setSerie]);
 
-  if (salud.cargando && !salud.datos) return <Esqueleto />;
-  if (salud.error) return <ApiCaida error={salud.error} onReintentar={salud.recargar} />;
+  if (healthCargando && !health) return <Esqueleto />;
+  if (healthError) return <ApiCaida error={healthError} onReintentar={recargarHealth} />;
 
   // Una API anterior a este frontend responde 200 con menos campos, y el fallo
   // aparecería después como un TypeError en cualquier pantalla. Pasa de verdad:
   // el contenedor de Docker sirve la imagen con la que se construyó, así que
   // después de tocar `api/` hay que reconstruirla. Vale más decirlo acá.
-  if (salud.datos && !Array.isArray(salud.datos.models)) {
-    return <ApiVieja onReintentar={salud.recargar} />;
+  if (health && !Array.isArray(health.models)) {
+    return <ApiVieja onReintentar={recargarHealth} />;
   }
 
   const elegir = (s: SeriesItem) => {
@@ -68,25 +73,27 @@ export default function App() {
 
   // Sin ningún artefacto cargado, las pantallas que emiten una cantidad no tienen
   // nada que mostrar. Las de evidencia sí, así que el estado no es global.
-  const modelos = salud.datos?.models ?? [];
+  const modelos = health?.models ?? [];
   const sinModelo = modelos.length > 0 && modelos.every((m) => !m.loaded);
   const necesitaModelo = pantalla === "reorder" || pantalla === "series" || pantalla === "explain";
 
   return (
     <>
       <Shell
-        health={salud.datos}
+        health={health}
         backtest={backtest.datos}
-        serieRotulo={rotuloSerie ?? serie}
+        backtestCargando={backtest.cargando}
+        serieRotulo={rotuloSerie}
         onAbrirSelector={() => setSelectorAbierto(true)}
       >
-        <LimiteDeFalla onReintentar={salud.recargar}>
+        <LimiteDeFalla onReintentar={recargarHealth}>
           {sinModelo && necesitaModelo ? (
-            <SinArtefacto modelos={modelos} onReintentar={salud.recargar} />
+            <SinArtefacto modelos={modelos} onReintentar={recargarHealth} />
           ) : (
             <>
               {pantalla === "reorder" && (
                 <PantallaReposicion
+                  backtest={backtest.datos}
                   onElegirSerie={(id) => {
                     setSerie(id);
                     irA("series");
@@ -94,13 +101,11 @@ export default function App() {
                 />
               )}
               {pantalla === "series" && (serie ? <PantallaSerie serie={serie} /> : <Esqueleto />)}
-              {pantalla === "overview" && salud.datos && (
-                <PantallaVistaGeneral health={salud.datos} />
-              )}
+              {pantalla === "overview" && health && <PantallaVistaGeneral health={health} />}
               {pantalla === "compare" && <PantallaComparativa />}
               {pantalla === "explain" &&
                 (serie ? <PantallaExplicabilidad serie={serie} /> : <Esqueleto />)}
-              {pantalla === "health" && salud.datos && <PantallaSalud health={salud.datos} />}
+              {pantalla === "health" && health && <PantallaSalud health={health} />}
               {pantalla === "map" && <PantallaMapa serieActiva={serie} />}
             </>
           )}

@@ -590,6 +590,9 @@ def list_series(
         ),
     ),
     store_id: int | None = Query(default=None, description="filtra por tienda"),
+    rotation_band: str | None = Query(
+        default=None, description="filtra por clase de rotacion: baja, media o alta"
+    ),
     limit: int = Query(default=100, ge=1, le=5000),
     offset: int = Query(default=0, ge=0),
 ) -> sc.SeriesPage:
@@ -616,6 +619,8 @@ def list_series(
 
     if store_id is not None:
         index = index[index[S.STORE_ID] == store_id]
+    if rotation_band is not None:
+        index = index[index["rotation_band"] == rotation_band]
     if q:
         haystack = index[S.SERIES_ID].astype(str).str.lower() + " " + index["label"].str.lower()
         for token in q.lower().split():

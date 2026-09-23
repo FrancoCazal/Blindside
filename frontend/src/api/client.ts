@@ -98,10 +98,19 @@ const post = <T>(path: string, body: unknown) =>
 export const api = {
   health: () => request<Health>("/health"),
 
-  series: (params: { q?: string; storeId?: number; limit?: number; offset?: number } = {}) => {
+  series: (
+    params: {
+      q?: string;
+      storeId?: number;
+      rotationBand?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) => {
     const qs = new URLSearchParams();
     if (params.q) qs.set("q", params.q);
     if (params.storeId != null) qs.set("store_id", String(params.storeId));
+    if (params.rotationBand) qs.set("rotation_band", params.rotationBand);
     qs.set("limit", String(params.limit ?? 100));
     qs.set("offset", String(params.offset ?? 0));
     return request<SeriesPage>(`/series?${qs.toString()}`);

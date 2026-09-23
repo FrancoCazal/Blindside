@@ -71,10 +71,7 @@ export function PantallaSerie({ serie }: { serie: string }) {
 
   return (
     <div className="pagina">
-      <div
-        className="tarjeta"
-        style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 268px" }}
-      >
+      <div className="tarjeta cuerpo-serie">
         <div style={{ padding: "16px var(--e5) 14px", borderRight: "1px solid var(--regla-fina)" }}>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 12 }}>
             <h2>{historia.series.series_id}</h2>
