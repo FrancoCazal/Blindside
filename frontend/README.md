@@ -33,16 +33,20 @@ al lado del cálculo. Cuando el backend los sirva, se borra de un solo lugar.
 
 ## Estado
 
-| Pantalla | Estado |
-|---|---|
-| Reposición (landing) | completa |
-| Serie individual | completa, las diez capas del gráfico |
-| Selector (Ctrl+K) | completo |
-| Salud del modelo | completa; el bloque de deriva declara que falta el endpoint |
-| Comparativa, Vista general, Explicabilidad, Mapa | sin implementar |
+| Pantalla | Estado | Datos |
+|---|---|---|
+| Reposición (landing) | completa, siete columnas | reales, salvo la columna Impacto |
+| Serie individual | completa, las diez capas del gráfico | reales |
+| Vista general | completa, con la comprobación de la ventana comercial | reales |
+| Comparativa | completa: por origen, por horizonte, por banda | reales |
+| Explicabilidad | completa, cascada de contribuciones | reales (TreeSHAP de LightGBM) |
+| Salud del modelo | completa | reales; la deriva declara que falta el endpoint |
+| Selector (Ctrl+K) | completo | reales |
+| Mapa de productos | completo | reales (PCA, 67 % de varianza en 2D) |
 
-Estados cubiertos: muestra commiteada, API caída, API anterior al frontend, carga, serie sin
-quiebres, modo oscuro.
+Estados cubiertos: muestra commiteada, sin artefacto entrenado, API caída, API anterior al
+frontend, carga, serie sin quiebres, modo oscuro. Queda sin dibujar el de quiebre continuo
+(rachas de hasta 95 días), que el handoff también dejó pendiente.
 
 ## Accesibilidad
 

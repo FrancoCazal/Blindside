@@ -24,7 +24,7 @@ import {
 
 import { RATIO_POR_DEFECTO } from "./domain";
 
-export type Pantalla = "reorder" | "series" | "health";
+export type Pantalla = "reorder" | "series" | "overview" | "compare" | "explain" | "health" | "map";
 export type Basis = "observed" | "recovered";
 export type Tema = "claro" | "oscuro";
 
@@ -46,13 +46,23 @@ export interface AppState {
 
 const Contexto = createContext<AppState | null>(null);
 
+const PANTALLAS: Pantalla[] = [
+  "reorder",
+  "series",
+  "overview",
+  "compare",
+  "explain",
+  "health",
+  "map",
+];
+
 function leerUrl() {
   const p = new URLSearchParams(window.location.search);
   const pantalla = p.get("screen");
   const basis = p.get("basis");
   const ratio = Number(p.get("ratio"));
   return {
-    pantalla: (pantalla === "series" || pantalla === "health" ? pantalla : "reorder") as Pantalla,
+    pantalla: (PANTALLAS.includes(pantalla as Pantalla) ? pantalla : "reorder") as Pantalla,
     basis: (basis === "recovered" ? "recovered" : "observed") as Basis,
     serie: p.get("series"),
     ratio: Number.isFinite(ratio) && ratio > 0 ? ratio : RATIO_POR_DEFECTO,

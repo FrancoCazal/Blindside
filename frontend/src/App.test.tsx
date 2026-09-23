@@ -254,13 +254,13 @@ describe("pantalla de reposición", () => {
     expect(filas.length).toBeGreaterThanOrEqual(IDS.length + 1);
     expect(within(tabla).getByText("T12 · P0412")).toBeTruthy();
 
-    // Columnas: Serie · Quiebre 14 d · Política · Sugerido · Δ · Impacto.
+    // Columnas: Serie · Clase · Quiebre 14 d · Política · Sugerido · Δ · Impacto.
     const primera = within(tabla).getByText("T12 · P0412").closest("tr")!;
     const celdas = within(primera).getAllByRole("cell");
-    expect(celdas[3].textContent).toBe("0,96");
+    expect(celdas[4].textContent).toBe("0,96");
     // La política es la media móvil de la historia, así que el delta es negativo
     // en base observada: pedir lo que ve el ERP es pedir de menos.
-    expect(celdas[4].textContent?.startsWith("\u2212")).toBe(true);
+    expect(celdas[5].textContent?.startsWith("\u2212")).toBe(true);
   });
 
   it("los botones de ratio muestran el cuantil que producen", async () => {

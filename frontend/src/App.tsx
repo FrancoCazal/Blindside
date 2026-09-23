@@ -1,12 +1,16 @@
 import { Component, useEffect, useState, type ReactNode } from "react";
 
 import { API_BASE, api, type SeriesItem } from "./api/client";
-import { ApiCaida, Esqueleto } from "./components/estados";
+import { ApiCaida, Esqueleto, SinArtefacto } from "./components/estados";
 import { Shell } from "./components/Shell";
 import { SelectorSeries } from "./components/SelectorSeries";
+import { PantallaComparativa } from "./screens/PantallaComparativa";
+import { PantallaExplicabilidad } from "./screens/PantallaExplicabilidad";
+import { PantallaMapa } from "./screens/PantallaMapa";
 import { PantallaReposicion } from "./screens/PantallaReposicion";
 import { PantallaSalud } from "./screens/PantallaSalud";
 import { PantallaSerie } from "./screens/PantallaSerie";
+import { PantallaVistaGeneral } from "./screens/PantallaVistaGeneral";
 import { useAsincrono, useAtajo, useEstado } from "./state";
 
 export default function App() {
@@ -62,6 +66,12 @@ export default function App() {
     irA("series");
   };
 
+  // Sin ningún artefacto cargado, las pantallas que emiten una cantidad no tienen
+  // nada que mostrar. Las de evidencia sí, así que el estado no es global.
+  const modelos = salud.datos?.models ?? [];
+  const sinModelo = modelos.length > 0 && modelos.every((m) => !m.loaded);
+  const necesitaModelo = pantalla === "reorder" || pantalla === "series" || pantalla === "explain";
+
   return (
     <>
       <Shell
@@ -71,17 +81,29 @@ export default function App() {
         onAbrirSelector={() => setSelectorAbierto(true)}
       >
         <LimiteDeFalla onReintentar={salud.recargar}>
-          {pantalla === "reorder" && (
-            <PantallaReposicion
-              onElegirSerie={(id) => {
-                setSerie(id);
-                irA("series");
-              }}
-            />
+          {sinModelo && necesitaModelo ? (
+            <SinArtefacto modelos={modelos} onReintentar={salud.recargar} />
+          ) : (
+            <>
+              {pantalla === "reorder" && (
+                <PantallaReposicion
+                  onElegirSerie={(id) => {
+                    setSerie(id);
+                    irA("series");
+                  }}
+                />
+              )}
+              {pantalla === "series" && (serie ? <PantallaSerie serie={serie} /> : <Esqueleto />)}
+              {pantalla === "overview" && salud.datos && (
+                <PantallaVistaGeneral health={salud.datos} />
+              )}
+              {pantalla === "compare" && <PantallaComparativa />}
+              {pantalla === "explain" &&
+                (serie ? <PantallaExplicabilidad serie={serie} /> : <Esqueleto />)}
+              {pantalla === "health" && salud.datos && <PantallaSalud health={salud.datos} />}
+              {pantalla === "map" && <PantallaMapa serieActiva={serie} />}
+            </>
           )}
-          {pantalla === "series" &&
-            (serie ? <PantallaSerie serie={serie} /> : <Esqueleto />)}
-          {pantalla === "health" && salud.datos && <PantallaSalud health={salud.datos} />}
         </LimiteDeFalla>
       </Shell>
 

@@ -24,6 +24,30 @@ const PRIMARIAS: { id: Pantalla; rotulo: string }[] = [
   { id: "series", rotulo: "Serie individual" },
 ];
 
+/**
+ * La navegación tiene dos niveles. Primario: las dos pantallas hero. Secundario:
+ * el resto agrupado bajo Evidencia y Diagnóstico. Un sidebar de siete ítems
+ * iguales sería la estructura equivocada — repite el error del Streamlit, donde
+ * todo pesa lo mismo y la decisión queda al lado de una métrica de diagnóstico.
+ */
+const GRUPOS: { rotulo: string; items: { id: Pantalla; rotulo: string }[] }[] = [
+  {
+    rotulo: "Evidencia",
+    items: [
+      { id: "overview", rotulo: "Vista general" },
+      { id: "compare", rotulo: "Comparativa" },
+    ],
+  },
+  {
+    rotulo: "Diagnóstico",
+    items: [
+      { id: "explain", rotulo: "Explicabilidad" },
+      { id: "health", rotulo: "Salud del modelo" },
+      { id: "map", rotulo: "Mapa" },
+    ],
+  },
+];
+
 export function Shell({
   health,
   backtest,
@@ -124,16 +148,21 @@ export function Shell({
             ))}
           </div>
           <div className="nav-separador" />
-          <div className="nav-grupo">
-            <span className="rotulo">Diagnóstico</span>
-            <button
-              type="button"
-              onClick={() => irA("health")}
-              aria-current={pantalla === "health" ? "page" : undefined}
-            >
-              Salud del modelo
-            </button>
-          </div>
+          {GRUPOS.map((grupo) => (
+            <div className="nav-grupo" key={grupo.rotulo}>
+              <span className="rotulo">{grupo.rotulo}</span>
+              {grupo.items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => irA(item.id)}
+                  aria-current={pantalla === item.id ? "page" : undefined}
+                >
+                  {item.rotulo}
+                </button>
+              ))}
+            </div>
+          ))}
         </nav>
 
         <div className="franja-contexto">

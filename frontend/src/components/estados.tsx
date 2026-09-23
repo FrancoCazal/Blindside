@@ -11,6 +11,83 @@ import { useEffect, useState } from "react";
 
 import { API_BASE, ApiError } from "../api/client";
 
+/**
+ * Sin artefacto. Es el estado inicial de un clon del repositorio: la API levanta,
+ * los datos están, y no hay modelo que pueda emitir una cantidad.
+ *
+ * Se distingue de «API caída» porque se arregla distinto — ahí falta un proceso,
+ * acá falta un entrenamiento — y de «sin datos», que pide otro comando todavía.
+ * Mostrar el mismo cartel para los tres hace perder el tiempo de quien lo lee.
+ */
+export function SinArtefacto({
+  modelos,
+  onReintentar,
+}: {
+  modelos: { basis: string; artifact: string; loaded: boolean; error?: string | null }[];
+  onReintentar: () => void;
+}) {
+  return (
+    <div className="pagina">
+      <h2>Falta entrenar el modelo</h2>
+      <p className="nota" style={{ maxWidth: "78ch", marginTop: 8 }}>
+        La API está en pie y sirviendo datos, pero no hay artefacto que pueda emitir una cantidad a
+        reponer. Las pantallas de evidencia — vista general y comparativa — funcionan igual, porque
+        no dependen del modelo.
+      </p>
+
+      <table className="tabla" style={{ maxWidth: 560, marginTop: 18 }}>
+        <thead>
+          <tr>
+            <th scope="col" className="izq">
+              Base de cálculo
+            </th>
+            <th scope="col" className="izq">
+              Artefacto
+            </th>
+            <th scope="col" className="izq">
+              Estado
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {modelos.map((m) => (
+            <tr className="fila" key={m.basis}>
+              <td className="izq tinta">
+                {m.basis === "recovered" ? "Demanda recuperada" : "Venta observada"}
+              </td>
+              <td className="izq apagada">{m.artifact}</td>
+              <td className="izq" style={{ color: m.loaded ? undefined : "var(--advertencia-texto)" }}>
+                {m.loaded ? "cargado" : (m.error ?? "falta")}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <div className="consecuencia" style={{ marginTop: 18, maxWidth: 620 }}>
+        <code style={{ fontFamily: "inherit" }}>make train</code> serializa los dos artefactos, uno
+        por base de cálculo. Hacen falta los dos: con uno solo el toggle de censura cambia el gráfico
+        y devuelve la misma cantidad en las dos posiciones.
+      </div>
+
+      <button
+        type="button"
+        onClick={onReintentar}
+        style={{
+          marginTop: 18,
+          background: "var(--tinta)",
+          color: "var(--papel)",
+          padding: "9px 16px",
+          fontSize: 13,
+          fontWeight: 600,
+        }}
+      >
+        Volver a consultar
+      </button>
+    </div>
+  );
+}
+
 export function ApiCaida({ error, onReintentar }: { error: unknown; onReintentar: () => void }) {
   const [segundos, setSegundos] = useState(15);
   const [ultimoIntento] = useState(() => new Date());

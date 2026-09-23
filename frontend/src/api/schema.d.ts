@@ -185,6 +185,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Explain
+         * @description Contribuciones por feature de una prediccion concreta.
+         *
+         *     Son TreeSHAP **de verdad**, calculadas por LightGBM con `pred_contrib=True`, no
+         *     el paquete `shap`: son los mismos valores — es la implementacion que LightGBM
+         *     lleva adentro — y asi la explicabilidad funciona en la imagen de servicio, que
+         *     deja `shap` afuera porque pesa y no hace falta para responder `/forecast`.
+         *
+         *     Se explica el cuantil critico y no la mediana, porque la cifra que la interfaz
+         *     muestra es la cantidad a pedir.
+         */
+        post: operations["explain_explain_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/products/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Products Map
+         * @description Proyeccion 2D del catalogo de productos.
+         *
+         *     Es una proyeccion medida, no un dibujo: PCA sobre seis features de
+         *     comportamiento de demanda por producto, con la varianza explicada en la
+         *     respuesta para que la pantalla pueda declarar cuanto del fenomeno cabe en dos
+         *     dimensiones. PCA y no UMAP porque es lineal y reproducible: un mapa que cambia
+         *     de forma entre corridas no sirve como evidencia.
+         */
+        get: operations["products_map_products_map_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/backtest/breakdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Backtest Breakdown
+         * @description El backtest desagregado por origen, por horizonte y por banda de rotacion.
+         *
+         *     Los datos ya estaban en el parquet; esto los expone. El agregado solo no
+         *     alcanza: la metodologia prohibe el numero unico porque un promedio bueno
+         *     esconde un origen catastrofico, y es justamente el origen malo el que despues
+         *     pasa en produccion.
+         */
+        get: operations["backtest_breakdown_backtest_breakdown_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/censoring": {
         parameters: {
             query?: never;
@@ -209,6 +288,28 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * BacktestBreakdown
+         * @description Desagregado del backtest: por origen, por horizonte y por banda.
+         *
+         *     Es lo que convierte "MASE 0,83" en un argumento: el promedio bueno puede
+         *     esconder un origen catastrofico, y el origen catastrofico es el que pasa en
+         *     produccion.
+         */
+        BacktestBreakdown: {
+            /** Target */
+            target: string;
+            /** Horizon */
+            horizon: number;
+            /** N Origins */
+            n_origins: number;
+            /** Origins */
+            origins: components["schemas"]["OriginMetric"][];
+            /** Horizons */
+            horizons: components["schemas"]["HorizonMetric"][];
+            /** Bands */
+            bands: components["schemas"]["BandMetric"][];
+        };
         /** BacktestResponse */
         BacktestResponse: {
             /** Target */
@@ -220,6 +321,19 @@ export interface components {
             /** Rows */
             rows: components["schemas"]["MetricRow"][];
             external_baseline?: components["schemas"]["MetricRow"] | null;
+        };
+        /** BandMetric */
+        BandMetric: {
+            /** Model Name */
+            model_name: string;
+            /** Band */
+            band: string;
+            /** Metric */
+            metric: string;
+            /** Value */
+            value: number;
+            /** N */
+            n: number;
         };
         /**
          * Basis
@@ -247,6 +361,46 @@ export interface components {
             coverage_empirical: number;
             /** N */
             n: number;
+        };
+        /** ExplainRequest */
+        ExplainRequest: {
+            /** Series Id */
+            series_id: string;
+            /**
+             * Dt
+             * Format: date
+             */
+            dt: string;
+            /**
+             * Top K
+             * @default 12
+             */
+            top_k: number;
+            /**
+             * Recover Censoring
+             * @default true
+             */
+            recover_censoring: boolean;
+        };
+        /** ExplainResponse */
+        ExplainResponse: {
+            series: components["schemas"]["SeriesRef"];
+            /**
+             * Dt
+             * Format: date
+             */
+            dt: string;
+            basis: components["schemas"]["Basis"];
+            /** Model Name */
+            model_name: string;
+            /** Quantile */
+            quantile?: number | null;
+            /** Base Value */
+            base_value: number;
+            /** Prediction */
+            prediction: number;
+            /** Contributions */
+            contributions: components["schemas"]["ShapContribution"][];
         };
         /** ForecastPoint */
         ForecastPoint: {
@@ -376,6 +530,17 @@ export interface components {
             /** Uplift Pct Clean Days */
             uplift_pct_clean_days: number;
         };
+        /** HorizonMetric */
+        HorizonMetric: {
+            /** Model Name */
+            model_name: string;
+            /** H */
+            h: number;
+            /** Metric */
+            metric: string;
+            /** Value */
+            value: number;
+        };
         /**
          * MetricRow
          * @description Una metrica de un modelo, con dispersion entre origenes.
@@ -427,6 +592,22 @@ export interface components {
             /** Error */
             error?: string | null;
         };
+        /** OriginMetric */
+        OriginMetric: {
+            /** Model Name */
+            model_name: string;
+            /** Origin */
+            origin: number;
+            /**
+             * Origin Date
+             * Format: date
+             */
+            origin_date: string;
+            /** Metric */
+            metric: string;
+            /** Value */
+            value: number;
+        };
         /**
          * PanelInfo
          * @description Que datos se estan sirviendo. Dispara el estado de muestra de la interfaz.
@@ -468,6 +649,40 @@ export interface components {
             reference_n_stores?: number | null;
             /** Reference N Products */
             reference_n_products?: number | null;
+        };
+        /**
+         * ProductMap
+         * @description Proyeccion 2D del catalogo, con la varianza que realmente captura.
+         *
+         *     La varianza explicada va en la respuesta porque un scatter sin ella invita a
+         *     leer distancias que la proyeccion no conserva.
+         */
+        ProductMap: {
+            /** Method */
+            method: string;
+            /** Features */
+            features: string[];
+            /** Explained Variance */
+            explained_variance: number[];
+            /** Points */
+            points: components["schemas"]["ProductPoint"][];
+        };
+        /** ProductPoint */
+        ProductPoint: {
+            /** Product Id */
+            product_id: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** Rotation Band */
+            rotation_band: string;
+            /** Demanda Media */
+            demanda_media: number;
+            /** Tasa Quiebre */
+            tasa_quiebre: number;
+            /** N Series */
+            n_series: number;
         };
         /** ReorderLine */
         ReorderLine: {
@@ -586,6 +801,8 @@ export interface components {
             second_category_id?: number | null;
             /** Third Category Id */
             third_category_id?: number | null;
+            /** Rotation Band */
+            rotation_band?: string | null;
             /** Label */
             label: string;
         };
@@ -624,6 +841,15 @@ export interface components {
             product_id: number;
             /** City Id */
             city_id?: number | null;
+        };
+        /** ShapContribution */
+        ShapContribution: {
+            /** Feature */
+            feature: string;
+            /** Value */
+            value?: number | null;
+            /** Contribution */
+            contribution: number;
         };
         /**
          * StockoutRun
@@ -871,6 +1097,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BacktestResponse"];
+                };
+            };
+        };
+    };
+    explain_explain_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExplainRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExplainResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    products_map_products_map_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProductMap"];
+                };
+            };
+        };
+    };
+    backtest_breakdown_backtest_breakdown_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BacktestBreakdown"];
                 };
             };
         };

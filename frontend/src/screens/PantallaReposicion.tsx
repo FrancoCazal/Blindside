@@ -163,6 +163,9 @@ function Reposicion({ onElegirSerie }: { onElegirSerie: (id: string) => void }) 
                     Serie
                   </th>
                   <th scope="col" className="col-opcional">
+                    Clase
+                  </th>
+                  <th scope="col" className="col-opcional">
                     Quiebre 14 d
                   </th>
                   <th scope="col">Política</th>
@@ -307,6 +310,10 @@ function FilaSerie({
         }}
       >
         <td className="izq serie">{serieCorta(fila.serie.store_id, fila.serie.product_id)}</td>
+        {/* La clase es la banda de rotación con los mismos cortes del backtest:
+            en baja rotación no se espera que el modelo complejo gane, así que hay
+            que poder ver de qué clase es cada fila sin salir de la tabla. */}
+        <td className="col-opcional apagada">{fila.serie.rotation_band ?? "—"}</td>
         <td className="col-opcional">
           <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
             <Sparkline valores={fila.quiebre14} maximo={maxHoras} />
@@ -329,7 +336,7 @@ function FilaSerie({
 
       {abierta && (
         <tr className="fila-expandida">
-          <td colSpan={6}>
+          <td colSpan={7}>
             <div className="detalle">
               <div>
                 <div className="rotulo" style={{ marginBottom: 6 }}>

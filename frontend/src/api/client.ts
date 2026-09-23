@@ -27,6 +27,14 @@ export type ForecastPoint = Schemas["ForecastPoint"];
 export type ReorderResponse = Schemas["ReorderResponse"];
 export type ReorderLine = Schemas["ReorderLine"];
 export type BacktestResponse = Schemas["BacktestResponse"];
+export type BacktestBreakdown = Schemas["BacktestBreakdown"];
+export type OriginMetric = Schemas["OriginMetric"];
+export type HorizonMetric = Schemas["HorizonMetric"];
+export type BandMetric = Schemas["BandMetric"];
+export type ExplainResponse = Schemas["ExplainResponse"];
+export type ShapContribution = Schemas["ShapContribution"];
+export type ProductMap = Schemas["ProductMap"];
+export type ProductPoint = Schemas["ProductPoint"];
 export type Basis = Schemas["Basis"];
 
 export const API_BASE: string =
@@ -136,4 +144,28 @@ export const api = {
     }),
 
   backtest: () => request<BacktestResponse>("/backtest"),
+
+  backtestBreakdown: () => request<BacktestBreakdown>("/backtest/breakdown"),
+
+  censoring: () =>
+    request<{
+      summary: Record<string, number>;
+      comparison: Record<string, number | string>[];
+      note: string;
+    }>("/censoring"),
+
+  explain: (args: {
+    seriesId: string;
+    dt: string;
+    topK?: number;
+    recoverCensoring: boolean;
+  }) =>
+    post<ExplainResponse>("/explain", {
+      series_id: args.seriesId,
+      dt: args.dt,
+      top_k: args.topK ?? 12,
+      recover_censoring: args.recoverCensoring,
+    }),
+
+  productsMap: () => request<ProductMap>("/products/map"),
 };

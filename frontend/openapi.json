@@ -335,6 +335,92 @@
         }
       }
     },
+    "/explain": {
+      "post": {
+        "tags": [
+          "explicabilidad"
+        ],
+        "summary": "Explain",
+        "description": "Contribuciones por feature de una prediccion concreta.\n\nSon TreeSHAP **de verdad**, calculadas por LightGBM con `pred_contrib=True`, no\nel paquete `shap`: son los mismos valores — es la implementacion que LightGBM\nlleva adentro — y asi la explicabilidad funciona en la imagen de servicio, que\ndeja `shap` afuera porque pesa y no hace falta para responder `/forecast`.\n\nSe explica el cuantil critico y no la mediana, porque la cifra que la interfaz\nmuestra es la cantidad a pedir.",
+        "operationId": "explain_explain_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExplainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplainResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/map": {
+      "get": {
+        "tags": [
+          "datos"
+        ],
+        "summary": "Products Map",
+        "description": "Proyeccion 2D del catalogo de productos.\n\nEs una proyeccion medida, no un dibujo: PCA sobre seis features de\ncomportamiento de demanda por producto, con la varianza explicada en la\nrespuesta para que la pantalla pueda declarar cuanto del fenomeno cabe en dos\ndimensiones. PCA y no UMAP porque es lineal y reproducible: un mapa que cambia\nde forma entre corridas no sirve como evidencia.",
+        "operationId": "products_map_products_map_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductMap"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/backtest/breakdown": {
+      "get": {
+        "tags": [
+          "evaluacion"
+        ],
+        "summary": "Backtest Breakdown",
+        "description": "El backtest desagregado por origen, por horizonte y por banda de rotacion.\n\nLos datos ya estaban en el parquet; esto los expone. El agregado solo no\nalcanza: la metodologia prohibe el numero unico porque un promedio bueno\nesconde un origen catastrofico, y es justamente el origen malo el que despues\npasa en produccion.",
+        "operationId": "backtest_breakdown_backtest_breakdown_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestBreakdown"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/censoring": {
       "get": {
         "tags": [
@@ -361,6 +447,54 @@
   },
   "components": {
     "schemas": {
+      "BacktestBreakdown": {
+        "properties": {
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "horizon": {
+            "type": "integer",
+            "title": "Horizon"
+          },
+          "n_origins": {
+            "type": "integer",
+            "title": "N Origins"
+          },
+          "origins": {
+            "items": {
+              "$ref": "#/components/schemas/OriginMetric"
+            },
+            "type": "array",
+            "title": "Origins"
+          },
+          "horizons": {
+            "items": {
+              "$ref": "#/components/schemas/HorizonMetric"
+            },
+            "type": "array",
+            "title": "Horizons"
+          },
+          "bands": {
+            "items": {
+              "$ref": "#/components/schemas/BandMetric"
+            },
+            "type": "array",
+            "title": "Bands"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "horizon",
+          "n_origins",
+          "origins",
+          "horizons",
+          "bands"
+        ],
+        "title": "BacktestBreakdown",
+        "description": "Desagregado del backtest: por origen, por horizonte y por banda.\n\nEs lo que convierte \"MASE 0,83\" en un argumento: el promedio bueno puede\nesconder un origen catastrofico, y el origen catastrofico es el que pasa en\nproduccion."
+      },
       "BacktestResponse": {
         "properties": {
           "target": {
@@ -402,6 +536,39 @@
         ],
         "title": "BacktestResponse"
       },
+      "BandMetric": {
+        "properties": {
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "band": {
+            "type": "string",
+            "title": "Band"
+          },
+          "metric": {
+            "type": "string",
+            "title": "Metric"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "n": {
+            "type": "integer",
+            "title": "N"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_name",
+          "band",
+          "metric",
+          "value",
+          "n"
+        ],
+        "title": "BandMetric"
+      },
       "Basis": {
         "type": "string",
         "enum": [
@@ -441,6 +608,93 @@
         ],
         "title": "CoveragePoint",
         "description": "Cobertura empirica de un paso del horizonte contra la nominal.\n\nLa degradacion **no** es monotona y eso es correcto: con estacionalidad\nsemanal el objetivo de h7 cae el mismo dia de la semana que el origen."
+      },
+      "ExplainRequest": {
+        "properties": {
+          "series_id": {
+            "type": "string",
+            "title": "Series Id"
+          },
+          "dt": {
+            "type": "string",
+            "format": "date",
+            "title": "Dt"
+          },
+          "top_k": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "default": 12
+          },
+          "recover_censoring": {
+            "type": "boolean",
+            "title": "Recover Censoring",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "series_id",
+          "dt"
+        ],
+        "title": "ExplainRequest"
+      },
+      "ExplainResponse": {
+        "properties": {
+          "series": {
+            "$ref": "#/components/schemas/SeriesRef"
+          },
+          "dt": {
+            "type": "string",
+            "format": "date",
+            "title": "Dt"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/Basis"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "quantile": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantile"
+          },
+          "base_value": {
+            "type": "number",
+            "title": "Base Value"
+          },
+          "prediction": {
+            "type": "number",
+            "title": "Prediction"
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/ShapContribution"
+            },
+            "type": "array",
+            "title": "Contributions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series",
+          "dt",
+          "basis",
+          "model_name",
+          "base_value",
+          "prediction",
+          "contributions"
+        ],
+        "title": "ExplainResponse"
       },
       "ForecastPoint": {
         "properties": {
@@ -801,6 +1055,34 @@
         ],
         "title": "HistorySummary"
       },
+      "HorizonMetric": {
+        "properties": {
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "h": {
+            "type": "integer",
+            "title": "H"
+          },
+          "metric": {
+            "type": "string",
+            "title": "Metric"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_name",
+          "h",
+          "metric",
+          "value"
+        ],
+        "title": "HorizonMetric"
+      },
       "MetricRow": {
         "properties": {
           "model_name": {
@@ -936,6 +1218,40 @@
         "title": "ModelStatus",
         "description": "Estado de un artefacto. Hay uno por base de calculo.\n\n`n_series_seen` contra `n_series_in_panel` existe porque el desajuste\ntrain/serve que ninguna metrica detecta es servir un artefacto entrenado\nsobre `data/sample/` contra el panel completo. Paso en este proyecto."
       },
+      "OriginMetric": {
+        "properties": {
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "origin": {
+            "type": "integer",
+            "title": "Origin"
+          },
+          "origin_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Origin Date"
+          },
+          "metric": {
+            "type": "string",
+            "title": "Metric"
+          },
+          "value": {
+            "type": "number",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_name",
+          "origin",
+          "origin_date",
+          "metric",
+          "value"
+        ],
+        "title": "OriginMetric"
+      },
       "PanelInfo": {
         "properties": {
           "source": {
@@ -1023,6 +1339,87 @@
         ],
         "title": "PanelInfo",
         "description": "Que datos se estan sirviendo. Dispara el estado de muestra de la interfaz.\n\nLos conteos van **siempre contra su referencia**: \"60 de 3066 series\" dice\nalgo, \"60 series\" no. La referencia sale del manifiesto del submuestreo, asi\nque es `None` si no esta — y en ese caso la interfaz no puede afirmar que\nesta viendo el panel completo."
+      },
+      "ProductMap": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Features"
+          },
+          "explained_variance": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Explained Variance"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/ProductPoint"
+            },
+            "type": "array",
+            "title": "Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "features",
+          "explained_variance",
+          "points"
+        ],
+        "title": "ProductMap",
+        "description": "Proyeccion 2D del catalogo, con la varianza que realmente captura.\n\nLa varianza explicada va en la respuesta porque un scatter sin ella invita a\nleer distancias que la proyeccion no conserva."
+      },
+      "ProductPoint": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "x": {
+            "type": "number",
+            "title": "X"
+          },
+          "y": {
+            "type": "number",
+            "title": "Y"
+          },
+          "rotation_band": {
+            "type": "string",
+            "title": "Rotation Band"
+          },
+          "demanda_media": {
+            "type": "number",
+            "title": "Demanda Media"
+          },
+          "tasa_quiebre": {
+            "type": "number",
+            "title": "Tasa Quiebre"
+          },
+          "n_series": {
+            "type": "integer",
+            "title": "N Series"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "x",
+          "y",
+          "rotation_band",
+          "demanda_media",
+          "tasa_quiebre",
+          "n_series"
+        ],
+        "title": "ProductPoint"
       },
       "ReorderLine": {
         "properties": {
@@ -1326,6 +1723,17 @@
             ],
             "title": "Third Category Id"
           },
+          "rotation_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotation Band"
+          },
           "label": {
             "type": "string",
             "title": "Label"
@@ -1421,6 +1829,35 @@
         ],
         "title": "SeriesRef",
         "description": "Referencia a una serie tienda-producto."
+      },
+      "ShapContribution": {
+        "properties": {
+          "feature": {
+            "type": "string",
+            "title": "Feature"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "contribution": {
+            "type": "number",
+            "title": "Contribution"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feature",
+          "contribution"
+        ],
+        "title": "ShapContribution"
       },
       "StockoutRun": {
         "properties": {
