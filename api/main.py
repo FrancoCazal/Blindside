@@ -363,6 +363,50 @@ def _opt_float(value: Any) -> float | None:
     return None if value is None or pd.isna(value) else float(value)
 
 
+def _require_backtest() -> pd.DataFrame:
+    """Resultado del ultimo backtest, o 503 con el comando que lo genera.
+
+    No se corre el backtest en el request: son minutos de entrenamiento por modelo
+    y una API no es el lugar.
+    """
+    path = cfg.REPORTS / "backtest_models.parquet"
+    if not path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"no hay resultado de backtest en {path}. Correr `make models`",
+        )
+    return pd.read_parquet(path)
+
+
+#: Nombres de columna del contrato de backtest. Se leen aca para no importar el
+#: modulo de contratos en cada request.
+C_MODEL = "model"
+C_ORIGIN = "origin"
+C_ORIGIN_DATE = "origin_date"
+
+#: Metricas que la interfaz muestra. El resto viven en el reporte: una pantalla
+#: con nueve metricas no comunica cual importa.
+_METRICAS_VISIBLES: tuple[str, ...] = ("mase", "wape", "mae", "coverage")
+
+
+def _rotation_bands() -> pd.Series:
+    """Banda de rotacion por serie, calculada una vez y memorizada.
+
+    Usa los mismos cortes que el backtest para desagregar sus metricas, asi que la
+    clase que muestra la tabla es la misma con la que se reporta que el modelo
+    complejo no le gana al ingenuo en baja rotacion.
+    """
+    cacheada = STATE.get("rotation_bands")
+    if cacheada is not None:
+        return cacheada
+    from blindside.validation.splits import rotation_bands
+
+    panel = _require_panel()
+    bandas = rotation_bands(panel, target=S.DEMAND_LATENT)
+    STATE["rotation_bands"] = bandas
+    return bandas
+
+
 def _uplift_pct(observed, recovered) -> float:
     """Cuanto mas alta es la demanda latente que la venta observada, en porcentaje.
 
@@ -565,6 +609,10 @@ def list_series(
     panel = _require_panel()
     index = S.series_index(panel)
     index["label"] = index.apply(_catalog_label, axis=1)
+    # La banda de rotacion es la columna "Clase" de la tabla. Se calcula una vez
+    # al arrancar: es un groupby sobre el panel entero y no cambia entre requests.
+    bandas = _rotation_bands()
+    index["rotation_band"] = index[S.SERIES_ID].map(bandas)
 
     if store_id is not None:
         index = index[index[S.STORE_ID] == store_id]
@@ -585,6 +633,7 @@ def list_series(
             first_category_id=_opt_int(r.get(S.FIRST_CATEGORY_ID)),
             second_category_id=_opt_int(r.get(S.SECOND_CATEGORY_ID)),
             third_category_id=_opt_int(r.get(S.THIRD_CATEGORY_ID)),
+            rotation_band=(str(r["rotation_band"]) if pd.notna(r["rotation_band"]) else None),
             label=str(r["label"]),
         )
         for _, r in page.iterrows()
@@ -821,13 +870,7 @@ def backtest() -> sc.BacktestResponse:
     """
     from blindside.evaluate import metrics as M
 
-    path = cfg.REPORTS / "backtest_models.parquet"
-    if not path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"no hay resultado de backtest en {path}. Correr `make models`",
-        )
-    result = pd.read_parquet(path)
+    result = _require_backtest()
     summary = M.summarize(result)
     return sc.BacktestResponse(
         target=S.DEMAND_LATENT,
@@ -845,6 +888,182 @@ def backtest() -> sc.BacktestResponse:
             )
             for _, r in summary.iterrows()
         ],
+    )
+
+
+@app.post("/explain", response_model=sc.ExplainResponse, tags=["explicabilidad"])
+def explain(req: sc.ExplainRequest) -> sc.ExplainResponse:
+    """Contribuciones por feature de una prediccion concreta.
+
+    Son TreeSHAP **de verdad**, calculadas por LightGBM con `pred_contrib=True`, no
+    el paquete `shap`: son los mismos valores — es la implementacion que LightGBM
+    lleva adentro — y asi la explicabilidad funciona en la imagen de servicio, que
+    deja `shap` afuera porque pesa y no hace falta para responder `/forecast`.
+
+    Se explica el cuantil critico y no la mediana, porque la cifra que la interfaz
+    muestra es la cantidad a pedir.
+    """
+    basis = _basis_of(recover_censoring=req.recover_censoring)
+    panel = _require_panel()
+    model = _require_model(basis)
+    refs = _series_refs(panel, [req.series_id])
+
+    # El modelo explicable puede estar debajo del envoltorio conformal.
+    interno = getattr(model, "base", model)
+    if not hasattr(interno, "contributions") or not hasattr(interno, "design_matrix"):
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=(
+                f"el modelo cargado para la base '{basis}' ('{_model_name(basis)}') no "
+                "produce contribuciones por feature. Solo los modelos de arbol las "
+                "emiten; cargar un LightGBM."
+            ),
+        )
+
+    future = _future_index(panel, [req.series_id], cfg.FORECAST.horizon)
+    fila = future[future[S.DATE] == pd.Timestamp(req.dt)]
+    if fila.empty:
+        disponibles = sorted({pd.Timestamp(d).date().isoformat() for d in future[S.DATE]})
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"la fecha {req.dt} no esta en el horizonte que el modelo puede "
+                f"predecir. Disponibles: {disponibles}"
+            ),
+        )
+
+    X = interno.design_matrix(fila)
+    aportes, base_value = interno.contributions(X)
+    prediccion = float(model.predict(fila).iloc[0])
+
+    serie = aportes.iloc[0]
+    orden = serie.abs().sort_values(ascending=False).head(req.top_k).index
+    valores = X.iloc[0]
+    contribuciones = [
+        sc.ShapContribution(
+            feature=str(f),
+            value=_opt_float(valores.get(f)),
+            contribution=float(serie[f]),
+        )
+        for f in orden
+    ]
+
+    return sc.ExplainResponse(
+        series=refs[req.series_id],
+        dt=req.dt,
+        basis=sc.Basis(basis),
+        model_name=_model_name(basis),
+        quantile=getattr(interno, "_explainable_quantile", lambda: None)(),
+        base_value=base_value,
+        prediction=prediccion,
+        contributions=contribuciones,
+    )
+
+
+@app.get("/products/map", response_model=sc.ProductMap, tags=["datos"])
+def products_map() -> sc.ProductMap:
+    """Proyeccion 2D del catalogo de productos.
+
+    Es una proyeccion medida, no un dibujo: PCA sobre seis features de
+    comportamiento de demanda por producto, con la varianza explicada en la
+    respuesta para que la pantalla pueda declarar cuanto del fenomeno cabe en dos
+    dimensiones. PCA y no UMAP porque es lineal y reproducible: un mapa que cambia
+    de forma entre corridas no sirve como evidencia.
+    """
+    from blindside.unsupervised import embeddings as emb
+
+    panel = _require_panel()
+    puntos, varianza = emb.project_products(panel)
+    return sc.ProductMap(
+        method="pca",
+        features=list(emb.FEATURES),
+        explained_variance=varianza,
+        points=[
+            sc.ProductPoint(
+                product_id=int(r[S.PRODUCT_ID]),
+                x=float(r["x"]),
+                y=float(r["y"]),
+                rotation_band=str(r["rotation_band"]),
+                demanda_media=float(r["demanda_media"]),
+                tasa_quiebre=float(r["tasa_quiebre"]),
+                n_series=int(r["n_series"]),
+            )
+            for _, r in puntos.iterrows()
+        ],
+    )
+
+
+@app.get("/backtest/breakdown", response_model=sc.BacktestBreakdown, tags=["evaluacion"])
+def backtest_breakdown() -> sc.BacktestBreakdown:
+    """El backtest desagregado por origen, por horizonte y por banda de rotacion.
+
+    Los datos ya estaban en el parquet; esto los expone. El agregado solo no
+    alcanza: la metodologia prohibe el numero unico porque un promedio bueno
+    esconde un origen catastrofico, y es justamente el origen malo el que despues
+    pasa en produccion.
+    """
+    from blindside.evaluate import metrics as M
+    from blindside.validation.splits import rotation_bands
+
+    result = _require_backtest()
+    panel = STATE.get("panel")
+
+    por_origen = M.metrics_by_origin(result)
+    origenes = [
+        sc.OriginMetric(
+            model_name=str(r[C_MODEL]),
+            origin=int(r[C_ORIGIN]),
+            origin_date=pd.Timestamp(r[C_ORIGIN_DATE]).date(),
+            metric=metric,
+            value=float(r[metric]),
+        )
+        for _, r in por_origen.iterrows()
+        for metric in _METRICAS_VISIBLES
+        if metric in por_origen.columns and pd.notna(r[metric])
+    ]
+
+    por_horizonte = M.metrics_by_horizon(result)
+    horizontes = [
+        sc.HorizonMetric(
+            model_name=str(r[C_MODEL]),
+            h=int(r["h"]),
+            metric=metric,
+            value=float(r[metric]),
+        )
+        for _, r in por_horizonte.iterrows()
+        for metric in _METRICAS_VISIBLES
+        if metric in por_horizonte.columns and pd.notna(r[metric])
+    ]
+
+    bandas: list[sc.BandMetric] = []
+    if panel is not None:
+        # Las bandas se definen con el train del primer origen, nunca con la serie
+        # completa: elegir los grupos sabiendo el resultado seria trampa.
+        primer_origen = pd.Timestamp(result[C_ORIGIN_DATE].min())
+        train = panel[panel[S.DATE] <= primer_origen]
+        if not train.empty:
+            bands = rotation_bands(train, target=S.DEMAND_LATENT)
+            tabla = M.metrics_by_group(result, bands, name="rotation_band")
+            bandas = [
+                sc.BandMetric(
+                    model_name=str(r[C_MODEL]),
+                    band=str(r["rotation_band"]),
+                    metric=metric,
+                    value=float(r[metric]),
+                    n=int(r.get("n", 0)),
+                )
+                for _, r in tabla.iterrows()
+                for metric in _METRICAS_VISIBLES
+                if metric in tabla.columns and pd.notna(r[metric])
+            ]
+
+    return sc.BacktestBreakdown(
+        target=S.DEMAND_LATENT,
+        horizon=cfg.FORECAST.horizon,
+        n_origins=int(result[C_ORIGIN].nunique()),
+        origins=origenes,
+        horizons=horizontes,
+        bands=bandas,
     )
 
 

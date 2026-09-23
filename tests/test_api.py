@@ -335,6 +335,100 @@ def test_series_history_batch_serves_the_table(panel_on_disk, recovered_panel) -
     assert faltante.status_code == 404
 
 
+# --- Pantallas de evidencia ----------------------------------------------
+def test_series_serves_the_rotation_band(panel_on_disk, recovered_panel) -> None:
+    """La columna "Clase" de la tabla sale de la misma banda que el backtest.
+
+    Que el modelo complejo no le gane al ingenuo en baja rotacion es un resultado
+    esperado, pero solo se puede leer en la lista si cada fila declara su clase.
+    """
+    from api import main
+
+    with TestClient(main.app) as client:
+        items = client.get("/series?limit=25").json()["items"]
+
+    bandas = {i["rotation_band"] for i in items}
+    assert bandas <= {"baja", "media", "alta"}
+    assert len(bandas) > 1, "con 24 series sinteticas tienen que aparecer varias clases"
+
+
+def test_products_map_is_a_measured_projection(panel_on_disk, recovered_panel) -> None:
+    """El mapa es PCA sobre features de comportamiento, no un scatter dibujado.
+
+    La varianza explicada viaja en la respuesta porque un scatter sin ella invita a
+    leer distancias que la proyeccion no conserva.
+    """
+    from api import main
+
+    with TestClient(main.app) as client:
+        body = client.get("/products/map").json()
+
+    assert body["method"] == "pca"
+    assert len(body["points"]) == recovered_panel[S.PRODUCT_ID].nunique()
+    assert len(body["explained_variance"]) == 2
+    assert all(0 <= v <= 1 for v in body["explained_variance"])
+    assert sum(body["explained_variance"]) <= 1.0 + 1e-9
+    punto = body["points"][0]
+    assert punto["rotation_band"] in {"baja", "media", "alta"}
+    assert punto["n_series"] >= 1
+
+
+def test_backtest_breakdown_exposes_every_origin(
+    panel_on_disk, recovered_panel, tmp_path, monkeypatch
+) -> None:
+    """Las ocho lineas por origen ya estaban en el parquet; esto las expone.
+
+    El agregado solo no alcanza: un promedio bueno esconde un origen catastrofico, y
+    es el origen malo el que despues pasa en produccion.
+    """
+    from blindside import config as cfg_mod
+    from blindside.evaluate.backtest import run_backtest
+    from blindside.models.baselines import SeasonalNaiveForecaster
+
+    reports = tmp_path / "reports_breakdown"
+    reports.mkdir()
+    forecast = cfg_mod.ForecastConfig(n_origins=3)
+    result = run_backtest(recovered_panel, [SeasonalNaiveForecaster()], forecast=forecast)
+    result.to_parquet(reports / "backtest_models.parquet", index=False)
+    monkeypatch.setattr(cfg, "REPORTS", reports)
+
+    from api import main
+
+    with TestClient(main.app) as client:
+        body = client.get("/backtest/breakdown").json()
+
+    assert body["n_origins"] == 3
+    assert {r["origin"] for r in body["origins"]} == {0, 1, 2}
+    assert {r["h"] for r in body["horizons"]} == set(range(1, 8))
+    assert {r["band"] for r in body["bands"]} <= {"baja", "media", "alta"}
+    assert all(r["metric"] in {"mase", "wape", "mae", "coverage"} for r in body["origins"])
+
+
+def test_explain_returns_real_contributions_or_says_why_not(panel_on_disk, recovered_panel) -> None:
+    """Las contribuciones las calcula LightGBM, no el paquete `shap`.
+
+    Con un baseline cargado el endpoint no puede explicar nada, y eso tiene que ser
+    un 501 que nombre el motivo en vez de una respuesta vacia o inventada.
+    """
+    from blindside.models.baselines import SeasonalNaiveForecaster
+
+    model = SeasonalNaiveForecaster().fit(recovered_panel, target=S.DEMAND_LATENT)
+    model.save(panel_on_disk / cfg.MODEL_FILES["recovered"])
+
+    from api import main
+
+    with TestClient(main.app) as client:
+        dt = str((recovered_panel[S.DATE].max() + pd.Timedelta(days=1)).date())
+        resp = client.post("/explain", json={"series_id": "0_0", "dt": dt, "top_k": 5})
+        fuera = client.post("/explain", json={"series_id": "0_0", "dt": "2020-01-01"})
+
+    assert resp.status_code == 501
+    assert "contribuciones" in resp.json()["detail"]
+    # Una fecha fuera del horizonte tampoco puede devolver 200: el 404 lista las
+    # fechas que si se pueden explicar.
+    assert fuera.status_code in (404, 501)
+
+
 # --- Estado global que la interfaz deriva de /health ----------------------
 def test_health_reports_panel_counts_and_missing_coverage(panel_on_disk, recovered_panel) -> None:
     """Conteos del panel servido y el motivo por el que falta la cobertura.

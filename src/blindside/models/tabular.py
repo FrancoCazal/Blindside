@@ -44,7 +44,7 @@ from blindside import config as cfg
 from blindside.data import schema as S
 from blindside.features import build as fb
 from blindside.features import calendar as cal
-from blindside.models.base import Forecaster
+from blindside.models.base import Forecaster, check_future_index, normalize_future_index
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -153,6 +153,16 @@ class TabularForecaster(Forecaster):
         usable = dates[WARMUP_DAYS:-1]
         strided = usable[:: self.origin_stride]
         return strided[-self.max_train_origins :]
+
+    def design_matrix(self, future: pd.DataFrame) -> pd.DataFrame:
+        """Matriz de features con la que el modelo va a predecir ese futuro.
+
+        Es la misma que usa `predict`, expuesta para explicar una prediccion: sin
+        ella la explicacion tendria que reconstruir las features por su cuenta, y
+        una reconstruccion que se desincroniza explica un modelo que no es el que
+        respondio.
+        """
+        return self._assemble(normalize_future_index(check_future_index(future)))
 
     def _assemble(self, future: pd.DataFrame) -> pd.DataFrame:
         """Cruza el estado congelado del origen con el indice de futuro.

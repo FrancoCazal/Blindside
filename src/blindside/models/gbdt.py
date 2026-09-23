@@ -106,6 +106,26 @@ class LightGBMForecaster(TabularForecaster):
         """El booster crudo, para SHAP."""
         return self._booster
 
+    def contributions(self, X: pd.DataFrame) -> tuple[pd.DataFrame, float]:
+        """Contribuciones TreeSHAP por feature, y el valor base del modelo.
+
+        Las calcula **LightGBM** con `pred_contrib=True`, no el paquete `shap`.
+        Son los mismos valores de TreeSHAP — es la implementacion que lleva
+        adentro — y asi la explicabilidad funciona en la imagen de servicio, que
+        deja `shap` afuera a proposito porque pesa y no se necesita para
+        responder `/forecast`.
+
+        Devuelve un DataFrame con una columna por feature y la fila por
+        observacion, mas el valor base. La ultima columna que emite LightGBM es
+        justamente ese valor base, no una feature.
+        """
+        if self._booster is None:
+            raise RuntimeError(f"{self.name}: booster no entrenado")
+        Xc = prepare_categoricals(X, self.categorical_features)
+        raw = np.asarray(self._booster.predict(Xc, pred_contrib=True), dtype="float64")
+        aportes = pd.DataFrame(raw[:, :-1], columns=self._booster.feature_name(), index=X.index)
+        return aportes, float(raw[0, -1])
+
 
 class LightGBMQuantileForecaster(TabularForecaster):
     """Un LightGBM por cuantil, con perdida cuantilica.
@@ -173,6 +193,30 @@ class LightGBMQuantileForecaster(TabularForecaster):
             raise RuntimeError(f"{self.name}: no hay booster para el cuantil {q}")
         Xc = prepare_categoricals(X, self.categorical_features)
         return np.asarray(booster.predict(Xc), dtype="float64")
+
+    def contributions(
+        self, X: pd.DataFrame, *, quantile: float | None = None
+    ) -> tuple[pd.DataFrame, float]:
+        """Contribuciones TreeSHAP del booster de un cuantil.
+
+        Por defecto explica el cuantil **critico** si esta entrenado, y no la
+        mediana: el numero que el usuario ve en pantalla es la cantidad a pedir,
+        que sale de q*, asi que explicar la mediana seria explicar otra cifra.
+        """
+        q = quantile if quantile is not None else self._explainable_quantile()
+        booster = self._boosters.get(q)
+        if booster is None:
+            raise RuntimeError(f"{self.name}: no hay booster para el cuantil {q}")
+        Xc = prepare_categoricals(X, self.categorical_features)
+        raw = np.asarray(booster.predict(Xc, pred_contrib=True), dtype="float64")
+        aportes = pd.DataFrame(raw[:, :-1], columns=booster.feature_name(), index=X.index)
+        return aportes, float(raw[0, -1])
+
+    def _explainable_quantile(self) -> float:
+        objetivo = cfg.ECONOMICS.critical_fraction
+        if objetivo in self._boosters:
+            return objetivo
+        return min(self._boosters, key=lambda q: abs(q - objetivo))
 
     def predict_quantile(self, future: pd.DataFrame, quantiles: Sequence[float]) -> pd.DataFrame:
         """Cuantiles nativos. Se ordenan por fila para que no se cruzen.

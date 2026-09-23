@@ -145,6 +145,11 @@ class SeriesItem(SeriesRef):
     first_category_id: int | None = None
     second_category_id: int | None = None
     third_category_id: int | None = None
+    #: Banda de rotacion (baja, media, alta), con los mismos cortes con los que el
+    #: backtest desagrega sus metricas. Es la columna "Clase" de la tabla, y esta
+    #: porque el modelo complejo no le gana al ingenuo en baja rotacion: quien
+    #: mira la lista tiene que poder ver de que clase es cada fila.
+    rotation_band: str | None = None
     #: Texto contra el que corre la busqueda, junto con el codigo de la serie.
     label: str
 
@@ -352,14 +357,94 @@ class ExplainRequest(BaseModel):
     series_id: str
     dt: date
     top_k: Annotated[int, Field(ge=1, le=50)] = 12
+    #: Misma semantica que en el resto: se explica el artefacto de esa base.
+    recover_censoring: bool = True
 
 
 class ExplainResponse(BaseModel):
     series: SeriesRef
     dt: date
+    basis: Basis
+    model_name: str
+    #: Cuantil explicado. Es el critico y no la mediana: el numero que la interfaz
+    #: muestra es la cantidad a pedir, asi que explicar la mediana seria explicar
+    #: otra cifra.
+    quantile: float | None = None
     base_value: float
     prediction: float
     contributions: list[ShapContribution]
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+# --- /products/map -------------------------------------------------------
+class ProductPoint(BaseModel):
+    product_id: int
+    x: float
+    y: float
+    rotation_band: str
+    demanda_media: float
+    tasa_quiebre: float
+    n_series: int
+
+
+class ProductMap(BaseModel):
+    """Proyeccion 2D del catalogo, con la varianza que realmente captura.
+
+    La varianza explicada va en la respuesta porque un scatter sin ella invita a
+    leer distancias que la proyeccion no conserva.
+    """
+
+    method: str
+    features: list[str]
+    explained_variance: list[float]
+    points: list[ProductPoint]
+
+
+# --- /backtest/breakdown -------------------------------------------------
+class OriginMetric(BaseModel):
+    model_name: str
+    origin: int
+    origin_date: date
+    metric: str
+    value: float
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+class HorizonMetric(BaseModel):
+    model_name: str
+    h: int
+    metric: str
+    value: float
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+class BandMetric(BaseModel):
+    model_name: str
+    band: str
+    metric: str
+    value: float
+    n: int
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+class BacktestBreakdown(BaseModel):
+    """Desagregado del backtest: por origen, por horizonte y por banda.
+
+    Es lo que convierte "MASE 0,83" en un argumento: el promedio bueno puede
+    esconder un origen catastrofico, y el origen catastrofico es el que pasa en
+    produccion.
+    """
+
+    target: str
+    horizon: int
+    n_origins: int
+    origins: list[OriginMetric]
+    horizons: list[HorizonMetric]
+    bands: list[BandMetric]
 
 
 # --- /backtest -----------------------------------------------------------
@@ -396,7 +481,9 @@ __all__ = [
     "Anomaly",
     "AnomalyKind",
     "AnomalyResponse",
+    "BacktestBreakdown",
     "BacktestResponse",
+    "BandMetric",
     "Basis",
     "CoveragePoint",
     "ExplainRequest",
@@ -407,9 +494,13 @@ __all__ = [
     "Health",
     "HistoryPoint",
     "HistorySummary",
+    "HorizonMetric",
     "MetricRow",
     "ModelStatus",
+    "OriginMetric",
     "PanelInfo",
+    "ProductMap",
+    "ProductPoint",
     "ReorderLine",
     "ReorderRequest",
     "ReorderResponse",
