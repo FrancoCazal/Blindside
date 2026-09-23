@@ -48,6 +48,10 @@ htmlcov/
 # --- Reportes generados --------------------------------------------------
 reports/figures/*
 !reports/figures/.gitkeep
+# Los .md de reports/ SI se commitean: son la evidencia que cita el README. Los
+# parquet del detalle no: son decenas de MB, se regeneran con `make models` y en
+# git no se pueden leer ni diferenciar.
+reports/*.parquet
 
 # --- Editor / OS ---------------------------------------------------------
 .vscode/*
