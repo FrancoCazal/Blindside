@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #FAF8F5; }
+  a { color: #1A1A18; text-decoration: none; border-bottom: 1px dotted rgba(26,26,24,.45); }
+  a:hover { color: #D6451A; border-bottom-color: #D6451A; }
+</style>
+</helmet>
+
+<div style="font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1A1A18; background: #FAF8F5; max-width: 1080px; margin: 0 auto; padding: 56px 40px 96px">
+
+  <div style="display: flex; flex-direction: column; gap: 10px; max-width: 72ch; margin-bottom: 40px">
+    <div style="font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #6B6B64; font-weight: 600">dfcore · handoff 2 de 2</div>
+    <h1 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 36px; line-height: 1.1; margin: 0; letter-spacing: -.02em">Planos y medidas</h1>
+    <p style="margin: 8px 0 0; font-size: 14.5px; line-height: 1.65; color: #44443E; text-wrap: pretty">Las regiones de cada pantalla con sus alturas, rellenos y columnas. Los colores, la tipografía y el comportamiento van en <a href="02 - Tokens y comportamiento.dc.html">el archivo 02</a>. Las pantallas reales están en <a href="01 - Pantallas finales.dc.html">el archivo 01</a>.</p>
+  </div>
+
+  <!-- RETÍCULA -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em; text-transform: uppercase">Retícula y espaciado</h2>
+  <p style="margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #5F5F59; max-width: 76ch">Todo es múltiplo de 2 con una escala corta de seis pasos. No hay radio de esquina ni sombras: la jerarquía la llevan las reglas y el peso tipográfico.</p>
+
+  <div style="display: flex; align-items: flex-end; gap: 0; border: 1px solid rgba(26,26,24,.18); padding: 18px 20px; margin-bottom: 14px">
+    <sc-for list="{{ spacing }}" as="s" hint-placeholder-count="6">
+      <div style="display: flex; flex-direction: column; align-items: center; gap: 7px; margin-right: 26px">
+        <div style="width: {{ s.px }}; height: {{ s.px }}; background: rgba(26,26,24,.10); border: 1px solid rgba(26,26,24,.25)"></div>
+        <div style="font-size: 11px; font-variant-numeric: tabular-nums; color: #44443E">{{ s.px }}</div>
+        <div style="font-size: 10.5px; color: #6B6B64; text-align: center; max-width: 80px; line-height: 1.4">{{ s.use }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(244px, 1fr)); gap: 0; border: 1px solid rgba(26,26,24,.18); margin-bottom: 48px">
+    <sc-for list="{{ rules }}" as="r" hint-placeholder-count="4">
+      <div style="padding: 13px 16px; border-right: 1px solid rgba(26,26,24,.12); border-bottom: 1px solid rgba(26,26,24,.12)">
+        <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 7px">{{ r.k }}</div>
+        <div style="height: 1px; background: {{ r.color }}; margin-bottom: 8px"></div>
+        <div style="font-size: 11.5px; color: #44443E; line-height: 1.5">{{ r.use }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- PLANOS -->
+  <sc-for list="{{ plans }}" as="p" hint-placeholder-count="3">
+    <div style="margin-bottom: 52px">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px">
+        <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0; letter-spacing: -.01em; text-transform: uppercase">{{ p.title }}</h2>
+        <span style="font-size: 11.5px; color: #6B6B64; font-variant-numeric: tabular-nums">{{ p.dims }}</span>
+      </div>
+      <p style="margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #5F5F59; max-width: 76ch">{{ p.note }}</p>
+
+      <div style="display: grid; grid-template-columns: minmax(0, 1fr) 62px; gap: 0; margin-bottom: 16px">
+        <div style="border: 1px solid rgba(26,26,24,.35); display: flex; flex-direction: column">
+          <sc-for list="{{ p.regions }}" as="g" hint-placeholder-count="5">
+            <div style="position: relative; height: {{ g.h }}; background: {{ g.bg }}; border-bottom: 1px dashed rgba(26,26,24,.30); display: flex; align-items: center; padding: 0 14px; gap: 14px; min-width: 0">
+              <span style="font-size: 12px; font-weight: 600">{{ g.name }}</span>
+              <span style="font-size: 11px; color: #5F5F59; font-variant-numeric: tabular-nums; min-width: 0">{{ g.spec }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; flex-direction: column; border-top: 1px solid rgba(26,26,24,.35); border-bottom: 1px solid rgba(26,26,24,.35)">
+          <sc-for list="{{ p.regions }}" as="g" hint-placeholder-count="5">
+            <div style="height: {{ g.h }}; border-bottom: 1px dashed rgba(26,26,24,.30); display: flex; align-items: center; justify-content: flex-end; padding-right: 2px; font-size: 10.5px; color: #6B6B64; font-variant-numeric: tabular-nums">
+              <span style="display: flex; align-items: center; gap: 5px"><span style="width: 10px; height: 1px; background: rgba(26,26,24,.4)"></span>{{ g.hLabel }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <table style="width: 100%; border-collapse: collapse; font-size: 12.5px">
+        <thead>
+          <tr style="border-bottom: 1px solid rgba(26,26,24,.35)">
+            <th scope="col" style="text-align: left; padding: 7px 10px 7px 0; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Elemento</th>
+            <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Medida</th>
+            <th scope="col" style="text-align: left; padding: 7px 0 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Nota</th>
+          </tr>
+        </thead>
+        <tbody>
+          <sc-for list="{{ p.specs }}" as="s" hint-placeholder-count="6">
+            <tr style="border-bottom: 1px solid rgba(26,26,24,.10)">
+              <th scope="row" style="text-align: left; padding: 8px 10px 8px 0; font-weight: 500; white-space: nowrap">{{ s.k }}</th>
+              <td style="padding: 8px 10px; color: #44443E; font-variant-numeric: tabular-nums; white-space: nowrap">{{ s.v }}</td>
+              <td style="padding: 8px 0 8px 10px; color: #5F5F59; line-height: 1.55">{{ s.note }}</td>
+            </tr>
+          </sc-for>
+        </tbody>
+      </table>
+    </div>
+  </sc-for>
+
+  <!-- ORDEN DE CAPAS -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em; text-transform: uppercase">Orden de capas del gráfico hero</h2>
+  <p style="margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #5F5F59; max-width: 76ch">De atrás hacia adelante. El orden no es negociable: la línea observada va encima de la recuperada para que la separación se lea como que la recuperada emerge desde abajo, no que tapa el dato original.</p>
+  <div style="border: 1px solid rgba(26,26,24,.18); margin-bottom: 48px">
+    <sc-for list="{{ layers }}" as="l" hint-placeholder-count="9">
+      <div style="display: grid; grid-template-columns: 34px 216px minmax(0, 1fr); border-bottom: 1px solid rgba(26,26,24,.10); align-items: center">
+        <div style="padding: 9px 0 9px 14px; font-size: 11.5px; color: #6B6B64; font-variant-numeric: tabular-nums">{{ l.n }}</div>
+        <div style="padding: 9px 10px 9px 0; font-size: 12.5px; font-weight: 500">{{ l.k }}</div>
+        <div style="padding: 9px 14px 9px 0; font-size: 11.5px; color: #44443E; line-height: 1.55">{{ l.v }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- CONTROLES -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 18px; letter-spacing: -.01em; text-transform: uppercase">Inventario de controles</h2>
+  <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 20px">
+    <thead>
+      <tr style="border-bottom: 1px solid rgba(26,26,24,.35)">
+        <th scope="col" style="text-align: left; padding: 7px 10px 7px 0; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Control</th>
+        <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Caja</th>
+        <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Reposo</th>
+        <th scope="col" style="text-align: left; padding: 7px 0 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Hover · activo</th>
+      </tr>
+    </thead>
+    <tbody>
+      <sc-for list="{{ controls }}" as="c" hint-placeholder-count="6">
+        <tr style="border-bottom: 1px solid rgba(26,26,24,.10)">
+          <th scope="row" style="text-align: left; padding: 8px 10px 8px 0; font-weight: 500; white-space: nowrap">{{ c.k }}</th>
+          <td style="padding: 8px 10px; color: #44443E; font-variant-numeric: tabular-nums">{{ c.box }}</td>
+          <td style="padding: 8px 10px; color: #5F5F59; line-height: 1.5">{{ c.rest }}</td>
+          <td style="padding: 8px 0 8px 10px; color: #5F5F59; line-height: 1.5">{{ c.hover }}</td>
+        </tr>
+      </sc-for>
+    </tbody>
+  </table>
+  <div style="padding: 11px 14px; background: #F2EEE8; border-left: 2px solid rgba(26,26,24,.35); font-size: 12px; line-height: 1.6; color: #44443E; max-width: 86ch">Ningún control depende del hover para descubrirse: la fila de la tabla se abre con clic y con Enter, y el hover solo cambia el fondo a superficie. Es una app que se va a proyectar, y en proyección no hay puntero visible.</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  renderVals() {
+    const spacing = [
+      ["4px", "Gap entre rótulo y cifra"],
+      ["8px", "Gap interno de una fila"],
+      ["12px", "Padding vertical de celda"],
+      ["18px", "Gap entre bloques del panel"],
+      ["22px", "Padding horizontal de tarjeta"],
+      ["44px", "Gap entre pantallas en el lienzo"]
+    ].map(s => ({ px: s[0], use: s[1] }));
+
+    const rules = [
+      { k: "Fila de tabla", color: "rgba(26,26,24,.10)", use: "1 px · tinta 10 %. Entre filas de datos." },
+      { k: "División interna", color: "rgba(26,26,24,.12)", use: "1 px · tinta 12 %. Entre bloques dentro de una tarjeta." },
+      { k: "Sección y borde", color: "rgba(26,26,24,.18)", use: "1 px · tinta 18 %. Borde de tarjeta y separador de sección." },
+      { k: "Cabecera de tabla", color: "rgba(26,26,24,.35)", use: "1 px · tinta 35 %. Solo bajo el thead y en el eje base." }
+    ];
+
+    const plans = [
+      {
+        title: "Shell",
+        dims: "1180 × 119 px de cromo fijo",
+        note: "El estado global y la navegación son dos contenedores visualmente distintos, y ese es el punto: el toggle y el selector no son navegación. El cromo mide 119 px en total y no se desplaza con el scroll.",
+        regions: [
+          { name: "Franja de estado", spec: "logo · selector · toggle · padding 11 / 22 · fondo superficie", h: "44px", hLabel: "44", bg: "#F2EEE8" },
+          { name: "Navegación", spec: "dos hero en Archivo 600 · resto agrupado · padding 0 / 22", h: "42px", hLabel: "42", bg: "#FAF8F5" },
+          { name: "Franja de contexto", spec: "5 datos · 11,5 px · gap 26 · padding 8 / 22", h: "33px", hLabel: "33", bg: "#FAF8F5" }
+        ],
+        specs: [
+          { k: "Logo", v: "30 × 11 px", note: "Marca en 16 px Archivo 700 a 9 px de separación." },
+          { k: "Selector", v: "alto 29 px · padding 5 / 10", note: "Borde tinta 28 %. Lupa de 12 px, atajo ⌘K en caja de 1 px." },
+          { k: "Toggle", v: "alto 31 px · padding 6 / 12", note: "Dos botones de 12 px / 500. Regla de acento de 2 px debajo, a 4 px." },
+          { k: "Ítem hero de nav", v: "15 px · padding 11 / 0 / 9", note: "Subrayado de 2 px en tinta solo en el activo." },
+          { k: "Ítem secundario", v: "12,5 px en apagada", note: "Precedido por su rótulo de grupo en 10,5 px versalitas." },
+          { k: "Separador de nav", v: "1 px × alto − 16", note: "Regla vertical en tinta 12 %, con 8 px de aire arriba y abajo." }
+        ]
+      },
+      {
+        title: "Reposición",
+        dims: "1180 px · dos columnas 1fr / 300, gap 26",
+        note: "La landing. El titular es la cantidad, no la exactitud: los KPIs viven en la franja de contexto del shell, en 11,5 px. La evidencia de cada fila se abre dentro de la tabla, sin cambiar de pantalla.",
+        regions: [
+          { name: "Encabezado", spec: "h2 21 px + subtítulo 12 px · padding 20 / 22 / 16", h: "62px", hLabel: "62", bg: "#FAF8F5" },
+          { name: "Cabecera de tabla", spec: "7 columnas · 10,5 px versalitas · regla inferior tinta 35 %", h: "28px", hLabel: "28", bg: "#FAF8F5" },
+          { name: "Fila de datos × 9", spec: "padding 8 · regla tinta 10 % · hover a superficie", h: "34px", hLabel: "34", bg: "#FAF8F5" },
+          { name: "Fila abierta", spec: "1fr / 232 gap 24 · 7 días con banda · padding 4 / 0 / 14", h: "96px", hLabel: "≈180", bg: "#F2EEE8" },
+          { name: "Nota de datos simulados", spec: "padding 10 / 13 · borde izquierdo 2 px ocre", h: "48px", hLabel: "48", bg: "#F2EEE8" }
+        ],
+        specs: [
+          { k: "Columnas", v: "auto · 92 · 118 · 96 · 104 · 84 · 110", note: "Serie flexible; el resto fijas para que las cifras no salten al alternar la base." },
+          { k: "Sparkline de quiebre", v: "76 × 15 px · 14 barras", note: "Barra de 5,4 px con 2,2 de gap, tinta 42 %, línea base tinta 20 %." },
+          { k: "Barra de impacto", v: "46 × 5 px", note: "Relleno vermellón al 75 %, ancho proporcional al máximo de la vista." },
+          { k: "Ratio de costo", v: "4 botones · alto 42 px", note: "Cifra 13 px / 600 arriba, cuantil 10 px al 72 % abajo. Activo en tinta plena." },
+          { k: "Cifra del total", v: "38 px Archivo 600 · −0,02 em", note: "Con su cuantil al lado en 12 px. Tabular, para que el cambio de ratio no mueva nada." },
+          { k: "Sello sim", v: "9 px · padding 0 / 3 · borde 1 px", note: "Ocre. Aparece en la cabecera de columna y en cada nota que lo explica." },
+          { k: "Panel lateral", v: "300 px · gap 18", note: "Bloques separados por regla de 1 px y 14 px de padding superior." }
+        ]
+      },
+      {
+        title: "Serie individual",
+        dims: "1180 px · dos columnas 1fr / 268, gap 0",
+        note: "La imagen que el panel se tiene que llevar. El gráfico es un viewBox de 1000 × 300 con rellenos internos de 46 a la izquierda y 14 a la derecha, más 12 arriba y 22 abajo para el eje de fechas.",
+        regions: [
+          { name: "Encabezado de serie", spec: "h2 21 px + conteo de rachas 12 px · padding 20 / 22 / 14", h: "66px", hLabel: "66", bg: "#FAF8F5" },
+          { name: "Gráfico principal", spec: "viewBox 1000 × 300 · 5 guías · eje base tinta 35 %", h: "150px", hLabel: "≈300", bg: "#FAF8F5" },
+          { name: "Franja de horas de quiebre", spec: "viewBox 1000 × 60 · escala 0–16 franjas", h: "50px", hLabel: "60", bg: "#FAF8F5" },
+          { name: "Leyenda", spec: "5 entradas · gap 22 · regla superior tinta 12 %, padding 12", h: "40px", hLabel: "40", bg: "#FAF8F5" }
+        ],
+        specs: [
+          { k: "Rellenos del viewBox", v: "46 · 14 · 12 · 22", note: "Izquierda, derecha, arriba, abajo. Las etiquetas del eje Y terminan a 40." },
+          { k: "Autoescala del eje Y", v: "0 a máximo × 1,06", note: "Obligatoria: p99 sobre mediana llega a 12×. Con eje fijo la serie queda pegada al piso." },
+          { k: "Racha de un día", v: "ancho mínimo 3 px", note: "Sin borde, más el marcador en la franja de horas. La mediana de racha es 2 días." },
+          { k: "Cuña", v: "vermellón al 16 %", note: "Solo dentro de los tramos sombreados, con 1 día de entrada y salida." },
+          { k: "Cantidad sugerida", v: "42 px Archivo 600", note: "Punto de 4,5 px de radio sobre el pronóstico y plomada de 1 px hasta el eje." },
+          { k: "Panel de decisión", v: "268 px · gap 18", note: "Cantidad, comparación con la política actual, contexto de censura, nota de la base." }
+        ]
+      }
+    ];
+
+    const layers = [
+      "Guías horizontales · tinta 10 %, cuatro líneas",
+      "Tramos de quiebre · sombreado vertical, tinta 7 %, de borde a borde vertical",
+      "Eje base y corte del pronóstico · tinta 35 % continuo, tinta 30 % guionado",
+      "Etiquetas de eje · 11 px en apagada, tabular",
+      "Cuña entre observada y recuperada · vermellón 16 %",
+      "Demanda recuperada · vermellón, 2,4 px, solo dentro de los tramos",
+      "Venta observada · gris observado, 1,4 px, continua en todo el rango",
+      "Banda conformal · vermellón 12 %, ensanchándose con el horizonte",
+      "Pronóstico · tinta 55 %, 1,8 px, guionado 5 / 4",
+      "Cantidad sugerida · punto y plomada en vermellón"
+    ].map((v, i) => ({ n: String(i + 1).padStart(2, "0"), k: v.split(" · ")[0], v: v.split(" · ").slice(1).join(" · ") }));
+
+    const controls = [
+      { k: "Botón primario", box: "alto 35 · padding 9 / 16", rest: "Tinta plena, texto papel, 13 px / 500", hover: "Tinta al 88 % · activo sin desplazamiento" },
+      { k: "Botón del toggle", box: "alto 31 · padding 6 / 12", rest: "Inactivo transparente con texto apagado", hover: "Fondo superficie · activo tinta plena, 300 ms" },
+      { k: "Botón secundario", box: "alto 31 · padding 5 / 10", rest: "Borde tinta 28 %, fondo papel", hover: "Borde a tinta plena, sin cambio de fondo" },
+      { k: "Campo de búsqueda", box: "alto 44 · padding 13 / 16", rest: "15 px, cursor de 1 px en vermellón", hover: "Foco: contorno de 2 px en tinta con 2 px de aire" },
+      { k: "Fila de la tabla", box: "alto 34 · padding 8", rest: "Fondo transparente, regla inferior tinta 10 %", hover: "Fondo superficie · abierta: superficie y regla 18 %" },
+      { k: "Resultado del selector", box: "alto 36 · padding 9 / 16", rest: "Rótulo de tipo 9,5 px, código 13 px / 500", hover: "Fondo superficie · seleccionado igual, sin acento" }
+    ];
+
+    return { spacing, rules, plans, layers, controls };
+  }
+}
+</script>
+</body>
+</html>

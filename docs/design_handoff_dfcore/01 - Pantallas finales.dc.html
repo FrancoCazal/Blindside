@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Archivo:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Libre+Franklin:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Instrument+Serif:ital@0;1&family=Public+Sans:wght@400;500;600;700&family=Spectral:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+body { margin: 0; background: #DAD5CB; }
+a { color: #1A1A18; text-decoration: none; border-bottom: 1px solid rgba(26,26,24,.3); }
+a:hover { border-bottom-color: #1A1A18; }
+</style>
+</helmet>
+
+<section style="padding: 56px 56px 60px; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1A1A18">
+  <div style="display: flex; flex-direction: column; gap: 10px; max-width: 800px; margin-bottom: 30px">
+    <div style="font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #6B6B64; font-weight: 600">3 · Estados y modo oscuro</div>
+    <h1 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 34px; line-height: 1.14; margin: 0; letter-spacing: -.018em">Los cuatro estados que van a ocurrir</h1>
+    <p style="margin: 6px 0 0; font-size: 14px; line-height: 1.6; color: #44443E; max-width: 70ch; text-wrap: pretty">Dos de ellos durante la defensa. Abajo, el mapeo a modo oscuro con la única decisión que no es una inversión mecánica: el sombreado de quiebre.</p>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 44px; align-items: flex-start">
+
+    <!-- ============ 5a · USANDO LA MUESTRA ============ -->
+    <div id="5a" data-screen-label="Estado · muestra" style="display: flex; flex-direction: column; gap: 14px; width: 1180px; flex: 0 0 1180px; min-width: 0">
+      <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #FAF8F5; background: #1A1A18; padding: 4px 9px">5a</span>
+        <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: -.015em">Usando la muestra</span>
+        <span style="font-size: 12.5px; color: #44443E">60 series presentadas como 3.066 es el error que arruina una defensa. Se marca en tres lugares a la vez.</span>
+      </div>
+
+      <div style="background: #FAF8F5; border: 1px solid rgba(26,26,24,.18); font-family: 'IBM Plex Sans', sans-serif">
+        <div style="display: flex; align-items: center; gap: 20px; padding: 11px 22px; background: #F2EEE8; border-bottom: 1px solid rgba(26,26,24,.18)">
+          <div style="display: flex; align-items: center; gap: 9px">
+            <svg viewBox="0 0 120 44" style="width: 30px; height: 11px; display: block">
+              <path d="M8 26 L52 26 L84 14 L112 14" fill="none" stroke="#8A8A84" stroke-width="4"></path>
+              <path d="M8 26 L52 26 L112 26" fill="none" stroke="#1A1A18" stroke-width="4"></path>
+              <path d="M52 26 L84 14 L112 14 L112 26 Z" fill="#D6451A"></path>
+            </svg>
+            <span style="font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: -.012em">blindside</span>
+          </div>
+          <span style="font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #FAF8F5; background: #7A5C10; padding: 3px 7px">Muestra</span>
+          <span style="font-size: 12.5px; color: #44443E">Tienda 12 · Producto 0412</span>
+          <div style="margin-left: auto; display: flex; align-items: center; gap: 10px">
+            <span style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600">Viendo</span>
+            <div style="display: flex; border: 1px solid rgba(26,26,24,.22)">
+              <span style="padding: 6px 12px; font-size: 12px; font-weight: 500; color: #5F5F59">Venta observada</span>
+              <span style="padding: 6px 12px; font-size: 12px; font-weight: 500; border-left: 1px solid rgba(26,26,24,.22); background: #1A1A18; color: #FAF8F5">Demanda recuperada</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: flex-start; gap: 14px; padding: 13px 22px; background: rgba(122,92,16,.10); border-bottom: 1px solid rgba(122,92,16,.35)">
+          <svg width="18" height="18" viewBox="0 0 18 18" style="display: block; flex: none; margin-top: 1px"><path d="M9 2 L17 16 L1 16 Z" fill="none" stroke="#7A5C10" stroke-width="1.6"></path><line x1="9" y1="7" x2="9" y2="11.5" stroke="#7A5C10" stroke-width="1.6"></line><circle cx="9" cy="13.6" r=".95" fill="#7A5C10"></circle></svg>
+          <div style="min-width: 0">
+            <div style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 14px; letter-spacing: -.008em; color: #5C4508">Estos números no son los del panel completo</div>
+            <div style="font-size: 12.5px; line-height: 1.55; color: #44443E; margin-top: 3px; font-variant-numeric: tabular-nums">Los datos vienen de <code style="font-family: inherit">data/sample/</code>: <strong style="font-weight: 600">60 series de 3.066</strong>, 2 tiendas de 19, 31 productos de 309. Las métricas de error y el uplift de recuperación se calculan sobre esa muestra y no son comparables con los del artefacto completo.</div>
+          </div>
+          <span style="margin-left: auto; flex: none; font-size: 11.5px; color: #5C4508; border: 1px solid rgba(122,92,16,.5); padding: 5px 10px; align-self: center">Cómo cargar el panel</span>
+        </div>
+
+        <div style="display: flex; gap: 26px; flex-wrap: wrap; padding: 8px 22px; border-bottom: 1px solid rgba(26,26,24,.12); font-size: 11.5px; color: #5F5F59; font-variant-numeric: tabular-nums">
+          <span>MASE <strong style="color: #1A1A18; font-weight: 600">0,743</strong> ± 0,061 · peor origen 0,884</span>
+          <span>Cobertura empírica 88 % · nominal 90 %</span>
+          <span>Entrenado hasta 2026-09-15</span>
+          <span style="color: #7A5C10; font-weight: 600">60 de 3.066 series conocidas por el modelo</span>
+        </div>
+
+        <div style="padding: 16px 22px 18px">
+          <div style="display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px">
+            <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 19px; margin: 0; letter-spacing: -.015em">Qué pedir hoy</h2>
+            <span style="font-size: 11.5px; color: #7A5C10; font-weight: 600; font-variant-numeric: tabular-nums">60 series en la muestra</span>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums">
+            <thead>
+              <tr style="border-bottom: 1px solid rgba(26,26,24,.35)">
+                <th scope="col" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Serie</th>
+                <th scope="col" style="text-align: right; padding: 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Política</th>
+                <th scope="col" style="text-align: right; padding: 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Sugerido</th>
+                <th scope="col" style="text-align: right; padding: 6px 0 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Δ</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid rgba(26,26,24,.10)"><th scope="row" style="text-align: left; padding: 8px 8px 8px 0; font-weight: 500">T12 · P0412</th><td style="text-align: right; padding: 8px; color: #5F5F59">0,96</td><td style="text-align: right; padding: 8px; font-weight: 600">1,35</td><td style="text-align: right; padding: 8px 0 8px 8px; font-weight: 600">+40,6 %</td></tr>
+              <tr style="border-bottom: 1px solid rgba(26,26,24,.10)"><th scope="row" style="text-align: left; padding: 8px 8px 8px 0; font-weight: 500">T04 · P0871</th><td style="text-align: right; padding: 8px; color: #5F5F59">2,10</td><td style="text-align: right; padding: 8px; font-weight: 600">3,02</td><td style="text-align: right; padding: 8px 0 8px 8px; font-weight: 600">+43,8 %</td></tr>
+              <tr><th scope="row" style="text-align: left; padding: 8px 8px 8px 0; font-weight: 500">T04 · P0233</th><td style="text-align: right; padding: 8px; color: #5F5F59">4,90</td><td style="text-align: right; padding: 8px; font-weight: 600">5,40</td><td style="text-align: right; padding: 8px 0 8px 8px">+10,2 %</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div style="font-size: 11.5px; color: #5F5F59; line-height: 1.55; max-width: 92ch">Tres marcas: el sello en la franja de estado, que queda fijo aunque se scrollee; la banda explicativa, descartable pero no en esta sesión; y el conteo de series en ocre dentro de la franja de contexto. El sello no se puede cerrar.</div>
+    </div>
+
+    <!-- ============ 5b · SERIE SIN QUIEBRES ============ -->
+    <div id="5b" data-screen-label="Estado · sin quiebres" style="display: flex; flex-direction: column; gap: 14px; width: 760px; flex: 0 0 760px; min-width: 0">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #FAF8F5; background: #1A1A18; padding: 4px 9px">5b</span>
+        <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: -.015em">Serie sin quiebres</span>
+        <span style="font-size: 12.5px; color: #44443E">El gráfico pierde su tema central y tiene que verse bien igual.</span>
+      </div>
+
+      <div style="background: #FAF8F5; border: 1px solid rgba(26,26,24,.18); font-family: 'IBM Plex Sans', sans-serif; padding: 18px 20px 16px">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 3px">
+          <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 19px; margin: 0; letter-spacing: -.015em">Tienda 7 · Producto 0154</h2>
+          <span style="font-size: 11.5px; color: #6B6B64; font-variant-numeric: tabular-nums">97 días · eje autoescalado 0,00–{{ cy0 }}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 9px; margin-bottom: 14px">
+          <span style="font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: #5F5F59; border: 1px solid rgba(26,26,24,.25); padding: 2px 7px">Serie limpia</span>
+          <span style="font-size: 12px; color: #5F5F59">Sin días de quiebre en los 97. La venta observada es la demanda: no hay nada que recuperar.</span>
+        </div>
+
+        <svg viewBox="0 0 1000 300" style="width: 100%; height: auto; display: block; overflow: visible" role="img" aria-label="Serie sin quiebres de stock: una sola línea, sin tramos sombreados">
+          <g stroke="rgba(26,26,24,.10)" stroke-width="1">
+            <line x1="46" y1="12" x2="986" y2="12"></line>
+            <line x1="46" y1="145" x2="986" y2="145"></line>
+          </g>
+          <line x1="46" y1="278" x2="986" y2="278" stroke="rgba(26,26,24,.35)" stroke-width="1"></line>
+          <line x1="{{ cleanQx }}" y1="12" x2="{{ cleanQx }}" y2="278" stroke="rgba(26,26,24,.3)" stroke-width="1" stroke-dasharray="3 3"></line>
+          <g font-family="IBM Plex Sans" font-size="11" fill="#5F5F59" text-anchor="end" style="font-variant-numeric: tabular-nums">
+            <text x="40" y="282">0,00</text>
+            <text x="40" y="149">{{ cy1 }}</text>
+            <text x="40" y="16">{{ cy0 }}</text>
+          </g>
+          <path d="{{ cleanBandPath }}" fill="rgba(214,69,26,.12)"></path>
+          <path d="{{ cleanPath }}" fill="none" stroke="#1A1A18" stroke-width="1.8" stroke-linejoin="round"></path>
+          <path d="{{ cleanFcPath }}" fill="none" stroke="rgba(26,26,24,.55)" stroke-width="1.8" stroke-dasharray="5 4"></path>
+          <line x1="{{ cleanQx }}" y1="{{ cleanQy }}" x2="{{ cleanQx }}" y2="278" stroke="#D6451A" stroke-width="1"></line>
+          <circle cx="{{ cleanQx }}" cy="{{ cleanQy }}" r="4.5" fill="#D6451A"></circle>
+        </svg>
+
+        <div style="display: flex; gap: 22px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(26,26,24,.12); font-size: 11.5px; color: #44443E">
+          <span style="display: flex; align-items: center; gap: 7px"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#1A1A18" stroke-width="1.8"></line></svg>Venta observada = demanda</span>
+          <span style="display: flex; align-items: center; gap: 7px"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="rgba(26,26,24,.55)" stroke-width="1.8" stroke-dasharray="5 4"></line></svg>Pronóstico</span>
+          <span style="display: flex; align-items: center; gap: 7px"><span style="width: 18px; height: 11px; background: rgba(214,69,26,.12)"></span>Banda conformal 90 %</span>
+          <span style="display: flex; align-items: center; gap: 7px"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="4" fill="#D6451A"></circle></svg>Cantidad sugerida</span>
+        </div>
+        <div style="margin-top: 12px; padding: 10px 13px; background: #F2EEE8; font-size: 11.5px; line-height: 1.55; color: #44443E; border-left: 2px solid rgba(26,26,24,.35)">La línea observada sube a 1,8 px y pasa a tinta plena: sin una segunda línea que la contraste, el gris de «observado» se lee como desactivado. El toggle sigue operable y no cambia nada en esta serie, con la etiqueta «sin efecto en series limpias». El acento queda solo en la cantidad y la banda, que es donde sigue habiendo una decisión.</div>
+      </div>
+    </div>
+
+    <!-- ============ 5c · API CAÍDA ============ -->
+    <div id="5c" data-screen-label="Estado · API caída" style="display: flex; flex-direction: column; gap: 14px; width: 556px; flex: 0 0 556px; min-width: 0">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #FAF8F5; background: #1A1A18; padding: 4px 9px">5c</span>
+        <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: -.015em">API caída</span>
+        <span style="font-size: 12.5px; color: #44443E">Distinto de «sin datos»: se arregla distinto.</span>
+      </div>
+
+      <div style="background: #FAF8F5; border: 1px solid rgba(26,26,24,.18); font-family: 'IBM Plex Sans', sans-serif">
+        <div style="display: flex; align-items: center; gap: 14px; padding: 11px 18px; background: #F2EEE8; border-bottom: 1px solid rgba(26,26,24,.18); opacity: .5">
+          <svg viewBox="0 0 120 44" style="width: 30px; height: 11px; display: block">
+            <path d="M8 26 L52 26 L84 14 L112 14" fill="none" stroke="#8A8A84" stroke-width="4"></path>
+            <path d="M8 26 L52 26 L112 26" fill="none" stroke="#1A1A18" stroke-width="4"></path>
+            <path d="M52 26 L84 14 L112 14 L112 26 Z" fill="#8A8A84"></path>
+          </svg>
+          <span style="font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: -.012em">blindside</span>
+          <span style="margin-left: auto; font-size: 11px; color: #5F5F59">Controles deshabilitados</span>
+        </div>
+
+        <div style="padding: 26px 20px 22px; display: flex; flex-direction: column; gap: 14px">
+          <svg width="34" height="34" viewBox="0 0 34 34" style="display: block"><line x1="3" y1="24" x2="13" y2="24" stroke="#8A8A84" stroke-width="2"></line><line x1="21" y1="24" x2="31" y2="24" stroke="#8A8A84" stroke-width="2"></line><line x1="14" y1="17" x2="20" y2="31" stroke="#D6451A" stroke-width="2"></line><line x1="20" y1="17" x2="14" y2="31" stroke="#D6451A" stroke-width="2"></line></svg>
+          <div>
+            <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 21px; margin: 0; letter-spacing: -.018em">El backend no responde</h2>
+            <div style="font-size: 13px; color: #44443E; line-height: 1.6; margin-top: 6px">No es que falten datos: no hay nadie escuchando en <code style="font-family: inherit">:8000</code>. La interfaz no tiene nada que mostrar y no va a inventar una versión en caché.</div>
+          </div>
+          <div style="border: 1px solid rgba(26,26,24,.18); font-size: 12px; font-variant-numeric: tabular-nums">
+            <div style="display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid rgba(26,26,24,.10)"><span style="color: #5F5F59">Último intento</span><span>hace 4 s · reintento en 8 s</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid rgba(26,26,24,.10)"><span style="color: #5F5F59">Endpoint</span><span>GET /health</span></div>
+            <div style="display: flex; justify-content: space-between; padding: 8px 12px"><span style="color: #5F5F59">Error</span><span>ECONNREFUSED</span></div>
+          </div>
+          <div style="background: #F2EEE8; padding: 12px 14px; font-size: 12px; line-height: 1.6; color: #44443E">
+            <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 6px">Levantarlo</div>
+            <div style="border-left: 2px solid rgba(26,26,24,.35); padding-left: 10px">uvicorn dfcore.api:app --port 8000</div>
+          </div>
+          <button type="button" style="appearance: none; cursor: pointer; font: inherit; font-size: 13px; font-weight: 500; background: #1A1A18; color: #FAF8F5; border: 0; padding: 9px 16px; align-self: flex-start">Reintentar ahora</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 5d · CARGA ============ -->
+    <div id="5d" data-screen-label="Estado · carga" style="display: flex; flex-direction: column; gap: 14px; width: 556px; flex: 0 0 556px; min-width: 0">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #FAF8F5; background: #1A1A18; padding: 4px 9px">5d</span>
+        <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: -.015em">Carga</span>
+        <span style="font-size: 12.5px; color: #44443E">El esqueleto reserva la geometría exacta: nada se mueve al llegar los datos.</span>
+      </div>
+
+      <div style="background: #FAF8F5; border: 1px solid rgba(26,26,24,.18); font-family: 'IBM Plex Sans', sans-serif">
+        <div style="height: 2px; background: rgba(26,26,24,.10)"><div style="height: 2px; width: 38%; background: #D6451A"></div></div>
+        <div style="display: flex; align-items: center; gap: 14px; padding: 11px 18px; background: #F2EEE8; border-bottom: 1px solid rgba(26,26,24,.18)">
+          <svg viewBox="0 0 120 44" style="width: 30px; height: 11px; display: block">
+            <path d="M8 26 L52 26 L84 14 L112 14" fill="none" stroke="#8A8A84" stroke-width="4"></path>
+            <path d="M8 26 L52 26 L112 26" fill="none" stroke="#1A1A18" stroke-width="4"></path>
+            <path d="M52 26 L84 14 L112 14 L112 26 Z" fill="#D6451A"></path>
+          </svg>
+          <span style="font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: -.012em">blindside</span>
+          <span style="margin-left: auto; font-size: 11px; color: #6B6B64">Cargando el panel · 3.066 series</span>
+        </div>
+        <div style="display: flex; gap: 18px; padding: 9px 18px; border-bottom: 1px solid rgba(26,26,24,.12)">
+          <div style="height: 9px; width: 148px; background: rgba(26,26,24,.09)"></div>
+          <div style="height: 9px; width: 118px; background: rgba(26,26,24,.09)"></div>
+          <div style="height: 9px; width: 96px; background: rgba(26,26,24,.09)"></div>
+        </div>
+        <div style="padding: 18px">
+          <div style="height: 19px; width: 168px; background: rgba(26,26,24,.12); margin-bottom: 14px"></div>
+          <div style="display: flex; flex-direction: column; gap: 0">
+            <div style="display: flex; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid rgba(26,26,24,.08)"><div style="height: 10px; width: 92px; background: rgba(26,26,24,.10)"></div><div style="height: 10px; width: 62px; background: rgba(26,26,24,.07)"></div><div style="height: 10px; width: 76px; background: rgba(26,26,24,.07); margin-left: auto"></div></div>
+            <div style="display: flex; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid rgba(26,26,24,.08)"><div style="height: 10px; width: 92px; background: rgba(26,26,24,.10)"></div><div style="height: 10px; width: 62px; background: rgba(26,26,24,.07)"></div><div style="height: 10px; width: 76px; background: rgba(26,26,24,.07); margin-left: auto"></div></div>
+            <div style="display: flex; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid rgba(26,26,24,.08)"><div style="height: 10px; width: 92px; background: rgba(26,26,24,.10)"></div><div style="height: 10px; width: 62px; background: rgba(26,26,24,.07)"></div><div style="height: 10px; width: 76px; background: rgba(26,26,24,.07); margin-left: auto"></div></div>
+            <div style="display: flex; align-items: center; gap: 14px; padding: 9px 0; border-bottom: 1px solid rgba(26,26,24,.08); opacity: .6"><div style="height: 10px; width: 92px; background: rgba(26,26,24,.10)"></div><div style="height: 10px; width: 62px; background: rgba(26,26,24,.07)"></div><div style="height: 10px; width: 76px; background: rgba(26,26,24,.07); margin-left: auto"></div></div>
+            <div style="display: flex; align-items: center; gap: 14px; padding: 9px 0; opacity: .3"><div style="height: 10px; width: 92px; background: rgba(26,26,24,.10)"></div><div style="height: 10px; width: 62px; background: rgba(26,26,24,.07)"></div><div style="height: 10px; width: 76px; background: rgba(26,26,24,.07); margin-left: auto"></div></div>
+          </div>
+        </div>
+      </div>
+      <div style="font-size: 11.5px; color: #5F5F59; line-height: 1.55">Sin brillo animado: el único elemento en movimiento es la regla de progreso de 2 px arriba, en vermellón. Los bloques se desvanecen hacia abajo para que el esqueleto no compita con el header, que ya tiene contenido real.</div>
+    </div>
+
+    <!-- ============ 5e · MODO OSCURO ============ -->
+    <div id="5e" data-screen-label="Modo oscuro" style="display: flex; flex-direction: column; gap: 14px; width: 1180px; flex: 0 0 1180px; min-width: 0">
+      <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #FAF8F5; background: #1A1A18; padding: 4px 9px">5e</span>
+        <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: -.015em">Modo oscuro</span>
+        <span style="font-size: 12.5px; color: #44443E">El sombreado de quiebre no se invierte: cambia de signo. Es la única decisión que no es mecánica.</span>
+      </div>
+
+      <div style="background: #141310; border: 1px solid rgba(250,248,245,.16); font-family: 'IBM Plex Sans', sans-serif; color: #F2EEE8">
+        <div style="display: flex; align-items: center; gap: 20px; padding: 11px 22px; background: #1E1C18; border-bottom: 1px solid rgba(250,248,245,.14)">
+          <div style="display: flex; align-items: center; gap: 9px">
+            <svg viewBox="0 0 120 44" style="width: 30px; height: 11px; display: block">
+              <path d="M8 26 L52 26 L84 14 L112 14" fill="none" stroke="#8A8A84" stroke-width="4"></path>
+              <path d="M8 26 L52 26 L112 26" fill="none" stroke="#F2EEE8" stroke-width="4"></path>
+              <path d="M52 26 L84 14 L112 14 L112 26 Z" fill="#F0602E"></path>
+            </svg>
+            <span style="font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: -.012em">blindside</span>
+          </div>
+          <span style="font-size: 12.5px; color: #C9C4BB">Tienda 12 · Producto 0412</span>
+          <div style="margin-left: auto; display: flex; align-items: center; gap: 10px">
+            <span style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #86817A; font-weight: 600">Viendo</span>
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; border: 1px solid rgba(250,248,245,.26)">
+                <span style="padding: 6px 12px; font-size: 12px; font-weight: 500; color: #9A958C">Venta observada</span>
+                <span style="padding: 6px 12px; font-size: 12px; font-weight: 500; border-left: 1px solid rgba(250,248,245,.26); background: #F2EEE8; color: #141310">Demanda recuperada</span>
+              </div>
+              <div style="height: 2px; background: #F0602E"></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 380px">
+          <div style="padding: 18px 22px 16px; border-right: 1px solid rgba(250,248,245,.14); min-width: 0">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 12px">
+              <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 19px; margin: 0; letter-spacing: -.015em">Tienda 12 · Producto 0412</h2>
+              <span style="font-size: 11.5px; color: #86817A; font-variant-numeric: tabular-nums">97 días · eje autoescalado 0,00–4,00</span>
+            </div>
+            <svg viewBox="0 0 1000 300" style="width: 100%; height: auto; display: block; overflow: visible" role="img" aria-label="La misma serie en modo oscuro">
+              <g stroke="rgba(250,248,245,.09)" stroke-width="1">
+                <line x1="46" y1="12" x2="986" y2="12"></line>
+                <line x1="46" y1="78.5" x2="986" y2="78.5"></line>
+                <line x1="46" y1="145" x2="986" y2="145"></line>
+                <line x1="46" y1="211.5" x2="986" y2="211.5"></line>
+              </g>
+              <path d="{{ bandsPath }}" fill="rgba(250,248,245,.07)"></path>
+              <line x1="46" y1="278" x2="986" y2="278" stroke="rgba(250,248,245,.32)" stroke-width="1"></line>
+              <line x1="922.7" y1="12" x2="922.7" y2="278" stroke="rgba(250,248,245,.28)" stroke-width="1" stroke-dasharray="3 3"></line>
+              <g font-family="IBM Plex Sans" font-size="11" fill="#9A958C" text-anchor="end" style="font-variant-numeric: tabular-nums">
+                <text x="40" y="282">0,00</text>
+                <text x="40" y="215.5">1,00</text>
+                <text x="40" y="149">2,00</text>
+                <text x="40" y="82.5">3,00</text>
+                <text x="40" y="16">4,00</text>
+              </g>
+              <path d="{{ wedgePath }}" fill="rgba(240,96,46,.20)"></path>
+              <path d="{{ recPath }}" fill="none" stroke="#F0602E" stroke-width="2.4" stroke-linejoin="round"></path>
+              <path d="{{ obsPath }}" fill="none" stroke="#8A8A84" stroke-width="1.6" stroke-linejoin="round"></path>
+              <path d="{{ bandPath }}" fill="rgba(240,96,46,.15)"></path>
+              <path d="{{ fcPath }}" fill="none" stroke="rgba(250,248,245,.5)" stroke-width="1.8" stroke-dasharray="5 4"></path>
+              <line x1="{{ qx }}" y1="{{ qy }}" x2="{{ qx }}" y2="278" stroke="#F0602E" stroke-width="1"></line>
+              <circle cx="{{ qx }}" cy="{{ qy }}" r="4.5" fill="#F0602E"></circle>
+            </svg>
+            <div style="display: flex; gap: 22px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(250,248,245,.14); font-size: 11.5px; color: #C9C4BB">
+              <span style="display: flex; align-items: center; gap: 7px"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#8A8A84" stroke-width="1.6"></line></svg>Venta observada</span>
+              <span style="display: flex; align-items: center; gap: 7px"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#F0602E" stroke-width="2.4"></line></svg>Demanda recuperada</span>
+              <span style="display: flex; align-items: center; gap: 7px"><span style="width: 18px; height: 11px; background: rgba(250,248,245,.07); border: 1px solid rgba(250,248,245,.14)"></span>Tramo de quiebre</span>
+            </div>
+          </div>
+
+          <div style="padding: 18px 22px">
+            <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #86817A; font-weight: 600; margin-bottom: 12px">Mapeo de tokens</div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(250,248,245,.3)">
+                  <th scope="col" style="text-align: left; padding: 5px 8px 5px 0; font-weight: 600; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #86817A">Rol</th>
+                  <th scope="col" style="text-align: left; padding: 5px 8px; font-weight: 600; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #86817A">Claro</th>
+                  <th scope="col" style="text-align: left; padding: 5px 0 5px 8px; font-weight: 600; font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: #86817A">Oscuro</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-bottom: 1px solid rgba(250,248,245,.09)"><th scope="row" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 400; color: #C9C4BB">papel</th><td style="padding: 6px 8px">FAF8F5</td><td style="padding: 6px 0 6px 8px">141310</td></tr>
+                <tr style="border-bottom: 1px solid rgba(250,248,245,.09)"><th scope="row" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 400; color: #C9C4BB">superficie</th><td style="padding: 6px 8px">F2EEE8</td><td style="padding: 6px 0 6px 8px">1E1C18</td></tr>
+                <tr style="border-bottom: 1px solid rgba(250,248,245,.09)"><th scope="row" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 400; color: #C9C4BB">tinta</th><td style="padding: 6px 8px">1A1A18</td><td style="padding: 6px 0 6px 8px">F2EEE8</td></tr>
+                <tr style="border-bottom: 1px solid rgba(250,248,245,.09)"><th scope="row" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 400; color: #C9C4BB">secundaria</th><td style="padding: 6px 8px">44443E</td><td style="padding: 6px 0 6px 8px">C9C4BB</td></tr>
+                <tr style="border-bottom: 1px solid rgba(250,248,245,.09)"><th scope="row" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 400; color: #C9C4BB">rótulo</th><td style="padding: 6px 8px">6B6B64</td><td style="padding: 6px 0 6px 8px">86817A</td></tr>
+                <tr style="border-bottom: 1px solid rgba(250,248,245,.09)"><th scope="row" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 400; color: #C9C4BB">observado</th><td style="padding: 6px 8px">8A8A84</td><td style="padding: 6px 0 6px 8px">8A8A84</td></tr>
+                <tr style="border-bottom: 1px solid rgba(250,248,245,.09)"><th scope="row" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 400; color: #C9C4BB">recuperado</th><td style="padding: 6px 8px; color: #D6451A">D6451A</td><td style="padding: 6px 0 6px 8px; color: #F0602E">F0602E</td></tr>
+                <tr style="border-bottom: 1px solid rgba(250,248,245,.09)"><th scope="row" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 400; color: #C9C4BB">advertencia</th><td style="padding: 6px 8px">7A5C10</td><td style="padding: 6px 0 6px 8px">D9A93A</td></tr>
+                <tr style="border-bottom: 1px solid rgba(250,248,245,.09)"><th scope="row" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 400; color: #C9C4BB">regla fina</th><td style="padding: 6px 8px">tinta 12 %</td><td style="padding: 6px 0 6px 8px">papel 14 %</td></tr>
+                <tr><th scope="row" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 600">quiebre</th><td style="padding: 6px 8px; font-weight: 600">tinta 7 %</td><td style="padding: 6px 0 6px 8px; font-weight: 600">papel 7 %</td></tr>
+              </tbody>
+            </table>
+            <div style="margin-top: 14px; padding: 11px 13px; background: #1E1C18; border-left: 2px solid #F0602E; font-size: 11.5px; line-height: 1.6; color: #C9C4BB">El tramo de quiebre es el único token que no invierte su valor sino su referencia: en claro es tinta al 7 % sobre papel, en oscuro es papel al 7 % sobre tinta. En los dos casos es <em style="font-style: normal; color: #F2EEE8">más claro que su fondo por la misma cantidad</em>, así que el sombreado pesa lo mismo. Un gris translúcido fijo desaparecería en uno de los dos.</div>
+            <div style="margin-top: 11px; font-size: 11.5px; line-height: 1.6; color: #9A958C">El vermellón sube de <span style="font-variant-numeric: tabular-nums">D6451A</span> a <span style="font-variant-numeric: tabular-nums; color: #F0602E">F0602E</span>: +10 % de luminosidad para mantener 4,5:1 contra el fondo oscuro. El gris de observado no cambia, porque a 8A8A84 pasa 3:1 contra los dos fondos y el grosor ya lo distingue.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="padding: 0 56px 60px; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1A1A18">
+  <div style="display: flex; flex-direction: column; gap: 10px; max-width: 800px; margin-bottom: 30px">
+    <div style="font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #6B6B64; font-weight: 600">2 · Shell, decisión y diagnóstico</div>
+    <h1 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 34px; line-height: 1.14; margin: 0; letter-spacing: -.018em">El shell y la pantalla de la decisión</h1>
+    <p style="margin: 6px 0 0; font-size: 14px; line-height: 1.6; color: #44443E; max-width: 70ch; text-wrap: pretty">Cuatro piezas: el shell con el estado global separado de la navegación, la landing de reposición, el selector con búsqueda y las dos pantallas de diagnóstico. Los números que el backend todavía no sirve van rotulados, no ocultos.</p>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 44px; align-items: flex-start">
+
+    <!-- ============ 4a · SHELL + REPOSICIÓN ============ -->
+    <div id="4a" data-screen-label="Reposición" style="display: flex; flex-direction: column; gap: 14px; width: 1180px; flex: 0 0 1180px; min-width: 0">
+      <div style="display: flex; align-items: baseline; gap: 14px">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #FAF8F5; background: #1A1A18; padding: 4px 9px">4a</span>
+        <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: -.015em">Reposición · landing</span>
+        <span style="font-size: 12.5px; color: #44443E">El toggle y el selector viven arriba de la navegación, en su propia franja. Cambiar de pantalla no los resetea.</span>
+      </div>
+
+      <div style="background: #FAF8F5; border: 1px solid rgba(26,26,24,.18); font-family: 'IBM Plex Sans', sans-serif">
+
+        <!-- franja de estado global -->
+        <div style="display: flex; align-items: center; gap: 20px; padding: 11px 22px; background: #F2EEE8; border-bottom: 1px solid rgba(26,26,24,.18)">
+          <div style="display: flex; align-items: center; gap: 9px">
+            <svg viewBox="0 0 120 44" style="width: 30px; height: 11px; display: block">
+              <path d="M8 26 L52 26 L84 14 L112 14" fill="none" stroke="#8A8A84" stroke-width="4"></path>
+              <path d="M8 26 L52 26 L112 26" fill="none" stroke="#1A1A18" stroke-width="4"></path>
+              <path d="M52 26 L84 14 L112 14 L112 26 Z" fill="#D6451A"></path>
+            </svg>
+            <span style="font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: -.012em">blindside</span>
+          </div>
+
+          <button type="button" style="appearance: none; cursor: pointer; font: inherit; display: flex; align-items: center; gap: 9px; background: #FAF8F5; border: 1px solid rgba(26,26,24,.28); padding: 5px 10px 5px 9px; font-size: 12.5px" style-hover="border-color: #1A1A18">
+            <svg width="12" height="12" viewBox="0 0 12 12" style="display: block"><circle cx="5" cy="5" r="3.6" fill="none" stroke="#5F5F59" stroke-width="1.4"></circle><line x1="7.8" y1="7.8" x2="11" y2="11" stroke="#5F5F59" stroke-width="1.4"></line></svg>
+            <span>Tienda 12 · Producto 0412</span>
+            <span style="font-size: 10.5px; color: #6B6B64; border: 1px solid rgba(26,26,24,.2); padding: 1px 4px; letter-spacing: .04em">⌘K</span>
+          </button>
+
+          <div style="margin-left: auto; display: flex; align-items: center; gap: 10px">
+            <span style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600">Viendo</span>
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; border: 1px solid rgba(26,26,24,.22)" role="group" aria-label="Base de cálculo">
+                <button type="button" onClick="{{ setObs }}" aria-pressed="{{ isObs }}" style="appearance: none; border: 0; cursor: pointer; padding: 6px 12px; font: inherit; font-size: 12px; font-weight: 500; background: {{ obsBg }}; color: {{ obsFg }}; transition: background .3s, color .3s">Venta observada</button>
+                <button type="button" onClick="{{ setRec }}" aria-pressed="{{ isRec }}" style="appearance: none; border: 0; border-left: 1px solid rgba(26,26,24,.22); cursor: pointer; padding: 6px 12px; font: inherit; font-size: 12px; font-weight: 500; background: {{ recBg }}; color: {{ recFg }}; transition: background .3s, color .3s">Demanda recuperada</button>
+              </div>
+              <div style="height: 2px; background: #D6451A; opacity: {{ accentRuleOpacity }}; transition: opacity .4s"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- navegación, contenedor propio -->
+        <div style="display: flex; align-items: flex-end; gap: 26px; padding: 0 22px; border-bottom: 1px solid rgba(26,26,24,.12)">
+          <div style="display: flex; gap: 22px">
+            <span aria-current="page" style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 15px; letter-spacing: -.01em; padding: 11px 0 9px; border-bottom: 2px solid #1A1A18">Reposición</span>
+            <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 15px; letter-spacing: -.01em; padding: 11px 0 9px; border-bottom: 2px solid transparent; color: #44443E">Serie individual</span>
+          </div>
+          <div style="width: 1px; align-self: stretch; background: rgba(26,26,24,.12); margin: 8px 0"></div>
+          <div style="display: flex; gap: 20px; padding-bottom: 11px; align-self: flex-end">
+            <span style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #8A8A84; font-weight: 600; align-self: center">Evidencia</span>
+            <span style="font-size: 12.5px; color: #5F5F59">Vista general</span>
+            <span style="font-size: 12.5px; color: #5F5F59">Comparativa</span>
+            <span style="font-size: 12.5px; color: #5F5F59">Explicabilidad</span>
+            <span style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #8A8A84; font-weight: 600; align-self: center; margin-left: 8px">Diagnóstico</span>
+            <span style="font-size: 12.5px; color: #5F5F59">Salud</span>
+            <span style="font-size: 12.5px; color: #5F5F59">Mapa</span>
+          </div>
+        </div>
+
+        <!-- franja de contexto -->
+        <div style="display: flex; gap: 26px; flex-wrap: wrap; padding: 8px 22px; border-bottom: 1px solid rgba(26,26,24,.12); font-size: 11.5px; color: #5F5F59; font-variant-numeric: tabular-nums">
+          <span>MASE <strong style="color: #1A1A18; font-weight: 600">{{ maseTxt }}</strong> ± {{ sdTxt }} · peor origen {{ worstTxt }}</span>
+          <span>Cobertura empírica 91 % · nominal 90 %</span>
+          <span>Entrenado hasta 2026-09-15</span>
+          <span>3.066 de 3.066 series conocidas por el modelo</span>
+        </div>
+
+        <!-- decisión -->
+        <div style="padding: 20px 22px 8px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 26px; align-items: start">
+          <div style="min-width: 0">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 3px">
+              <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 21px; margin: 0; letter-spacing: -.018em">Qué pedir hoy</h2>
+              <span style="font-size: 11.5px; color: #6B6B64; font-variant-numeric: tabular-nums">3.066 series · ordenadas por impacto · horizonte 7 días</span>
+            </div>
+            <div style="font-size: 12px; color: #5F5F59; margin-bottom: 16px">Las nueve de mayor impacto. La fila abierta muestra su evidencia sin cambiar de pantalla.</div>
+
+            <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(26,26,24,.35)">
+                  <th scope="col" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Serie</th>
+                  <th scope="col" style="text-align: left; padding: 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Clase</th>
+                  <th scope="col" style="text-align: left; padding: 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Quiebre · 14 d</th>
+                  <th scope="col" style="text-align: right; padding: 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Política</th>
+                  <th scope="col" style="text-align: right; padding: 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Sugerido</th>
+                  <th scope="col" style="text-align: right; padding: 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Δ</th>
+                  <th scope="col" style="text-align: right; padding: 6px 0 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Impacto <span style="font-size: 9px; letter-spacing: .06em; color: #7A5C10; border: 1px solid rgba(122,92,16,.5); padding: 0 3px">sim</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ repoRows }}" as="r" hint-placeholder-count="9">
+                  <tr onClick="{{ r.pick }}" style="border-bottom: 1px solid rgba(26,26,24,.10); background: {{ r.rowBg }}; cursor: pointer" style-hover="background: #F2EEE8">
+                    <th scope="row" style="text-align: left; padding: 8px 8px 8px 0; font-weight: 500">{{ r.id }}</th>
+                    <td style="padding: 8px; color: #5F5F59">{{ r.clase }}</td>
+                    <td style="padding: 8px">
+                      <span style="display: flex; align-items: center; gap: 8px">
+                        <svg viewBox="0 0 100 15" style="width: 76px; height: 15px; display: block">
+                          <line x1="0" y1="14.5" x2="100" y2="14.5" stroke="rgba(26,26,24,.2)" stroke-width="1"></line>
+                          <sc-for list="{{ r.bars }}" as="b" hint-placeholder-count="14">
+                            <rect x="{{ b.x }}" y="{{ b.y }}" width="5.4" height="{{ b.h }}" fill="rgba(26,26,24,.42)"></rect>
+                          </sc-for>
+                        </svg>
+                        <span style="font-size: 11px; color: {{ r.censColor }}">{{ r.censTxt }}</span>
+                      </span>
+                    </td>
+                    <td style="text-align: right; padding: 8px; color: #5F5F59">{{ r.pol }}</td>
+                    <td style="text-align: right; padding: 8px; font-weight: 600">{{ r.sug }}</td>
+                    <td style="text-align: right; padding: 8px; font-weight: {{ r.deltaWeight }}">{{ r.delta }}</td>
+                    <td style="text-align: right; padding: 8px 0 8px 8px">
+                      <span style="display: flex; align-items: center; gap: 7px; justify-content: flex-end">
+                        <span style="display: block; width: 46px; height: 5px; background: rgba(26,26,24,.10)"><span style="display: block; height: 5px; width: {{ r.impWidth }}; background: #D6451A; opacity: .75; transition: width .5s"></span></span>
+                        <span>{{ r.imp }}</span>
+                      </span>
+                    </td>
+                  </tr>
+                  <sc-if value="{{ r.open }}" hint-placeholder-val="{{ false }}">
+                    <tr style="background: #F2EEE8; border-bottom: 1px solid rgba(26,26,24,.18)">
+                      <td colspan="7" style="padding: 4px 0 14px">
+                        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 232px; gap: 24px; padding: 0 2px">
+                          <div style="min-width: 0">
+                            <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 8px">Pronóstico a 7 días con banda conformal 90 %</div>
+                            <table style="width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums">
+                              <tbody>
+                                <sc-for list="{{ fRow }}" as="f" hint-placeholder-count="7">
+                                  <tr>
+                                    <th scope="row" style="text-align: left; padding: 3px 10px 3px 0; font-weight: 400; color: #5F5F59; width: 62px">{{ f.lbl }}</th>
+                                    <td style="padding: 3px 0; width: 100%">
+                                      <span style="display: block; height: 9px; background: rgba(214,69,26,.14); width: {{ f.barW }}; border-right: 2px solid #D6451A; opacity: {{ recOn }}; transition: opacity .5s, width .5s"></span>
+                                    </td>
+                                    <td style="padding: 3px 0 3px 12px; text-align: right; white-space: nowrap; color: #5F5F59">{{ f.lo }} – {{ f.hi }}</td>
+                                    <td style="padding: 3px 0 3px 12px; text-align: right; font-weight: 600">{{ f.pred }}</td>
+                                  </tr>
+                                </sc-for>
+                              </tbody>
+                            </table>
+                          </div>
+                          <div style="display: flex; flex-direction: column; gap: 9px; font-size: 11.5px; color: #44443E; line-height: 1.5">
+                            <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600">Por qué difiere</div>
+                            <div><strong style="font-weight: 600; font-variant-numeric: tabular-nums">{{ r.cens }} de los últimos 28 días</strong> con quiebre · racha máxima {{ r.maxr }} d. La política actual promedia esos días como si la venta baja fuera demanda baja.</div>
+                            <a href="#2a" style="color: #1A1A18; border-bottom: 1px dotted rgba(26,26,24,.45); text-decoration: none; align-self: flex-start">Abrir la serie completa</a>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </sc-if>
+                </sc-for>
+              </tbody>
+            </table>
+
+            <div style="margin-top: 12px; padding: 10px 13px; background: #F2EEE8; border-left: 2px solid #7A5C10; font-size: 11.5px; line-height: 1.55; color: #44443E">
+              <strong style="font-weight: 600">Impacto simulado.</strong> <code style="font-family: inherit">/reorder</code> devuelve 0 en <code style="font-family: inherit">expected_shortfall</code>, <code style="font-family: inherit">expected_overage</code> y <code style="font-family: inherit">cost_delta_pct</code>. Esta columna se calcula en el cliente con la banda conformal y el ratio Cu/Co, y queda rotulada <span style="font-size: 9px; letter-spacing: .06em; color: #7A5C10; border: 1px solid rgba(122,92,16,.5); padding: 0 3px">sim</span> hasta que el backend los sirva. El orden de la tabla depende de ella.
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 18px">
+            <div>
+              <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 8px">Ratio de costo Co/Cu</div>
+              <div style="display: flex; border: 1px solid rgba(26,26,24,.22)" role="group" aria-label="Ratio de costo">
+                <sc-for list="{{ ratioOpts }}" as="o" hint-placeholder-count="4">
+                  <button type="button" onClick="{{ o.pick }}" aria-pressed="{{ o.on }}" style="appearance: none; border: 0; border-left: 1px solid rgba(26,26,24,.16); cursor: pointer; font: inherit; flex: 1; padding: 7px 4px; display: flex; flex-direction: column; gap: 2px; align-items: center; background: {{ o.bg }}; color: {{ o.fg }}; transition: background .25s, color .25s">
+                    <span style="font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums">{{ o.label }}</span>
+                    <span style="font-size: 10px; opacity: .72; font-variant-numeric: tabular-nums">q {{ o.q }}</span>
+                  </button>
+                </sc-for>
+              </div>
+              <div style="font-size: 11.5px; color: #44443E; line-height: 1.5; margin-top: 8px">{{ ratioNote }}</div>
+            </div>
+
+            <div style="border-top: 1px solid rgba(26,26,24,.12); padding-top: 14px">
+              <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 6px">Total a pedir · 9 series</div>
+              <div style="display: flex; align-items: baseline; gap: 8px">
+                <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 38px; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums">{{ repoTotal }}</span>
+                <span style="font-size: 12px; color: #6B6B64">en q* = {{ qStarTxt }}</span>
+              </div>
+              <div style="font-size: 11.5px; color: #5F5F59; margin-top: 7px; line-height: 1.5">Magnitud adimensional: <code style="font-family: inherit">sale_amount</code> viene multiplicado por un coeficiente no divulgado. No hay unidad.</div>
+            </div>
+
+            <div style="border-top: 1px solid rgba(26,26,24,.12); padding-top: 14px; display: flex; flex-direction: column; gap: 9px; font-size: 12.5px; font-variant-numeric: tabular-nums">
+              <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Impacto acumulado</span><span style="font-weight: 600">{{ repoImpTotal }}</span></div>
+              <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Series en alerta</span><span style="color: #7A5C10; font-weight: 600">18</span></div>
+              <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Cu / Co</span><span>1,00 / {{ ratioCoTxt }}</span></div>
+            </div>
+
+            <div style="background: #F2EEE8; padding: 11px 13px; font-size: 11.5px; line-height: 1.55; color: #44443E; border-left: 2px solid rgba(26,26,24,.35)">{{ basisNote }}</div>
+          </div>
+        </div>
+
+        <div style="padding: 0 22px 18px; font-size: 11.5px; color: #5F5F59; line-height: 1.55">Los KPIs de exactitud van en la franja de contexto, chicos: son estado, no titular. El titular es la cantidad.</div>
+      </div>
+    </div>
+
+    <!-- ============ 4b · SELECTOR ============ -->
+    <div id="4b" data-screen-label="Selector" style="display: flex; flex-direction: column; gap: 14px; width: 556px; flex: 0 0 556px; min-width: 0">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #FAF8F5; background: #1A1A18; padding: 4px 9px">4b</span>
+        <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: -.015em">Selector</span>
+        <span style="font-size: 12.5px; color: #44443E">309 productos y 3.066 series: búsqueda, no desplegable.</span>
+      </div>
+
+      <div style="background: #FAF8F5; border: 1px solid rgba(26,26,24,.18); font-family: 'IBM Plex Sans', sans-serif">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 13px 16px; border-bottom: 1px solid rgba(26,26,24,.18)">
+          <svg width="14" height="14" viewBox="0 0 14 14" style="display: block; flex: none"><circle cx="6" cy="6" r="4.4" fill="none" stroke="#5F5F59" stroke-width="1.5"></circle><line x1="9.4" y1="9.4" x2="13" y2="13" stroke="#5F5F59" stroke-width="1.5"></line></svg>
+          <span style="font-size: 15px; font-variant-numeric: tabular-nums">041<span style="display: inline-block; width: 1px; height: 17px; background: #D6451A; vertical-align: -3px; margin-left: 1px"></span></span>
+          <span style="margin-left: auto; font-size: 10.5px; color: #6B6B64; font-variant-numeric: tabular-nums">5 de 3.375</span>
+        </div>
+        <div>
+          <sc-for list="{{ hits }}" as="h" hint-placeholder-count="5">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid rgba(26,26,24,.08); background: {{ h.bg }}; cursor: pointer" style-hover="background: #F2EEE8">
+              <span style="font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: #6B6B64; font-weight: 600; width: 58px; flex: none">{{ h.kind }}</span>
+              <span style="font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; width: 96px; flex: none">{{ h.code }}</span>
+              <span style="font-size: 11.5px; color: #5F5F59; min-width: 0">{{ h.meta }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; gap: 18px; padding: 9px 16px; font-size: 10.5px; color: #6B6B64">
+          <span>↑↓ mover</span><span>↵ abrir</span><span>esc cerrar</span>
+          <span style="margin-left: auto">Búsqueda sobre código y descripción</span>
+        </div>
+      </div>
+      <div style="font-size: 11.5px; color: #5F5F59; line-height: 1.55">Cambiar de serie no cambia la base de cálculo: el toggle y el selector son dos estados globales independientes, y los dos sobreviven a la navegación.</div>
+    </div>
+
+    <!-- ============ 4c · SALUD DEL MODELO ============ -->
+    <div id="4c" data-screen-label="Salud" style="display: flex; flex-direction: column; gap: 14px; width: 556px; flex: 0 0 556px; min-width: 0">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #FAF8F5; background: #1A1A18; padding: 4px 9px">4c</span>
+        <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: -.015em">Salud del modelo</span>
+        <span style="font-size: 12.5px; color: #44443E">Mitad verificada, mitad simulada.</span>
+      </div>
+
+      <div style="background: #FAF8F5; border: 1px solid rgba(26,26,24,.18); font-family: 'IBM Plex Sans', sans-serif">
+        <div style="padding: 16px 18px; border-bottom: 1px solid rgba(26,26,24,.12)">
+          <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 10px">Artefacto cargado · /health</div>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; font-variant-numeric: tabular-nums">
+            <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Versión</span><span>lgbm-q0625 · 2026-09-15</span></div>
+            <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Entrenado hasta</span><span>2026-09-15</span></div>
+            <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Series conocidas</span><span style="font-weight: 600">3.066 de 3.066 en el panel</span></div>
+            <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Origen de los datos</span><span>panel completo · no <code style="font-family: inherit">data/sample</code></span></div>
+          </div>
+        </div>
+
+        <div style="padding: 16px 18px; border-bottom: 1px solid rgba(26,26,24,.12)">
+          <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px">
+            <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600">Cobertura empírica por horizonte</div>
+            <span style="font-size: 11px; color: #6B6B64">nominal 90 %</span>
+          </div>
+          <svg viewBox="0 0 520 120" style="width: 100%; height: auto; display: block" role="img" aria-label="Cobertura empírica de la banda conformal en cada horizonte contra el nominal de 90 por ciento">
+            <line x1="30" y1="40" x2="514" y2="40" stroke="rgba(26,26,24,.45)" stroke-width="1" stroke-dasharray="4 3"></line>
+            <text x="24" y="44" font-family="IBM Plex Sans" font-size="10" fill="#5F5F59" text-anchor="end">90</text>
+            <text x="24" y="14" font-family="IBM Plex Sans" font-size="10" fill="#5F5F59" text-anchor="end">96</text>
+            <text x="24" y="98" font-family="IBM Plex Sans" font-size="10" fill="#5F5F59" text-anchor="end">82</text>
+            <line x1="30" y1="94" x2="514" y2="94" stroke="rgba(26,26,24,.10)"></line>
+            <line x1="30" y1="10" x2="514" y2="10" stroke="rgba(26,26,24,.10)"></line>
+            <g fill="rgba(26,26,24,.42)">
+              <rect x="44" y="40" width="42" height="14"></rect>
+              <rect x="112" y="31" width="42" height="9"></rect>
+              <rect x="180" y="40" width="42" height="8"></rect>
+              <rect x="248" y="40" width="42" height="21"></rect>
+              <rect x="316" y="26" width="42" height="14"></rect>
+              <rect x="384" y="40" width="42" height="11"></rect>
+              <rect x="452" y="40" width="42" height="27"></rect>
+            </g>
+            <g font-family="IBM Plex Sans" font-size="10" fill="#5F5F59" text-anchor="middle">
+              <text x="65" y="114">h1</text><text x="133" y="114">h2</text><text x="201" y="114">h3</text><text x="269" y="114">h4</text><text x="337" y="114">h5</text><text x="405" y="114">h6</text><text x="473" y="114">h7</text>
+            </g>
+          </svg>
+          <div style="font-size: 11.5px; color: #5F5F59; line-height: 1.55; margin-top: 6px">Las barras bajan del nominal en h4 y h7. No es monótona y eso está bien: con estacionalidad semanal el objetivo de h7 cae el mismo día que el origen.</div>
+        </div>
+
+        <div style="padding: 16px 18px">
+          <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px">
+            <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600">Deriva de features</div>
+            <span style="font-size: 9px; letter-spacing: .06em; color: #7A5C10; border: 1px solid rgba(122,92,16,.5); padding: 0 3px; font-weight: 600">sim</span>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 7px; font-size: 12px; font-variant-numeric: tabular-nums">
+            <div style="display: flex; align-items: center; gap: 10px"><span style="width: 118px; color: #5F5F59; flex: none">oos_hours_7d</span><span style="flex: 1; height: 6px; background: rgba(26,26,24,.10)"><span style="display: block; height: 6px; width: 62%; background: rgba(26,26,24,.5)"></span></span><span style="width: 42px; text-align: right">0,31</span></div>
+            <div style="display: flex; align-items: center; gap: 10px"><span style="width: 118px; color: #5F5F59; flex: none">media_28d</span><span style="flex: 1; height: 6px; background: rgba(26,26,24,.10)"><span style="display: block; height: 6px; width: 24%; background: rgba(26,26,24,.5)"></span></span><span style="width: 42px; text-align: right">0,12</span></div>
+            <div style="display: flex; align-items: center; gap: 10px"><span style="width: 118px; color: #5F5F59; flex: none">promo_activa</span><span style="flex: 1; height: 6px; background: rgba(26,26,24,.10)"><span style="display: block; height: 6px; width: 16%; background: rgba(26,26,24,.5)"></span></span><span style="width: 42px; text-align: right">0,08</span></div>
+          </div>
+          <div style="margin-top: 11px; padding: 9px 12px; background: #F2EEE8; border-left: 2px solid #7A5C10; font-size: 11.5px; line-height: 1.55; color: #44443E">No existe endpoint de deriva. Estos tres valores son sintéticos, rotulados <span style="font-size: 9px; letter-spacing: .06em; color: #7A5C10; border: 1px solid rgba(122,92,16,.5); padding: 0 3px; font-weight: 600">sim</span>, y muestran la forma que tendría la pantalla. En la defensa se presentan como diseño, no como medición.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 4d · MAPA DE PRODUCTOS ============ -->
+    <div id="4d" data-screen-label="Mapa" style="display: flex; flex-direction: column; gap: 14px; width: 556px; flex: 0 0 556px; min-width: 0">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #FAF8F5; background: #1A1A18; padding: 4px 9px">4d</span>
+        <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: -.015em">Mapa de productos</span>
+        <span style="font-size: 12.5px; color: #44443E">309 productos, proyección sintética.</span>
+      </div>
+
+      <div style="background: #FAF8F5; border: 1px solid rgba(26,26,24,.18); font-family: 'IBM Plex Sans', sans-serif">
+        <div style="display: flex; align-items: baseline; gap: 10px; padding: 14px 18px 6px">
+          <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600">UMAP sobre features de serie</div>
+          <span style="font-size: 9px; letter-spacing: .06em; color: #7A5C10; border: 1px solid rgba(122,92,16,.5); padding: 0 3px; font-weight: 600">sim</span>
+        </div>
+        <div style="padding: 0 18px 12px">
+          <svg viewBox="0 0 300 170" style="width: 100%; height: auto; display: block; background: #F2EEE8" role="img" aria-label="Proyección de los 309 productos en dos dimensiones, agrupados por banda de rotación">
+            <sc-for list="{{ umap }}" as="p" hint-placeholder-count="120">
+              <circle cx="{{ p.cx }}" cy="{{ p.cy }}" r="{{ p.r }}" fill="{{ p.fill }}"></circle>
+            </sc-for>
+            <circle cx="104" cy="78" r="6.5" fill="none" stroke="#D6451A" stroke-width="1.6"></circle>
+            <circle cx="104" cy="78" r="2.6" fill="#D6451A"></circle>
+            <line x1="110.5" y1="78" x2="140" y2="78" stroke="#D6451A" stroke-width="1"></line>
+            <text x="144" y="81.5" font-family="IBM Plex Sans" font-size="9.5" fill="#1A1A18" font-weight="600">P0412</text>
+          </svg>
+        </div>
+        <div style="display: flex; gap: 18px; flex-wrap: wrap; padding: 0 18px 12px; font-size: 11px; color: #44443E">
+          <span style="display: flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 50%; background: rgba(26,26,24,.45)"></span>Alta rotación · 104</span>
+          <span style="display: flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 50%; background: rgba(26,26,24,.30)"></span>Media · 103</span>
+          <span style="display: flex; align-items: center; gap: 6px"><span style="width: 8px; height: 8px; border-radius: 50%; background: rgba(26,26,24,.16)"></span>Baja · 102</span>
+          <span style="display: flex; align-items: center; gap: 6px"><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.5" fill="none" stroke="#D6451A" stroke-width="1.4"></circle><circle cx="7" cy="7" r="2.2" fill="#D6451A"></circle></svg>Selección activa</span>
+        </div>
+        <div style="padding: 12px 18px; border-top: 1px solid rgba(26,26,24,.12); background: #F2EEE8; border-left: 2px solid #7A5C10; font-size: 11.5px; line-height: 1.55; color: #44443E">La cola de baja rotación es un tercio del catálogo, no la mayoría. El plan asume lo contrario y conviene corregirlo antes de la defensa: esta pantalla lo hace visible.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section style="padding: 40px 56px 80px; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1A1A18; border-top: 1px solid rgba(26,26,24,.2)">
+  <div style="display: flex; flex-direction: column; gap: 10px; max-width: 800px; margin-bottom: 36px">
+    <div style="font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #6B6B64; font-weight: 600">1 · Dirección elegida · registro corregido</div>
+    <h1 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 34px; line-height: 1.14; margin: 0; letter-spacing: -.018em">Registro corregido</h1>
+    <p style="margin: 6px 0 0; font-size: 14px; line-height: 1.6; color: #44443E; max-width: 70ch; text-wrap: pretty">Misma regla de color en todas las pantallas: el mundo observado es desaturado y el vermellón queda reservado por completo a la demanda recuperada. Lo que cambia entre las tres es la voz tipográfica, la densidad y cómo se encuadra el gráfico. El toggle de arriba acciona las tres a la vez.</p>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 14px 18px; background: #FAF8F5; border: 1px solid rgba(26,26,24,.16); margin-bottom: 34px; position: sticky; top: 12px; z-index: 5">
+    <span style="font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600">Viendo</span>
+    <div style="display: flex; flex-direction: column; gap: 5px">
+      <div style="display: flex; border: 1px solid rgba(26,26,24,.22)">
+        <button type="button" onClick="{{ setObs }}" style="appearance: none; border: 0; cursor: pointer; padding: 7px 14px; font: inherit; font-size: 12.5px; font-weight: 500; background: {{ obsBg }}; color: {{ obsFg }}; transition: background .3s, color .3s">Venta observada</button>
+        <button type="button" onClick="{{ setRec }}" style="appearance: none; border: 0; border-left: 1px solid rgba(26,26,24,.22); cursor: pointer; padding: 7px 14px; font: inherit; font-size: 12.5px; font-weight: 500; background: {{ recBg }}; color: {{ recFg }}; transition: background .3s, color .3s">Demanda recuperada</button>
+      </div>
+      <div style="height: 2px; background: #D6451A; opacity: {{ accentRuleOpacity }}; transition: opacity .4s"></div>
+    </div>
+    <span style="font-size: 12.5px; color: #44443E; line-height: 1.4; max-width: 46ch">{{ basisNote }}</span>
+    <span style="margin-left: auto; font-size: 11.5px; color: #6B6B64">Opciones <a href="#2a">2a</a> · <a href="#2b">2b</a> · <a href="#2c">2c</a></span>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 44px; align-items: flex-start">
+
+    <!-- ============ 2a · REGISTRO CORREGIDO ============ -->
+    <div id="2a" style="display: flex; flex-direction: column; gap: 14px; width: 1180px; flex: 0 0 1180px; min-width: 0">
+      <div style="display: flex; align-items: baseline; gap: 14px">
+        <span style="font-size: 12px; font-weight: 600; letter-spacing: .08em; color: #FAF8F5; background: #1A1A18; padding: 4px 9px">2a</span>
+        <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 20px; letter-spacing: -.015em">Registro corregido</span>
+        <span style="font-size: 12.5px; color: #44443E">Archivo + IBM Plex Sans · reglas finas, ritmo balanceado. La recomendación literal del doc.</span>
+      </div>
+
+      <div style="background: #FAF8F5; border: 1px solid rgba(26,26,24,.18); font-family: 'IBM Plex Sans', sans-serif">
+
+        <!-- identidad -->
+        <div style="display: grid; grid-template-columns: 300px 1fr 300px; border-bottom: 1px solid rgba(26,26,24,.12)">
+          <div style="padding: 20px 22px; border-right: 1px solid rgba(26,26,24,.12); display: flex; flex-direction: column; gap: 12px">
+            <div style="font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: #6B6B64; font-weight: 600">La marca</div>
+            <svg viewBox="0 0 120 44" style="width: 148px; height: 54px; display: block">
+              <path d="M8 26 L52 26 L84 14 L112 14" fill="none" stroke="#8A8A84" stroke-width="2.4"></path>
+              <path d="M8 26 L52 26 L112 26" fill="none" stroke="#1A1A18" stroke-width="2.4"></path>
+              <path d="M52 26 L84 14 L112 14 L112 26 Z" fill="#D6451A" opacity=".9"></path>
+            </svg>
+            <div style="font-size: 11.5px; line-height: 1.5; color: #44443E">Dos trazos que coinciden y en un punto se abren. La cuña rellena es la demanda recuperada.</div>
+          </div>
+          <div style="padding: 20px 22px; border-right: 1px solid rgba(26,26,24,.12); display: flex; flex-direction: column; gap: 12px">
+            <div style="font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: #6B6B64; font-weight: 600">Paleta · un solo saturado</div>
+            <div style="display: flex; gap: 0; border: 1px solid rgba(26,26,24,.12)">
+              <div style="flex: 1; height: 38px; background: #FAF8F5"></div>
+              <div style="flex: 1; height: 38px; background: #F2EEE8"></div>
+              <div style="flex: 1; height: 38px; background: #8A8A84"></div>
+              <div style="flex: 1; height: 38px; background: #5F5F59"></div>
+              <div style="flex: 1; height: 38px; background: #1A1A18"></div>
+              <div style="flex: 1.6; height: 38px; background: #D6451A"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 10.5px; color: #6B6B64; font-variant-numeric: tabular-nums">
+              <span>FAF8F5 papel</span><span>8A8A84 observado</span><span style="color: #D6451A; font-weight: 600">D6451A recuperado</span>
+            </div>
+          </div>
+          <div style="padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+            <div style="font-size: 10.5px; letter-spacing: .16em; text-transform: uppercase; color: #6B6B64; font-weight: 600">Tipografía</div>
+            <div style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 22px; line-height: 1.1; letter-spacing: -.015em">Serie 0412 · 88</div>
+            <div style="font-size: 13px; font-variant-numeric: tabular-nums; color: #44443E; letter-spacing: .01em">0,80 · 1,222 · 21.462 · −24,5 %</div>
+            <div style="font-size: 10.5px; color: #6B6B64">Archivo 600 para títulos · IBM Plex Sans con cifras tabulares para datos</div>
+          </div>
+        </div>
+
+        <!-- header app -->
+        <div style="display: flex; align-items: center; gap: 26px; padding: 12px 22px; border-bottom: 1px solid rgba(26,26,24,.12); background: #F2EEE8">
+          <div style="display: flex; align-items: center; gap: 9px">
+            <svg viewBox="0 0 120 44" style="width: 30px; height: 11px; display: block">
+              <path d="M8 26 L52 26 L84 14 L112 14" fill="none" stroke="#8A8A84" stroke-width="4"></path>
+              <path d="M8 26 L52 26 L112 26" fill="none" stroke="#1A1A18" stroke-width="4"></path>
+              <path d="M52 26 L84 14 L112 14 L112 26 Z" fill="#D6451A"></path>
+            </svg>
+            <span style="font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: -.012em">blindside</span>
+          </div>
+          <div style="display: flex; gap: 20px; font-size: 13px">
+            <span style="font-weight: 600; border-bottom: 2px solid #1A1A18; padding-bottom: 2px">Reposición</span>
+            <span style="font-weight: 600; color: #1A1A18; border-bottom: 2px solid #1A1A18; padding-bottom: 2px">Series</span>
+            <span style="color: #6B6B64; margin-left: 10px">Evidencia</span>
+            <span style="color: #6B6B64">Diagnóstico</span>
+          </div>
+          <div style="margin-left: auto; display: flex; align-items: center; gap: 10px">
+            <span style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600">Viendo</span>
+            <div style="display: flex; flex-direction: column; gap: 4px">
+              <div style="display: flex; border: 1px solid rgba(26,26,24,.22)">
+                <button type="button" onClick="{{ setObs }}" style="appearance: none; border: 0; cursor: pointer; padding: 6px 12px; font: inherit; font-size: 12px; font-weight: 500; background: {{ obsBg }}; color: {{ obsFg }}; transition: background .3s, color .3s">Venta observada</button>
+                <button type="button" onClick="{{ setRec }}" style="appearance: none; border: 0; border-left: 1px solid rgba(26,26,24,.22); cursor: pointer; padding: 6px 12px; font: inherit; font-size: 12px; font-weight: 500; background: {{ recBg }}; color: {{ recFg }}; transition: background .3s, color .3s">Demanda recuperada</button>
+              </div>
+              <div style="height: 2px; background: #D6451A; opacity: {{ accentRuleOpacity }}; transition: opacity .4s"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- franja de contexto -->
+        <div style="display: flex; gap: 26px; flex-wrap: wrap; padding: 8px 22px; border-bottom: 1px solid rgba(26,26,24,.12); font-size: 11.5px; color: #5F5F59; font-variant-numeric: tabular-nums">
+          <span>MASE <strong style="color: #1A1A18; font-weight: 600">{{ maseTxt }}</strong> ± {{ sdTxt }} · peor origen {{ worstTxt }}</span>
+          <span>Cobertura empírica 91 % · nominal 90 %</span>
+          <span>Entrenado hasta 2026-09-15</span>
+          <span>3.066 de 3.066 series conocidas por el modelo</span>
+          <span style="color: #7A5C10; font-weight: 600">18 series en alerta</span>
+        </div>
+
+        <!-- hero -->
+        <div style="display: grid; grid-template-columns: minmax(0, 1fr) 268px">
+          <div style="padding: 20px 22px 16px; border-right: 1px solid rgba(26,26,24,.12); min-width: 0">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px">
+              <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 21px; margin: 0; letter-spacing: -.018em">Tienda 12 · Producto 0412</h2>
+              <span style="font-size: 11.5px; color: #6B6B64; font-variant-numeric: tabular-nums">97 días · eje autoescalado 0,00–4,00</span>
+            </div>
+            <div style="font-size: 12px; color: #5F5F59; margin-bottom: 14px; font-variant-numeric: tabular-nums">{{ censDays }} días con quiebre en {{ streakCount }} rachas · mediana 2 días · rachas de un día dibujadas con ancho mínimo de 3 px</div>
+
+            <svg viewBox="0 0 1000 300" style="width: 100%; height: auto; display: block; overflow: visible" role="img" aria-label="Venta observada contra demanda recuperada, con tramos de quiebre sombreados">
+              <g stroke="rgba(26,26,24,.10)" stroke-width="1">
+                <line x1="46" y1="12" x2="986" y2="12"></line>
+                <line x1="46" y1="78.5" x2="986" y2="78.5"></line>
+                <line x1="46" y1="145" x2="986" y2="145"></line>
+                <line x1="46" y1="211.5" x2="986" y2="211.5"></line>
+              </g>
+              <path d="{{ bandsPath }}" fill="rgba(26,26,24,.07)"></path>
+              <line x1="46" y1="278" x2="986" y2="278" stroke="rgba(26,26,24,.35)" stroke-width="1"></line>
+              <line x1="922.7" y1="12" x2="922.7" y2="278" stroke="rgba(26,26,24,.3)" stroke-width="1" stroke-dasharray="3 3"></line>
+              <g font-family="IBM Plex Sans" font-size="11" fill="#5F5F59" text-anchor="end" style="font-variant-numeric: tabular-nums">
+                <text x="40" y="282">0,00</text>
+                <text x="40" y="215.5">1,00</text>
+                <text x="40" y="149">2,00</text>
+                <text x="40" y="82.5">3,00</text>
+                <text x="40" y="16">4,00</text>
+              </g>
+              <g font-family="IBM Plex Sans" font-size="11" fill="#5F5F59" text-anchor="middle">
+                <text x="50.5" y="294">11 jun</text>
+                <text x="195.1" y="294">27 jun</text>
+                <text x="339.7" y="294">13 jul</text>
+                <text x="484.3" y="294">29 jul</text>
+                <text x="628.9" y="294">14 ago</text>
+                <text x="773.5" y="294">30 ago</text>
+                <text x="918.1" y="294">15 sep</text>
+              </g>
+              <g opacity="{{ recOn }}" style="transition: opacity .6s cubic-bezier(.4,0,.2,1)">
+                <path d="{{ wedgePath }}" fill="rgba(214,69,26,.16)"></path>
+                <path d="{{ recPath }}" fill="none" stroke="#D6451A" stroke-width="2.4" stroke-linejoin="round"></path>
+              </g>
+              <path d="{{ obsPath }}" fill="none" stroke="#8A8A84" stroke-width="1.4" stroke-linejoin="round"></path>
+              <path d="{{ bandPath }}" fill="rgba(214,69,26,.12)" opacity="{{ recOn }}" style="transition: opacity .6s"></path>
+              <path d="{{ fcPath }}" fill="none" stroke="rgba(26,26,24,.55)" stroke-width="1.8" stroke-dasharray="5 4"></path>
+              <g opacity="{{ recOn }}" style="transition: opacity .6s">
+                <line x1="{{ qx }}" y1="{{ qy }}" x2="{{ qx }}" y2="278" stroke="#D6451A" stroke-width="1"></line>
+                <circle cx="{{ qx }}" cy="{{ qy }}" r="4.5" fill="#D6451A"></circle>
+              </g>
+            </svg>
+
+            <svg viewBox="0 0 1000 60" style="width: 100%; height: auto; display: block; margin-top: 8px" role="img" aria-label="Horas de quiebre por día, sobre 16 franjas comerciales">
+              <text x="46" y="9" font-family="IBM Plex Sans" font-size="9.5" font-weight="600" letter-spacing="1.1" fill="#6B6B64">HORAS DE QUIEBRE POR DÍA</text>
+              <g transform="translate(0 14)">
+                <line x1="46" y1="40" x2="986" y2="40" stroke="rgba(26,26,24,.35)" stroke-width="1"></line>
+                <line x1="46" y1="6" x2="986" y2="6" stroke="rgba(26,26,24,.10)" stroke-width="1"></line>
+                <path d="{{ hoursPath }}" fill="rgba(26,26,24,.42)"></path>
+                <text x="40" y="10" font-family="IBM Plex Sans" font-size="10" fill="#5F5F59" text-anchor="end">16</text>
+                <text x="40" y="44" font-family="IBM Plex Sans" font-size="10" fill="#5F5F59" text-anchor="end">0</text>
+              </g>
+            </svg>
+
+            <div style="display: flex; gap: 22px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(26,26,24,.12); font-size: 11.5px; color: #44443E">
+              <span style="display: flex; align-items: center; gap: 7px"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#8A8A84" stroke-width="1.4"></line></svg>Venta observada</span>
+              <span style="display: flex; align-items: center; gap: 7px"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="#D6451A" stroke-width="2.4"></line></svg>Demanda recuperada</span>
+              <span style="display: flex; align-items: center; gap: 7px"><span style="width: 18px; height: 11px; background: rgba(26,26,24,.07); border: 1px solid rgba(26,26,24,.15)"></span>Tramo de quiebre</span>
+              <span style="display: flex; align-items: center; gap: 7px"><svg width="26" height="8"><line x1="0" y1="4" x2="26" y2="4" stroke="rgba(26,26,24,.55)" stroke-width="1.8" stroke-dasharray="5 4"></line></svg>Pronóstico</span>
+              <span style="display: flex; align-items: center; gap: 7px"><span style="width: 18px; height: 11px; background: rgba(214,69,26,.12)"></span>Banda conformal 90 %</span>
+            </div>
+          </div>
+
+          <div style="padding: 20px 22px; display: flex; flex-direction: column; gap: 18px">
+            <div>
+              <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 6px">Cantidad sugerida</div>
+              <div style="display: flex; align-items: baseline; gap: 8px">
+                <span style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 42px; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums">{{ qLabel }}</span>
+                <span style="font-size: 12px; color: #6B6B64">en q* = 0,625</span>
+              </div>
+              <div style="font-size: 11.5px; color: #5F5F59; margin-top: 8px; line-height: 1.5">Perecedero: el sobrante es pérdida total al vencimiento. <a href="#2a" style="border-bottom-style: dotted">Cómo se validó</a></div>
+            </div>
+            <div style="border-top: 1px solid rgba(26,26,24,.12); padding-top: 14px; display: flex; flex-direction: column; gap: 9px; font-size: 12.5px; font-variant-numeric: tabular-nums">
+              <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Política actual</span><span>{{ qPolitica }}</span></div>
+              <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Delta</span><span style="font-weight: 600">{{ qDelta }}</span></div>
+              <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Cu / Co</span><span>1,00 / 0,60</span></div>
+            </div>
+            <div style="border-top: 1px solid rgba(26,26,24,.12); padding-top: 14px; display: flex; flex-direction: column; gap: 9px; font-size: 12.5px; font-variant-numeric: tabular-nums">
+              <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Uplift de recuperación</span><span style="font-weight: 600">{{ upliftTxt }}</span></div>
+              <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Horas de quiebre / día</span><span>7,0</span></div>
+              <div style="display: flex; justify-content: space-between"><span style="color: #5F5F59">Racha máxima</span><span>11 días</span></div>
+            </div>
+            <div style="background: #F2EEE8; padding: 11px 13px; font-size: 11.5px; line-height: 1.55; color: #44443E; border-left: 2px solid rgba(26,26,24,.35)">{{ basisNote }}</div>
+          </div>
+        </div>
+
+        <!-- vista general -->
+        <div style="border-top: 1px solid rgba(26,26,24,.18); padding: 18px 22px">
+          <div style="display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px">
+            <h3 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 16px; margin: 0; letter-spacing: -.01em; text-transform: uppercase">Vista general</h3>
+            <span style="font-size: 11.5px; color: #6B6B64">¿En qué estado está el sistema y le puedo creer?</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border: 1px solid rgba(26,26,24,.12)">
+            <div style="padding: 13px 15px; border-right: 1px solid rgba(26,26,24,.12)">
+              <div style="font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 7px">Artefacto</div>
+              <div style="font-size: 20px; font-variant-numeric: tabular-nums; font-weight: 500">3.066</div>
+              <div style="font-size: 11.5px; color: #5F5F59; margin-top: 3px">series conocidas de 3.066 en el panel</div>
+            </div>
+            <div style="padding: 13px 15px; border-right: 1px solid rgba(26,26,24,.12)">
+              <div style="font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 7px">Censura del panel</div>
+              <div style="font-size: 20px; font-variant-numeric: tabular-nums; font-weight: 500">43,9 %</div>
+              <div style="font-size: 11.5px; color: #5F5F59; margin-top: 3px">días con quiebre · 7,0 h promedio</div>
+            </div>
+            <div style="padding: 13px 15px; border-right: 1px solid rgba(26,26,24,.12)">
+              <div style="font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 7px">Uplift de recuperación</div>
+              <div style="font-size: 20px; font-variant-numeric: tabular-nums; font-weight: 500; color: #D6451A">+21,1 %</div>
+              <div style="font-size: 11.5px; color: #5F5F59; margin-top: 3px">censurados · limpios +0,0 % · todos +8,4 %</div>
+            </div>
+            <div style="padding: 13px 15px">
+              <div style="font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 7px">Objetivo</div>
+              <div style="font-size: 20px; font-variant-numeric: tabular-nums; font-weight: 500">{{ vsNaive }}</div>
+              <div style="font-size: 11.5px; color: #5F5F59; margin-top: 3px">MASE vs naive estacional · peor origen {{ worstTxt }}</div>
+            </div>
+          </div>
+          <div style="margin-top: 11px; padding: 10px 14px; background: #F2EEE8; font-size: 12px; color: #44443E; line-height: 1.55; font-variant-numeric: tabular-nums">Comprobación de la ventana comercial: 43,9 % de días con quiebre × 7,0 horas ÷ 16 franjas = <strong style="font-weight: 600">19,2 %</strong> de horas comerciales en quiebre, que reproduce el ≈20 % declarado en la ficha del dataset.</div>
+        </div>
+
+        <!-- comparativa -->
+        <div style="border-top: 1px solid rgba(26,26,24,.18); padding: 18px 22px; display: grid; grid-template-columns: minmax(0, 1fr) 680px; gap: 26px">
+          <div>
+            <div style="display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px">
+              <h3 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 16px; margin: 0; letter-spacing: -.01em; text-transform: uppercase">Comparativa de modelos</h3>
+              <span style="font-size: 11.5px; color: #6B6B64">¿Comparado contra qué?</span>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(26,26,24,.35)">
+                  <th scope="col" style="text-align: left; padding: 6px 8px 6px 0; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Modelo</th>
+                  <th scope="col" style="text-align: right; padding: 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">MASE</th>
+                  <th scope="col" style="text-align: right; padding: 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">σ orígenes</th>
+                  <th scope="col" style="text-align: right; padding: 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Peor</th>
+                  <th scope="col" style="text-align: right; padding: 6px 0 6px 8px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Δ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ modelLines }}" as="m" hint-placeholder-count="5">
+                  <tr style="border-bottom: 1px solid rgba(26,26,24,.12)">
+                    <th scope="row" style="text-align: left; padding: 7px 8px 7px 0; font-weight: 400">{{ m.k }}</th>
+                    <td style="text-align: right; padding: 7px 8px">{{ m.mean }}</td>
+                    <td style="text-align: right; padding: 7px 8px; color: #5F5F59">{{ m.sd }}</td>
+                    <td style="text-align: right; padding: 7px 8px">{{ m.worst }}</td>
+                    <td style="text-align: right; padding: 7px 0 7px 8px; color: #5F5F59">{{ m.delta }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            <div style="font-size: 11.5px; color: #5F5F59; margin-top: 10px; line-height: 1.55">La degradación por horizonte no es monótona y eso está bien: con estacionalidad semanal el error en h=7 puede bajar, porque el objetivo cae el mismo día de la semana que el origen.</div>
+          </div>
+          <div>
+            <div style="font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 8px">Una línea por modelo a través de los 8 orígenes</div>
+            <svg viewBox="0 0 660 180" style="width: 100%; height: auto; display: block" role="img" aria-label="MASE de cada modelo en los ocho orígenes de validación">
+              <g stroke="rgba(26,26,24,.10)">
+                <line x1="34" y1="8" x2="652" y2="8"></line>
+                <line x1="34" y1="61.5" x2="652" y2="61.5"></line>
+                <line x1="34" y1="115" x2="652" y2="115"></line>
+              </g>
+              <line x1="34" y1="148" x2="652" y2="148" stroke="rgba(26,26,24,.35)"></line>
+              <g font-family="IBM Plex Sans" font-size="10" fill="#5F5F59" text-anchor="end" style="font-variant-numeric: tabular-nums">
+                <text x="28" y="12">{{ yl1 }}</text>
+                <text x="28" y="65.5">{{ yl2 }}</text>
+                <text x="28" y="119">{{ yl3 }}</text>
+              </g>
+              <sc-for list="{{ modelLines }}" as="m" hint-placeholder-count="5">
+                <path d="{{ m.d }}" fill="none" stroke="rgba(26,26,24,.4)" stroke-width="1.3"></path>
+              </sc-for>
+              <g font-family="IBM Plex Sans" font-size="10" fill="#5F5F59" text-anchor="middle">
+                <text x="34" y="164">o1</text>
+                <text x="122" y="164">o2</text>
+                <text x="211" y="164">o3</text>
+                <text x="299" y="164">o4</text>
+                <text x="387" y="164">o5</text>
+                <text x="476" y="164">o6</text>
+                <text x="564" y="164">o7</text>
+                <text x="652" y="164">o8</text>
+              </g>
+            </svg>
+            <div style="font-size: 11.5px; color: #5F5F59; margin-top: 6px">La línea más baja y más plana es LightGBM q0,625. No se reporta un número único.</div>
+          </div>
+        </div>
+
+        <!-- shap -->
+        <div style="border-top: 1px solid rgba(26,26,24,.18); padding: 18px 22px">
+          <div style="display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px">
+            <h3 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 16px; margin: 0; letter-spacing: -.01em; text-transform: uppercase">Explicabilidad · SHAP</h3>
+            <span style="font-size: 11.5px; color: #6B6B64">Tienda 12 · Producto 0412 · 2026-09-18 · predicción 1,35</span>
+            <span style="margin-left: auto; font-size: 10.5px; color: #7A5C10; font-weight: 600; letter-spacing: .08em; text-transform: uppercase">Requiere endpoint /explain</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 200px 1fr; gap: 0; font-size: 12.5px; font-variant-numeric: tabular-nums">
+            <div style="display: flex; flex-direction: column">
+              <div style="padding: 7px 12px 7px 0; text-align: right; border-bottom: 1px solid rgba(26,26,24,.08); color: #5F5F59">base del modelo</div>
+              <div style="padding: 7px 12px 7px 0; text-align: right; border-bottom: 1px solid rgba(26,26,24,.08)">lag_7 = 1,20</div>
+              <div style="padding: 7px 12px 7px 0; text-align: right; border-bottom: 1px solid rgba(26,26,24,.08)">promo_activa = 1</div>
+              <div style="padding: 7px 12px 7px 0; text-align: right; border-bottom: 1px solid rgba(26,26,24,.08)">dow = viernes</div>
+              <div style="padding: 7px 12px 7px 0; text-align: right; border-bottom: 1px solid rgba(26,26,24,.08)">media_28d = 0,94</div>
+              <div style="padding: 7px 12px 7px 0; text-align: right; border-bottom: 1px solid rgba(26,26,24,.08)">oos_hours_7d = 21</div>
+              <div style="padding: 7px 12px 7px 0; text-align: right; font-weight: 600">predicción</div>
+            </div>
+            <div style="display: flex; flex-direction: column; position: relative">
+              <div style="position: absolute; left: 22%; top: 0; bottom: 0; width: 1px; background: rgba(26,26,24,.25)"></div>
+              <div style="display: flex; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(26,26,24,.08)"><span style="width: 22%"></span><span style="height: 13px; width: 0; border-left: 2px solid #1A1A18"></span><span style="margin-left: 8px; color: #5F5F59">0,86</span></div>
+              <div style="display: flex; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(26,26,24,.08)"><span style="width: 22%"></span><span style="height: 13px; width: 19%; background: rgba(26,26,24,.55)"></span><span style="margin-left: 8px">+0,28</span></div>
+              <div style="display: flex; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(26,26,24,.08)"><span style="width: 41%"></span><span style="height: 13px; width: 12%; background: rgba(26,26,24,.55)"></span><span style="margin-left: 8px">+0,17</span></div>
+              <div style="display: flex; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(26,26,24,.08)"><span style="width: 53%"></span><span style="height: 13px; width: 7%; background: rgba(26,26,24,.55)"></span><span style="margin-left: 8px">+0,10</span></div>
+              <div style="display: flex; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(26,26,24,.08)"><span style="width: 54%"></span><span style="height: 13px; width: 6%; background: rgba(26,26,24,.22); border: 1px solid rgba(26,26,24,.45)"></span><span style="margin-left: 8px; color: #5F5F59">−0,09</span></div>
+              <div style="display: flex; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(26,26,24,.08)"><span style="width: 54%"></span><span style="height: 13px; width: 2%; background: rgba(26,26,24,.22); border: 1px solid rgba(26,26,24,.45)"></span><span style="margin-left: 8px; color: #5F5F59">−0,03</span></div>
+              <div style="display: flex; align-items: center; padding: 7px 0"><span style="width: 22%"></span><span style="height: 15px; width: 32%; background: #D6451A; opacity: {{ recOn }}; transition: opacity .5s"></span><span style="margin-left: 8px; font-weight: 600">1,35</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="margin-top: 44px; padding-top: 18px; border-top: 1px solid rgba(26,26,24,.18); font-size: 12.5px; color: #44443E; max-width: 90ch; line-height: 1.65; text-wrap: pretty">
+    <strong style="font-weight: 600">Decisiones aplicadas:</strong> rachas de un día con ancho mínimo de 3 px sin borde más la franja de horas debajo (§5, opción 1 + 3); vermellón <span style="font-variant-numeric: tabular-nums">#D6451A</span> exclusivo de la demanda recuperada, con la alerta resuelta en oro oscuro y peso; dos caras tipográficas por dirección; observado y recuperado distinguidos por grosor además de color, porque coinciden exactamente fuera de los quiebres; sin símbolo de moneda; dos decimales y cifras tabulares en toda métrica. El oscuro queda para después del pick.
+  </div>
+</section>
+
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startBasis&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;observada&quot;,&quot;recuperada&quot;],&quot;default&quot;:&quot;observada&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Toggle de censura&quot;},&quot;showTurn1&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Vista&quot;},&quot;showBrand&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Vista&quot;},&quot;singleDayTreatment&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;marcador bajo el eje&quot;,&quot;banda de 8 px&quot;],&quot;default&quot;:&quot;marcador bajo el eje&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Gráfico hero&quot;}}">
+const PL = 46, PR = 14, PT = 12, PB = 22, CW = 1000, CH = 300, YMAX = 4;
+const DW = (CW - PL - PR) / 104;
+const X = i => PL + (i + 0.5) * DW;
+const Y = v => PT + (1 - v / YMAX) * (CH - PT - PB);
+const f2 = v => v.toFixed(2).replace(".", ",");
+
+function panel() {
+  let s = 20260916;
+  const r = () => ((s = (s * 1664525 + 1013904223) >>> 0), s / 4294967296);
+  const n = 97, H = 7, lat = [];
+  for (let i = 0; i < n; i++) {
+    const dow = (i + 3) % 7;
+    let v = 0.72 + 0.22 * Math.sin((i / 7) * Math.PI * 2) + (dow === 5 || dow === 6 ? 0.42 : 0);
+    v += (r() - 0.5) * 0.3;
+    if (r() < 0.035) v += 1.3 + r() * 1.5;
+    lat.push(Math.min(3.5, Math.max(0.14, v)));
+  }
+  const avail = new Array(n).fill(1), cens = new Array(n).fill(0), streaks = [];
+  let i = 3;
+  while (i < n - 9) {
+    if (r() < 0.2) {
+      const u = r();
+      let len = u < 0.44 ? 1 : u < 0.78 ? 2 : u < 0.92 ? 3 + Math.floor(r() * 2) : 8 + Math.floor(r() * 4);
+      len = Math.min(len, n - 9 - i);
+      streaks.push([i, len]);
+      for (let k = 0; k < len; k++) { avail[i + k] = 0.14 + r() * 0.42; cens[i + k] = 1; }
+      i += len + 2 + Math.floor(r() * 7);
+    } else i++;
+  }
+  const obs = lat.map((v, k) => v * avail[k]);
+  const fc = [], lo = [], hi = [];
+  for (let h = 0; h < H; h++) {
+    const dow = (n + h + 3) % 7;
+    const v = 0.86 + 0.2 * Math.sin(((n + h) / 7) * Math.PI * 2) + (dow === 5 || dow === 6 ? 0.4 : 0);
+    const w = 0.26 + 0.075 * h;
+    fc.push(v); lo.push(Math.max(0.05, v - w)); hi.push(v + w);
+  }
+  return { n, H, lat, obs, avail, cens, streaks, fc, lo, hi };
+}
+
+const MODELS = [
+  { k: "LightGBM q0,625", o: [0.71, 0.76, 0.73, 0.81, 0.70, 0.75, 0.72, 0.77], acc: true },
+  { k: "LightGBM media", o: [0.78, 0.83, 0.79, 0.88, 0.76, 0.82, 0.80, 0.85] },
+  { k: "ETS", o: [0.91, 0.97, 0.93, 1.02, 0.90, 0.95, 0.92, 0.99] },
+  { k: "Naive estacional", o: [0.98, 1.03, 0.99, 1.06, 0.97, 1.01, 1.00, 1.04] },
+  { k: "Media móvil 28d", o: [1.09, 1.14, 1.11, 1.19, 1.07, 1.13, 1.10, 1.16] }
+];
+
+class Component extends DCLogic {
+  state = { basis: null };
+
+  get ratio() { return this.state.ratio ?? 0.6; }
+  get openRow() { return this.state.openRow ?? 0; }
+
+  get basis() {
+    return this.state.basis ?? (this.props.startBasis === "recuperada" ? "recovered" : "observed");
+  }
+
+  renderVals() {
+    const d = (this._d || (this._d = panel()));
+    const marks = this.props.singleDayTreatment !== "banda de 8 px";
+    const rec = this.basis === "recovered";
+
+    const line = (arr, from) => arr.map((v, k) => (k ? "L" : "M") + X(k + (from || 0)).toFixed(1) + " " + Y(v).toFixed(1)).join(" ");
+
+    let wedge = "", bands = "", hours = "";
+    d.streaks.forEach(([st, len]) => {
+      const a = Math.max(0, st - 1), b = Math.min(d.n - 1, st + len);
+      let up = "", dn = "";
+      for (let k = a; k <= b; k++) {
+        up += (k === a ? "M" : "L") + X(k).toFixed(1) + " " + Y(d.lat[k]).toFixed(1) + " ";
+      }
+      for (let k = b; k >= a; k--) {
+        dn += "L" + X(k).toFixed(1) + " " + Y(d.obs[k]).toFixed(1) + " ";
+      }
+      wedge += up + dn + "Z ";
+      const w = Math.max(3, len * DW), cx = X(st) - DW / 2 + (len * DW) / 2;
+      bands += "M" + (cx - w / 2).toFixed(1) + " " + PT + "h" + w.toFixed(1) + "v" + (CH - PT - PB) + "h" + (-w).toFixed(1) + "Z ";
+    });
+    for (let k = 0; k < d.n; k++) {
+      if (!d.cens[k]) continue;
+      const h = (1 - d.avail[k]) * 16 / 16 * 34, w = Math.max(2.4, DW - 1.4);
+      hours += "M" + (X(k) - w / 2).toFixed(1) + " " + (40 - h).toFixed(1) + "h" + w.toFixed(1) + "v" + h.toFixed(1) + "h" + (-w).toFixed(1) + "Z ";
+    }
+
+    // la línea recuperada existe solo dentro de los tramos de quiebre, con un día de
+    // entrada y salida para empalmar con la observada: fuera de ahí son la misma serie.
+    let recSeg = "";
+    d.streaks.forEach(([st, len]) => {
+      const a = Math.max(0, st - 1), b = Math.min(d.n - 1, st + len);
+      for (let k = a; k <= b; k++) {
+        recSeg += (k === a ? "M" : "L") + X(k).toFixed(1) + " " + Y(d.lat[k]).toFixed(1) + " ";
+      }
+    });
+
+    const fcPath = "M" + X(d.n - 1).toFixed(1) + " " + Y(d.lat[d.n - 1]).toFixed(1) + " " +
+      d.fc.map((v, k) => "L" + X(d.n + k).toFixed(1) + " " + Y(v).toFixed(1)).join(" ");
+    const bandPath =
+      "M" + X(d.n - 1).toFixed(1) + " " + Y(d.lat[d.n - 1]).toFixed(1) + " " +
+      d.hi.map((v, k) => "L" + X(d.n + k).toFixed(1) + " " + Y(v).toFixed(1)).join(" ") + " " +
+      d.lo.slice().reverse().map((v, k) => "L" + X(d.n + d.H - 1 - k).toFixed(1) + " " + Y(v).toFixed(1)).join(" ") + " Z";
+
+    const qv = d.fc[2] + 0.42 * (d.hi[2] - d.fc[2]);
+    const censDays = d.cens.reduce((a, b) => a + b, 0);
+
+    // dispersión entre orígenes · 660×170
+    const mx = i => 34 + i * (660 - 42) / 7;
+    const my = v => 8 + (1.25 - v) / 0.65 * 140;
+    const f3 = v => v.toFixed(3).replace(".", ",");
+    // una sola fuente de verdad para el MASE: la franja de contexto y la tabla salen
+    // de MODELS. Sin corregir la censura el error del modelo sube por un factor fijo.
+    const sc = rec ? 1 : 1.228;
+    const stat = o => {
+      const mean = o.reduce((a, b) => a + b, 0) / 8 * sc;
+      const sd = Math.sqrt(o.reduce((a, b) => a + (b - o.reduce((x, y) => x + y, 0) / 8) ** 2, 0) / 8) * sc;
+      return { mean, sd, worst: Math.max.apply(null, o) * sc };
+    };
+    const ref = stat(MODELS[0].o), base = stat(MODELS[3].o);
+    const top = 1.25 * sc, bot = 0.6 * sc, span = top - bot;
+    const my2 = v => 8 + (top - v) / span * 140;
+    const modelLines = MODELS.map(m => {
+      const s2 = stat(m.o);
+      return {
+        k: m.k,
+        accent: !!m.acc,
+        d: m.o.map((v, i) => (i ? "L" : "M") + mx(i).toFixed(1) + " " + my2(v * sc).toFixed(1)).join(" "),
+        mean: f3(s2.mean),
+        sd: f3(s2.sd),
+        worst: f3(s2.worst),
+        delta: m.acc ? "—" : "+" + ((s2.mean / ref.mean - 1) * 100).toFixed(1).replace(".", ",") + " %"
+      };
+    });
+
+    const n2 = v => v.toFixed(2).replace(".", ",");
+    const pc = v => (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(1).replace(".", ",") + " %";
+    const QS = { "0.3": 0.769, "0.6": 0.625, "1": 0.5, "1.5": 0.4 };
+    const ratio = this.ratio, qStar = QS[String(ratio)];
+    const qf = Math.pow(qStar / 0.625, 0.55);
+
+    const rnd = seed => { let s = seed; return () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648; };
+
+    const repoSeed = [
+      ["T12 · P0412", "Perecedero", 1.35, 1.12, 0.96, 4.1, 11, 4],
+      ["T04 · P0871", "Perecedero", 3.02, 2.44, 2.10, 3.6, 9, 3],
+      ["T12 · P0154", "Seco", 0.88, 0.81, 0.74, 2.9, 6, 2],
+      ["T07 · P1142", "Perecedero", 2.21, 1.73, 1.58, 2.4, 14, 6],
+      ["T19 · P0412", "Perecedero", 1.04, 0.90, 0.86, 1.8, 5, 2],
+      ["T04 · P0233", "Seco", 5.40, 5.12, 4.90, 1.5, 3, 1],
+      ["T11 · P0688", "Perecedero", 0.62, 0.49, 0.44, 1.1, 12, 5],
+      ["T19 · P1301", "Seco", 1.90, 1.84, 1.79, 0.7, 2, 1],
+      ["T07 · P0154", "Seco", 0.45, 0.45, 0.42, 0.3, 0, 0]
+    ];
+    const repoRows = repoSeed.map((s, i) => {
+      const [id, clase, sr, so, pol, imp, cens, maxr] = s;
+      const sug = (rec ? sr : so) * qf;
+      const dl = sug / pol - 1;
+      const g = rnd(97 + i * 31);
+      const bars = [];
+      for (let k = 0; k < 14; k++) {
+        const v = cens === 0 ? 0 : (g() < cens / 28 ? 0.35 + g() * 0.65 : 0);
+        bars.push({ x: (k * 7.6).toFixed(1), y: (15 - v * 15).toFixed(1), h: (v * 15).toFixed(1) });
+      }
+      return {
+        id, clase, cens: String(cens), maxr: String(maxr),
+        censTxt: cens === 0 ? "sin quiebres" : cens + " de 28 d",
+        censColor: cens === 0 ? "#8A8A84" : "#44443E",
+        pol: n2(pol), sug: n2(sug), delta: pc(dl),
+        deltaWeight: Math.abs(dl) > 0.15 ? "600" : "400",
+        imp: (imp * (rec ? 1 : 0.38) * qf).toFixed(1).replace(".", ","),
+        impWidth: (imp / 4.1 * 100 * (rec ? 1 : 0.38)).toFixed(1) + "%",
+        rowBg: i === this.openRow ? "#F2EEE8" : "transparent",
+        bars,
+        open: i === this.openRow,
+        pick: () => this.setState({ openRow: i === this.openRow ? -1 : i })
+      };
+    });
+
+    const fdays = ["mié 16", "jue 17", "vie 18", "sáb 19", "dom 20", "lun 21", "mar 22"];
+    const fRow = fdays.map((lbl, i) => {
+      const p = [1.02, 1.18, 1.35, 1.72, 1.44, 0.98, 1.06][i] * (rec ? 1 : 0.83);
+      const w = 0.12 + i * 0.045;
+      return { lbl, pred: n2(p), lo: n2(Math.max(0, p - p * w)), hi: n2(p + p * w), barW: (p / 2.1 * 100).toFixed(1) + "%" };
+    });
+
+    const ratioOpts = [["0.3", "0,3", "0,769", "Seco: el sobrante es capital inmovilizado"], ["0.6", "0,6", "0,625", "Perecedero: el sobrante es pérdida total al vencimiento"], ["1", "1,0", "0,500", "Los dos errores cuestan igual: el óptimo es la mediana"], ["1.5", "1,5", "0,400", "El sobrante duele más que el quiebre"]].map(o => ({
+      key: o[0], label: o[1], q: o[2], note: o[3],
+      on: String(ratio) === o[0],
+      bg: String(ratio) === o[0] ? "#1A1A18" : "transparent",
+      fg: String(ratio) === o[0] ? "#FAF8F5" : "#44443E",
+      pick: () => this.setState({ ratio: Number(o[0]) })
+    }));
+    const ratioNote = (ratioOpts.find(o => o.on) || ratioOpts[1]).note;
+
+    const g2 = rnd(4242);
+    const umap = [];
+    for (let i = 0; i < 309; i++) {
+      const c = i % 3;
+      const cx = [96, 208, 158][c] + (g2() - 0.5) * [110, 96, 70][c];
+      const cy = [86, 120, 46][c] + (g2() - 0.5) * [90, 72, 46][c];
+      umap.push({
+        cx: cx.toFixed(1), cy: cy.toFixed(1),
+        r: (1.6 + g2() * 1.9).toFixed(1),
+        fill: c === 0 ? "rgba(26,26,24,.30)" : c === 1 ? "rgba(26,26,24,.16)" : "rgba(26,26,24,.45)"
+      });
+    }
+
+    const hits = [
+      ["Producto", "P0412", "Lácteo refrigerado 1 L · en 9 tiendas", true],
+      ["Producto", "P0413", "Lácteo refrigerado 2 L · en 6 tiendas", false],
+      ["Serie", "T12 · P0412", "97 días · 11 rachas de quiebre", false],
+      ["Serie", "T19 · P0412", "97 días · 4 rachas de quiebre", false],
+      ["Producto", "P1041", "Pan de molde · en 12 tiendas", false]
+    ].map(h => ({ kind: h[0], code: h[1], meta: h[2], bg: h[3] ? "#F2EEE8" : "transparent" }));
+
+    const g3 = rnd(777);
+    const cn = 97, cvals = [];
+    for (let i = 0; i < cn; i++) {
+      const dow = i % 7, wk = dow === 5 || dow === 6 ? 1.28 : dow === 0 ? 0.82 : 1;
+      cvals.push(Math.max(0.06, (0.95 + Math.sin(i / 11) * 0.18) * wk * (0.82 + g3() * 0.36)));
+    }
+    const cfc = [], clo = [], chi = [];
+    for (let h = 1; h <= 7; h++) {
+      const dow = (cn + h - 1) % 7, wk = dow === 5 || dow === 6 ? 1.28 : dow === 0 ? 0.82 : 1;
+      const v = 1.02 * wk, w = 0.14 + 0.05 * h;
+      cfc.push(v); clo.push(Math.max(0.03, v - w)); chi.push(v + w);
+    }
+    const cmax = Math.max.apply(null, cvals.concat(chi)) * 1.06;
+    const CX = i => 46 + (940 * i) / (cn + 6);
+    const CY = v => 278 - (266 * v) / cmax;
+    const cline = a => a.map((v, i) => (i ? "L" : "M") + CX(i).toFixed(1) + " " + CY(v).toFixed(1)).join(" ");
+    const fx = i => CX(cn - 1 + i);
+    const fseq = [cvals[cn - 1]].concat(cfc);
+    const cleanFcPath = fseq.map((v, i) => (i ? "L" : "M") + fx(i).toFixed(1) + " " + CY(v).toFixed(1)).join(" ");
+    const cleanBandPath =
+      clo.map((v, i) => (i ? "L" : "M") + fx(i + 1).toFixed(1) + " " + CY(chi[i]).toFixed(1)).join(" ") +
+      " " + clo.slice().reverse().map((v, i) => "L" + fx(clo.length - i).toFixed(1) + " " + CY(v).toFixed(1)).join(" ") + " Z";
+
+    return {
+      repoRows, fRow, ratioOpts, ratioNote, umap, hits,
+      cleanPath: cline(cvals),
+      cleanFcPath, cleanBandPath,
+      cleanQx: fx(7).toFixed(1),
+      cleanQy: CY(cfc[6] * 1.12).toFixed(1),
+      cy0: n2(cmax), cy1: n2(cmax * 0.5),
+      isObs: !rec,
+      ratioCoTxt: n2(ratio),
+      qStarTxt: n2(qStar).replace("0,", "0,"),
+      repoTotal: n2(repoRows.reduce((a, r2) => a + Number(r2.sug.replace(",", ".")), 0)),
+      repoImpTotal: repoRows.reduce((a, r2) => a + Number(r2.imp.replace(",", ".")), 0).toFixed(1).replace(".", ","),
+      showBrand: this.props.showBrand ?? true,
+      showTurn1: this.props.showTurn1 ?? true,
+      marksForSingleDays: marks,
+      bandsForSingleDays: !marks,
+      isRec: rec,
+      recOn: rec ? 1 : 0,
+      obsBg: rec ? "transparent" : "#1A1A18",
+      obsFg: rec ? "#5F5F59" : "#FAF8F5",
+      recBg: rec ? "#1A1A18" : "transparent",
+      recFg: rec ? "#FAF8F5" : "#5F5F59",
+      accentRuleOpacity: rec ? 1 : 0,
+      obsStroke: rec ? 1 : 1,
+      toggle: () => this.setState({ basis: rec ? "observed" : "recovered" }),
+      setObs: () => this.setState({ basis: "observed" }),
+      setRec: () => this.setState({ basis: "recovered" }),
+      basisLabel: rec ? "Demanda recuperada" : "Venta observada",
+      yl0: f2(bot), yl1: f2(top), yl2: f2(bot + span * 0.6179), yl3: f2(bot + span * 0.2357),
+      vsNaive: "−" + ((1 - ref.mean / base.mean) * 100).toFixed(1).replace(".", ",") + " %",
+      basisNote: rec
+        ? "Censura corregida. Es la base de la cantidad sugerida."
+        : "Es lo que ve el ERP. Subestima la demanda en los días con quiebre.",
+      obsPath: line(d.obs),
+      recPath: recSeg,
+      wedgePath: wedge,
+      bandsPath: bands,
+      hoursPath: hours,
+      fcPath, bandPath,
+      qx: X(d.n + 2).toFixed(1),
+      qy: Y(qv).toFixed(1),
+      qLabel: f2(rec ? qv : qv * 0.83),
+      qPolitica: f2(qv * 0.71),
+      qDelta: rec ? "+31,4 %" : "+9,1 %",
+      maseTxt: f3(ref.mean),
+      sdTxt: f3(ref.sd),
+      worstTxt: f3(ref.worst),
+      upliftTxt: rec ? "+21,1 %" : "—",
+      censDays: String(censDays),
+      streakCount: String(d.streaks.length),
+      modelLines
+    };
+  }
+}
+</script>
+</body>
+</html>

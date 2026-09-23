@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #FAF8F5; }
+  a { color: #1A1A18; text-decoration: none; border-bottom: 1px dotted rgba(26,26,24,.45); }
+  a:hover { color: #D6451A; border-bottom-color: #D6451A; }
+</style>
+</helmet>
+
+<div style="font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1A1A18; background: #FAF8F5; max-width: 1080px; margin: 0 auto; padding: 56px 40px 96px">
+
+  <div style="display: flex; flex-direction: column; gap: 10px; max-width: 72ch; margin-bottom: 40px">
+    <div style="font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #6B6B64; font-weight: 600">dfcore · handoff 1 de 2</div>
+    <h1 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 36px; line-height: 1.1; margin: 0; letter-spacing: -.02em">Tokens y comportamiento</h1>
+    <p style="margin: 8px 0 0; font-size: 14.5px; line-height: 1.65; color: #44443E; text-wrap: pretty">Todo lo que no se puede leer de una captura. Las medidas de cada pantalla van en el archivo 03. La dirección visual de referencia es <a href="01 - Pantallas finales.dc.html">la pantalla 2a</a>.</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0; border: 1px solid rgba(26,26,24,.18); margin-bottom: 52px">
+    <div style="padding: 14px 16px; border-right: 1px solid rgba(26,26,24,.12)">
+      <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 6px">Tipografía</div>
+      <div style="font-size: 13px; line-height: 1.5">Archivo 600 · IBM Plex Sans 400/500/600</div>
+    </div>
+    <div style="padding: 14px 16px; border-right: 1px solid rgba(26,26,24,.12)">
+      <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 6px">Acento</div>
+      <div style="font-size: 13px; line-height: 1.5; font-variant-numeric: tabular-nums">Uno solo · <span style="color: #D6451A; font-weight: 600">D6451A</span></div>
+    </div>
+    <div style="padding: 14px 16px; border-right: 1px solid rgba(26,26,24,.12)">
+      <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 6px">Ancho mínimo</div>
+      <div style="font-size: 13px; line-height: 1.5; font-variant-numeric: tabular-nums">1024 px con reflow</div>
+    </div>
+    <div style="padding: 14px 16px">
+      <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 6px">Radio de esquina</div>
+      <div style="font-size: 13px; line-height: 1.5">0 px, sin excepciones</div>
+    </div>
+  </div>
+
+  <!-- 1 · COLOR -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em; text-transform: uppercase">1 · Color</h2>
+  <p style="margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #5F5F59; max-width: 76ch">Una sola regla gobierna la paleta: <strong style="font-weight: 600; color: #1A1A18">el mundo observado es desaturado y solo lo recuperado lleva acento</strong>. Si algo nuevo necesita color, la respuesta por defecto es un gris de la escala.</p>
+
+  <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; margin-bottom: 14px">
+    <thead>
+      <tr style="border-bottom: 1px solid rgba(26,26,24,.35)">
+        <th scope="col" style="text-align: left; padding: 7px 10px 7px 0; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Rol</th>
+        <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Claro</th>
+        <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Oscuro</th>
+        <th scope="col" style="text-align: left; padding: 7px 0 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Dónde</th>
+      </tr>
+    </thead>
+    <tbody>
+      <sc-for list="{{ tokens }}" as="t" hint-placeholder-count="12">
+        <tr style="border-bottom: 1px solid rgba(26,26,24,.10)">
+          <th scope="row" style="text-align: left; padding: 8px 10px 8px 0; font-weight: 500; white-space: nowrap">
+            <span style="display: flex; align-items: center; gap: 9px"><span style="width: 13px; height: 13px; flex: none; background: {{ t.sw }}; border: 1px solid rgba(26,26,24,.25)"></span>{{ t.role }}</span>
+          </th>
+          <td style="padding: 8px 10px; color: #44443E">{{ t.light }}</td>
+          <td style="padding: 8px 10px; color: #44443E">{{ t.dark }}</td>
+          <td style="padding: 8px 0 8px 10px; color: #5F5F59">{{ t.use }}</td>
+        </tr>
+      </sc-for>
+    </tbody>
+  </table>
+  <div style="padding: 11px 14px; background: #F2EEE8; border-left: 2px solid #D6451A; font-size: 12px; line-height: 1.6; color: #44443E; margin-bottom: 44px; max-width: 86ch">El tramo de quiebre no invierte su valor sino su referencia: en claro es tinta al 7 % sobre papel, en oscuro es papel al 7 % sobre tinta. Un gris translúcido fijo desaparece en uno de los dos modos.</div>
+
+  <!-- 2 · SEMÁNTICA RESERVADA -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em; text-transform: uppercase">2 · Semántica reservada</h2>
+  <p style="margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #5F5F59; max-width: 76ch">Cuatro significados tienen color propio y no se reasignan. Cada uno lleva además una redundancia no cromática, porque el par observado / recuperado tiene que distinguirse en escala de grises y con daltonismo.</p>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(236px, 1fr)); gap: 0; border: 1px solid rgba(26,26,24,.18); margin-bottom: 44px">
+    <sc-for list="{{ semantics }}" as="s" hint-placeholder-count="4">
+      <div style="padding: 15px 16px; border-right: 1px solid rgba(26,26,24,.12); border-bottom: 1px solid rgba(26,26,24,.12); display: flex; flex-direction: column; gap: 8px">
+        <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600">{{ s.name }}</div>
+        <div style="display: flex; align-items: center; gap: 10px">
+          <svg width="34" height="10" style="display: block; flex: none"><line x1="0" y1="5" x2="34" y2="5" stroke="{{ s.stroke }}" stroke-width="{{ s.w }}" stroke-dasharray="{{ s.dash }}"></line></svg>
+          <span style="font-size: 12px; font-variant-numeric: tabular-nums; color: #44443E">{{ s.hex }}</span>
+        </div>
+        <div style="font-size: 11.5px; line-height: 1.55; color: #5F5F59">{{ s.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 3 · TIPOGRAFÍA -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 18px; letter-spacing: -.01em; text-transform: uppercase">3 · Escala tipográfica</h2>
+  <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 44px">
+    <thead>
+      <tr style="border-bottom: 1px solid rgba(26,26,24,.35)">
+        <th scope="col" style="text-align: left; padding: 7px 10px 7px 0; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Nivel</th>
+        <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Familia · peso</th>
+        <th scope="col" style="text-align: right; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">px</th>
+        <th scope="col" style="text-align: right; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Tracking</th>
+        <th scope="col" style="text-align: left; padding: 7px 0 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Muestra</th>
+      </tr>
+    </thead>
+    <tbody>
+      <sc-for list="{{ type }}" as="t" hint-placeholder-count="9">
+        <tr style="border-bottom: 1px solid rgba(26,26,24,.10)">
+          <th scope="row" style="text-align: left; padding: 9px 10px 9px 0; font-weight: 500; white-space: nowrap">{{ t.lvl }}</th>
+          <td style="padding: 9px 10px; color: #5F5F59; white-space: nowrap">{{ t.fam }}</td>
+          <td style="padding: 9px 10px; text-align: right; font-variant-numeric: tabular-nums">{{ t.px }}</td>
+          <td style="padding: 9px 10px; text-align: right; color: #5F5F59; font-variant-numeric: tabular-nums">{{ t.tr }}</td>
+          <td style="padding: 9px 0 9px 10px">{{ t.sample }}</td>
+        </tr>
+      </sc-for>
+    </tbody>
+  </table>
+
+  <!-- 4 · CIFRAS -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em; text-transform: uppercase">4 · Formato de cifras</h2>
+  <p style="margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #5F5F59; max-width: 76ch"><code style="font-family: inherit">sale_amount</code> viene multiplicado por un coeficiente no divulgado. No hay guaraníes, no hay kilos: cualquier símbolo de moneda o unidad en la interfaz es un error factual. Los ejes tampoco los llevan.</p>
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); gap: 0; border: 1px solid rgba(26,26,24,.18); margin-bottom: 44px">
+    <sc-for list="{{ numFmt }}" as="n" hint-placeholder-count="6">
+      <div style="padding: 13px 16px; border-right: 1px solid rgba(26,26,24,.12); border-bottom: 1px solid rgba(26,26,24,.12)">
+        <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 5px">{{ n.k }}</div>
+        <div style="font-size: 14px; font-variant-numeric: tabular-nums; margin-bottom: 4px">{{ n.v }}</div>
+        <div style="font-size: 11.5px; color: #5F5F59; line-height: 1.5">{{ n.note }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 5 · TOGGLE -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em; text-transform: uppercase">5 · Toggle de censura</h2>
+  <p style="margin: 0 0 20px; font-size: 13px; line-height: 1.6; color: #5F5F59; max-width: 76ch">El control más importante de la app. Cambia todo a la vez: series, cantidades sugeridas, métricas de error y costo esperado. El movimiento es el mensaje, así que la animación está especificada y no es decorativa.</p>
+
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0; border: 1px solid rgba(26,26,24,.18); margin-bottom: 18px">
+    <div style="padding: 15px 17px; border-right: 1px solid rgba(26,26,24,.12); border-bottom: 1px solid rgba(26,26,24,.12)">
+      <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 8px">Estado</div>
+      <div style="font-size: 12.5px; line-height: 1.65; color: #44443E">Vive en la URL como <code style="font-family: inherit">?basis=observed|recovered</code>. Arranca en <strong style="font-weight: 600">observed</strong>: la demo empieza en el modo incorrecto y se corrige en vivo. Persiste al navegar entre pantallas y es independiente del selector de serie.</div>
+    </div>
+    <div style="padding: 15px 17px; border-right: 1px solid rgba(26,26,24,.12); border-bottom: 1px solid rgba(26,26,24,.12)">
+      <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 8px">Etiqueta de consecuencia</div>
+      <div style="font-size: 12.5px; line-height: 1.65; color: #44443E">No dice solo cómo se llama el modo, dice qué implica. En observada: «Es lo que ve el ERP. Subestima la demanda en los días con quiebre». Va en el panel lateral, no como tooltip.</div>
+    </div>
+    <div style="padding: 15px 17px; border-bottom: 1px solid rgba(26,26,24,.12)">
+      <div style="font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600; margin-bottom: 8px">Advertencia sutil en observada</div>
+      <div style="font-size: 12.5px; line-height: 1.65; color: #44443E">La regla de 2 px en vermellón bajo el control está en opacidad 0 y sube a 1 al pasar a recuperada. En observada el acento no aparece en ninguna parte de la pantalla: la ausencia de color es la advertencia.</div>
+    </div>
+  </div>
+
+  <div style="border: 1px solid rgba(26,26,24,.18); margin-bottom: 14px">
+    <div style="padding: 13px 17px 4px; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: #6B6B64; font-weight: 600">Secuencia de la transición · {{ totalMs }} ms</div>
+    <div style="padding: 10px 17px 18px">
+      <sc-for list="{{ stages }}" as="s" hint-placeholder-count="5">
+        <div style="display: flex; align-items: center; gap: 14px; padding: 7px 0; border-bottom: 1px solid rgba(26,26,24,.08)">
+          <span style="width: 200px; flex: none; font-size: 12.5px; font-weight: 500">{{ s.what }}</span>
+          <span style="flex: 1; min-width: 0; height: 12px; background: rgba(26,26,24,.06); position: relative">
+            <span style="position: absolute; top: 0; height: 12px; left: {{ s.left }}; width: {{ s.width }}; background: {{ s.fill }}"></span>
+          </span>
+          <span style="width: 96px; flex: none; text-align: right; font-size: 11.5px; color: #5F5F59; font-variant-numeric: tabular-nums">{{ s.range }}</span>
+        </div>
+      </sc-for>
+      <div style="display: flex; gap: 20px; margin-top: 12px; font-size: 11.5px; color: #5F5F59">
+        <span>Curva: cubic-bezier(.4, 0, .2, 1)</span>
+        <span>Sin <em style="font-style: normal">layout shift</em>: cifras tabulares y anchos fijos</span>
+      </div>
+    </div>
+  </div>
+  <div style="padding: 11px 14px; background: #F2EEE8; border-left: 2px solid rgba(26,26,24,.35); font-size: 12px; line-height: 1.6; color: #44443E; margin-bottom: 44px; max-width: 86ch">El orden importa: primero responde el control, después aparece la evidencia, al final se mueven los números. Invertirlo hace que los números parezcan la causa. Con <code style="font-family: inherit">prefers-reduced-motion</code> todo pasa a 0 ms y los valores se reemplazan en seco, sin conteo.</div>
+
+  <!-- 6 · ACCESIBILIDAD -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 18px; letter-spacing: -.01em; text-transform: uppercase">6 · Accesibilidad del control</h2>
+  <div style="display: flex; flex-direction: column; gap: 0; border: 1px solid rgba(26,26,24,.18); margin-bottom: 44px; font-size: 12.5px">
+    <sc-for list="{{ a11y }}" as="a" hint-placeholder-count="5">
+      <div style="display: grid; grid-template-columns: 176px minmax(0, 1fr); border-bottom: 1px solid rgba(26,26,24,.10)">
+        <div style="padding: 10px 14px; background: #F2EEE8; font-weight: 500">{{ a.k }}</div>
+        <div style="padding: 10px 14px; color: #44443E; line-height: 1.6">{{ a.v }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- 7 · REFLOW -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em; text-transform: uppercase">7 · Reflow</h2>
+  <p style="margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #5F5F59; max-width: 76ch">Diseñado a 1180 px, soportado hasta 1024 px. Abajo de 1024 la app no se adapta: muestra un aviso. La demo va a proyector, así que ningún texto baja de 11,5 px y las cifras de decisión no bajan de 19 px.</p>
+  <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 44px">
+    <thead>
+      <tr style="border-bottom: 1px solid rgba(26,26,24,.35)">
+        <th scope="col" style="text-align: left; padding: 7px 10px 7px 0; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Ancho</th>
+        <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Panel lateral</th>
+        <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Tabla</th>
+        <th scope="col" style="text-align: left; padding: 7px 0 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Navegación</th>
+      </tr>
+    </thead>
+    <tbody>
+      <sc-for list="{{ reflow }}" as="r" hint-placeholder-count="3">
+        <tr style="border-bottom: 1px solid rgba(26,26,24,.10)">
+          <th scope="row" style="text-align: left; padding: 9px 10px 9px 0; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums">{{ r.w }}</th>
+          <td style="padding: 9px 10px; color: #44443E; line-height: 1.55">{{ r.side }}</td>
+          <td style="padding: 9px 10px; color: #44443E; line-height: 1.55">{{ r.table }}</td>
+          <td style="padding: 9px 0 9px 10px; color: #44443E; line-height: 1.55">{{ r.nav }}</td>
+        </tr>
+      </sc-for>
+    </tbody>
+  </table>
+
+  <!-- 8 · ESTADOS -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 18px; letter-spacing: -.01em; text-transform: uppercase">8 · Estados</h2>
+  <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 44px">
+    <thead>
+      <tr style="border-bottom: 1px solid rgba(26,26,24,.35)">
+        <th scope="col" style="text-align: left; padding: 7px 10px 7px 0; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Estado</th>
+        <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Disparador</th>
+        <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Tratamiento</th>
+        <th scope="col" style="text-align: left; padding: 7px 0 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Plano</th>
+      </tr>
+    </thead>
+    <tbody>
+      <sc-for list="{{ states }}" as="s" hint-placeholder-count="6">
+        <tr style="border-bottom: 1px solid rgba(26,26,24,.10)">
+          <th scope="row" style="text-align: left; padding: 9px 10px 9px 0; font-weight: 500; white-space: nowrap">{{ s.k }}</th>
+          <td style="padding: 9px 10px; color: #5F5F59; line-height: 1.55">{{ s.when }}</td>
+          <td style="padding: 9px 10px; color: #44443E; line-height: 1.55">{{ s.what }}</td>
+          <td style="padding: 9px 0 9px 10px; color: #5F5F59; white-space: nowrap">{{ s.ref }}</td>
+        </tr>
+      </sc-for>
+    </tbody>
+  </table>
+
+  <!-- 9 · API -->
+  <h2 style="font-family: 'Archivo', sans-serif; font-weight: 600; font-size: 17px; margin: 0 0 4px; letter-spacing: -.01em; text-transform: uppercase">9 · De qué depende cada pantalla</h2>
+  <p style="margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #5F5F59; max-width: 76ch">Lo que el backend no sirve todavía se muestra igual, con datos sintéticos y el sello <span style="font-size: 9.5px; letter-spacing: .06em; color: #7A5C10; border: 1px solid rgba(122,92,16,.5); padding: 0 3px; font-weight: 600">sim</span>. La regla es que ningún número sin respaldo aparezca sin rótulo, y que el sello no se pueda cerrar.</p>
+  <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 20px">
+    <thead>
+      <tr style="border-bottom: 1px solid rgba(26,26,24,.35)">
+        <th scope="col" style="text-align: left; padding: 7px 10px 7px 0; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Pantalla</th>
+        <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Endpoint</th>
+        <th scope="col" style="text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Estado</th>
+        <th scope="col" style="text-align: left; padding: 7px 0 7px 10px; font-weight: 600; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: #6B6B64">Qué hace el frontend</th>
+      </tr>
+    </thead>
+    <tbody>
+      <sc-for list="{{ api }}" as="a" hint-placeholder-count="7">
+        <tr style="border-bottom: 1px solid rgba(26,26,24,.10)">
+          <th scope="row" style="text-align: left; padding: 9px 10px 9px 0; font-weight: 500; white-space: nowrap">{{ a.screen }}</th>
+          <td style="padding: 9px 10px; color: #44443E; white-space: nowrap">{{ a.ep }}</td>
+          <td style="padding: 9px 10px; white-space: nowrap"><span style="font-size: 10px; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; color: {{ a.fg }}; border: 1px solid {{ a.bd }}; padding: 2px 6px">{{ a.status }}</span></td>
+          <td style="padding: 9px 0 9px 10px; color: #44443E; line-height: 1.55">{{ a.act }}</td>
+        </tr>
+      </sc-for>
+    </tbody>
+  </table>
+  <div style="padding: 11px 14px; background: #F2EEE8; border-left: 2px solid #7A5C10; font-size: 12px; line-height: 1.6; color: #44443E; max-width: 86ch">El hueco que bloquea la pantalla hero es el de historia: no hay endpoint que devuelva la serie observada contra la latente día por día. Todo lo demás se puede construir con lo que ya existe.</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  renderVals() {
+    const tokens = [
+      ["papel", "#FAF8F5", "FAF8F5", "141310", "Fondo de la app y de las tarjetas"],
+      ["superficie", "#F2EEE8", "F2EEE8", "1E1C18", "Franja de estado, filas abiertas, notas al pie"],
+      ["tinta", "#1A1A18", "1A1A18", "F2EEE8", "Títulos, cifras, línea observada en series limpias"],
+      ["secundaria", "#44443E", "44443E", "C9C4BB", "Cuerpo de texto y celdas de dato"],
+      ["apagada", "#5F5F59", "5F5F59", "9A958C", "Notas, ejes, etiquetas de columna secundarias"],
+      ["rótulo", "#6B6B64", "6B6B64", "86817A", "Versalitas de 10,5 px"],
+      ["observado", "#8A8A84", "8A8A84", "8A8A84", "Línea de venta observada · no cambia entre modos"],
+      ["recuperado", "#D6451A", "D6451A", "F0602E", "Solo lo recuperado: línea, cuña, banda, cantidad"],
+      ["advertencia", "#7A5C10", "7A5C10", "D9A93A", "Muestra, sello sim, series en alerta"],
+      ["regla fina", "rgba(26,26,24,.12)", "tinta 12 %", "papel 14 %", "Divisiones internas de tarjeta"],
+      ["regla de sección", "rgba(26,26,24,.18)", "tinta 18 %", "papel 16 %", "Borde de tarjeta y separador de sección"],
+      ["quiebre", "rgba(26,26,24,.07)", "tinta 7 %", "papel 7 %", "Sombreado vertical de los tramos"]
+    ].map(t => ({ sw: t[1], role: t[0], light: t[2], dark: t[3], use: t[4] }));
+
+    const semantics = [
+      { name: "Observado", stroke: "#8A8A84", w: "1.4", dash: "", hex: "8A8A84 · 1,4 px", note: "Gris y fino. Redundancia: la mitad de grosor que la recuperada." },
+      { name: "Recuperado", stroke: "#D6451A", w: "2.4", dash: "", hex: "D6451A · 2,4 px", note: "Único saturado del sistema. Redundancia: grosor pleno y cuña rellena." },
+      { name: "Pronóstico", stroke: "rgba(26,26,24,.55)", w: "1.8", dash: "5 4", hex: "tinta 55 % · 1,8 px", note: "Guionado. Nunca lleva acento: el futuro no es un hallazgo." },
+      { name: "Advertencia", stroke: "#7A5C10", w: "2.4", dash: "", hex: "7A5C10", note: "Ocre. Redundancia: triángulo o sello con borde, nunca solo color." }
+    ];
+
+    const type = [
+      ["Título de página", "Archivo 600", "34–36", "−0,018 em", "El shell y la pantalla de la decisión"],
+      ["Título de pantalla", "Archivo 600", "21", "−0,018 em", "Qué pedir hoy"],
+      ["Título de sección", "Archivo 600 · versalitas", "16–17", "−0,010 em", "VISTA GENERAL"],
+      ["Cifra de decisión", "Archivo 600 · tabular", "38–42", "−0,020 em", "1,35"],
+      ["Cifra de KPI", "Plex Sans 500 · tabular", "20", "0", "43,9 %"],
+      ["Cuerpo", "Plex Sans 400", "13–14", "0", "Perecedero: el sobrante es pérdida total."],
+      ["Celda de dato", "Plex Sans 400 · tabular", "12,5", "0", "0,743 ± 0,061"],
+      ["Nota", "Plex Sans 400", "11,5", "0", "Magnitud adimensional, sin unidad."],
+      ["Rótulo", "Plex Sans 600 · versalitas", "10,5", "0,14 em", "CANTIDAD SUGERIDA"]
+    ].map(t => ({ lvl: t[0], fam: t[1], px: t[2], tr: t[3], sample: t[4] }));
+
+    const numFmt = [
+      { k: "Magnitud", v: "1,35", note: "Dos decimales, coma decimal. Sin símbolo ni unidad, nunca." },
+      { k: "Error", v: "0,743 ± 0,061", note: "Tres decimales. Siempre con su dispersión entre orígenes." },
+      { k: "Porcentaje", v: "+21,1 %", note: "Un decimal, espacio antes del signo, con signo explícito." },
+      { k: "Negativo", v: "−24,5 %", note: "Menos tipográfico U+2212, no guion. Se alinea con las cifras." },
+      { k: "Conteo", v: "3.066 series", note: "Punto de miles. Siempre contra su total: «60 de 3.066»." },
+      { k: "Fecha", v: "2026-09-18", note: "ISO en datos y ejes; «15 sep» solo en etiquetas de eje cortas." }
+    ];
+
+    const stages = [
+      ["Relleno del botón", 0, 120, "rgba(26,26,24,.55)"],
+      ["Regla de acento", 60, 180, "#D6451A"],
+      ["Cuña y línea recuperada", 120, 720, "#D6451A"],
+      ["Cifras · conteo", 200, 700, "rgba(26,26,24,.55)"],
+      ["Columna Δ y barras de impacto", 240, 740, "rgba(26,26,24,.35)"]
+    ].map(s => ({
+      what: s[0],
+      left: (s[1] / 740 * 100).toFixed(1) + "%",
+      width: ((s[2] - s[1]) / 740 * 100).toFixed(1) + "%",
+      fill: s[3],
+      range: s[1] + "–" + s[2] + " ms"
+    }));
+
+    const a11y = [
+      { k: "Estructura", v: "Un role=\"group\" con aria-label «Base de cálculo» y dos botones con aria-pressed. No es un checkbox: son dos estados con nombre propio." },
+      { k: "Teclado", v: "Tab entra al grupo, ← → mueven entre los dos, Enter o Espacio confirman. Atajo global B para alternar, anunciado en la ayuda." },
+      { k: "Anuncio", v: "Al cambiar, una región aria-live=\"polite\" dice «Demanda recuperada. La cantidad sugerida pasa de 1,12 a 1,35». El cambio de valor, no el nombre del modo." },
+      { k: "Contraste", v: "Texto 4,5:1 mínimo; el vermellón sobre papel da 4,6:1. El par de líneas se distingue por grosor, así que pasa en escala de grises." },
+      { k: "Foco", v: "Contorno de 2 px en tinta con 2 px de separación. Nunca se suprime, tampoco en los botones del toggle." }
+    ];
+
+    const reflow = [
+      { w: "≥ 1180", side: "Columna fija de 300 px a la derecha", table: "Siete columnas completas", nav: "Dos niveles en una fila" },
+      { w: "1024–1179", side: "Pasa arriba de la tabla, en tira de tres bloques", table: "Se ocultan Clase y Quiebre 14 d; la evidencia queda solo en la fila abierta", nav: "Los dos niveles se apilan en dos filas" },
+      { w: "< 1024", side: "—", table: "—", nav: "Aviso de ancho mínimo con la resolución sugerida" }
+    ];
+
+    const states = [
+      { k: "Sin artefacto", when: "/health → model_loaded: false", what: "Pantalla completa con el comando a correr. Es el estado inicial de un clon del repo.", ref: "pendiente" },
+      { k: "API caída", when: "ECONNREFUSED en /health", what: "Distinto de «sin datos»: se nombra el puerto, se muestra el reintento y el comando de uvicorn.", ref: "5c" },
+      { k: "Usando la muestra", when: "Datos desde data/sample/", what: "Sello fijo en la franja de estado, banda explicativa y conteo en ocre. El sello no se cierra.", ref: "5a" },
+      { k: "Serie sin quiebres", when: "cens_days = 0", what: "Una sola línea en tinta plena a 1,8 px. El toggle sigue operable y se rotula «sin efecto en series limpias».", ref: "5b" },
+      { k: "Quiebre continuo", when: "Rachas de hasta 95 días", what: "El fondo entero sombreado. La cuña cubre casi todo el gráfico: se agrega el conteo de días en el encabezado para que el sombreado no se lea como un error de render.", ref: "pendiente" },
+      { k: "Carga", when: "Primer fetch del panel", what: "Esqueleto con la geometría exacta y una regla de progreso de 2 px. Sin brillo animado.", ref: "5d" }
+    ];
+
+    const ok = { fg: "#1A1A18", bd: "rgba(26,26,24,.35)" };
+    const warn = { fg: "#7A5C10", bd: "rgba(122,92,16,.5)" };
+    const api = [
+      { screen: "Reposición", ep: "POST /reorder", status: "parcial", act: "Cantidades reales; impacto calculado en el cliente y rotulado sim, porque los tres campos de costo vuelven en cero.", ...warn },
+      { screen: "Serie individual", ep: "falta", status: "bloqueante", act: "No hay endpoint de historia observada contra latente. Es el hueco que bloquea la pantalla hero.", ...warn },
+      { screen: "Vista general", ep: "GET /censoring", status: "verificado", act: "Directo, incluida la comprobación de la ventana comercial.", ...ok },
+      { screen: "Comparativa", ep: "GET /backtest", status: "parcial", act: "El agregado con dispersión es real; las ocho líneas por origen son sintéticas y van rotuladas.", ...warn },
+      { screen: "Explicabilidad", ep: "POST /explain", status: "no existe", act: "Contribuciones sintéticas con sello sim. Se presenta como diseño, no como medición.", ...warn },
+      { screen: "Salud", ep: "GET /health", status: "mixto", act: "Artefacto y cobertura son reales; la deriva de features es sintética y rotulada.", ...warn },
+      { screen: "Mapa", ep: "falta", status: "no existe", act: "Proyección sintética de los 309 productos. Corrige el supuesto del plan sobre la cola de baja rotación.", ...warn }
+    ];
+
+    return { tokens, semantics, type, numFmt, stages, totalMs: "740", a11y, reflow, states, api };
+  }
+}
+</script>
+</body>
+</html>
