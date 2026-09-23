@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Final, Literal
 
 # --- Rutas ---------------------------------------------------------------
 # La raiz se resuelve desde la ubicacion de este archivo (src/blindside/config.py),
@@ -28,6 +29,42 @@ FIGURES = REPORTS / "figures"
 PANEL_FILE = "panel.parquet"  # data/interim: submuestreo crudo + secuencias horarias
 DEMAND_FILE = "demand.parquet"  # data/processed: demanda latente recuperada
 FEATURES_FILE = "features.parquet"  # data/processed: matriz de features
+MANIFEST_FILE = "subsample_manifest.json"  # data/interim: que se submuestreo y con que semilla
+
+# --- Bases de calculo ----------------------------------------------------
+#: Las dos bases sobre las que se puede pronosticar. `recovered` es demanda
+#: latente (censura corregida) y `observed` es la venta que registra el ERP.
+Basis = Literal["observed", "recovered"]
+
+#: Base por defecto. Es la recuperada porque es la que el proyecto defiende; la
+#: interfaz arranca en `observed` a proposito, para corregirlo en vivo.
+DEFAULT_BASIS: Final[Basis] = "recovered"
+
+#: Un artefacto por base. Son **dos** y no uno porque el toggle de censura de la
+#: interfaz tiene que cambiar las cantidades sugeridas, no solo que serie se
+#: dibuja: un unico modelo entrenado sobre demanda latente puede mostrar la
+#: brecha historica, pero responde lo mismo en las dos posiciones del control, y
+#: entonces la mitad del argumento — que corregir la censura cambia lo que se
+#: pide — queda sin evidencia. Los dos se entrenan con la misma arquitectura y
+#: los mismos hiperparametros para que la comparacion sea pareada (D10).
+MODEL_FILES: Final[dict[Basis, str]] = {
+    "recovered": "model.joblib",
+    "observed": "model_observed.joblib",
+}
+
+
+def model_path(basis: Basis = DEFAULT_BASIS) -> Path:
+    """Ruta del artefacto de una base. Unico lugar donde vive ese nombre."""
+    try:
+        filename = MODEL_FILES[basis]
+    except KeyError:
+        raise ValueError(
+            f"base de calculo '{basis}' desconocida; son {sorted(MODEL_FILES)}"
+        ) from None
+    # ARTIFACTS se lee en cada llamada a proposito: los tests lo reapuntan a un
+    # tmp_path con monkeypatch y una ruta capturada al importar los ignoraria.
+    return ARTIFACTS / filename
+
 
 # --- Semilla -------------------------------------------------------------
 #: Semilla unica del proyecto. Se puede sobreescribir con BLINDSIDE_SEED para
@@ -169,21 +206,26 @@ __all__ = [
     "DATA_PROCESSED",
     "DATA_RAW",
     "DATA_SAMPLE",
+    "DEFAULT_BASIS",
     "DEMAND_FILE",
     "ECONOMICS",
     "FEATURES_FILE",
     "FIGURES",
     "FORECAST",
     "HF_DATASET",
+    "MANIFEST_FILE",
+    "MODEL_FILES",
     "PANEL_FILE",
     "PATHS",
     "REPORTS",
     "ROOT",
     "SEED",
     "SUBSAMPLE",
+    "Basis",
     "CensoringConfig",
     "EconomicsConfig",
     "ForecastConfig",
     "Paths",
     "SubsampleConfig",
+    "model_path",
 ]

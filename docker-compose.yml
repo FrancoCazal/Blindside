@@ -34,6 +34,11 @@ x-common: &common
     # Misma semilla que el proyecto. Se puede sobreescribir para comprobar que un
     # resultado no depende de una semilla afortunada.
     BLINDSIDE_SEED: "${BLINDSIDE_SEED:-42}"
+    # Origenes que pueden llamar a la API desde un navegador. El default son los
+    # del dev server del frontend. Es un allowlist y no un comodin a proposito:
+    # la API no tiene autenticacion, asi que "*" dejaria que cualquier pagina
+    # abierta lea los pronosticos desde la maquina del usuario.
+    BLINDSIDE_CORS_ORIGINS: "${BLINDSIDE_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}"
     PYTHONUNBUFFERED: "1"
   volumes:
     # data/ va de solo lectura: ningun servicio de consulta tiene por que

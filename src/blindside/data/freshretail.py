@@ -62,7 +62,7 @@ ID_COLUMNS: tuple[str, ...] = (S.CITY_ID, S.STORE_ID, S.PRODUCT_ID)
 
 #: Metadatos del submuestreo. Se escriben junto al panel para que el subconjunto
 #: sea auditable sin releer el parquet original.
-MANIFEST_FILE = "subsample_manifest.json"
+MANIFEST_FILE = cfg.MANIFEST_FILE
 
 
 # --------------------------------------------------------------------------
@@ -289,6 +289,11 @@ def build_subsample(
         "n_series_requested": n_series,
         "n_series_actual": int(panel[S.SERIES_ID].nunique()),
         "n_stores": int(panel[S.STORE_ID].nunique()),
+        # Productos y dias quedan registrados porque `/health` los usa como
+        # referencia para decir "60 de 3066 series, 31 de 309 productos" cuando se
+        # esta sirviendo la muestra. Sin la referencia el conteo no dice nada.
+        "n_products": int(panel[S.PRODUCT_ID].nunique()),
+        "n_days": int(panel[S.DATE].nunique()),
         "cities": list(cities) if cities is not None else "all",
         "splits": list(splits),
         "date_min": str(panel[S.DATE].min().date()),

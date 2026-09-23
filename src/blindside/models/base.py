@@ -21,12 +21,13 @@ modelo rompa esta separacion.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import joblib
 import numpy as np
 import pandas as pd
 
+from blindside import config as cfg
 from blindside.data import schema as S
 
 if TYPE_CHECKING:
@@ -52,6 +53,34 @@ FORBIDDEN_IN_FUTURE: tuple[str, ...] = (
 
 class NotFittedError(RuntimeError):
     """Se pidio predecir antes de entrenar."""
+
+
+#: Columna de target de cada base de calculo. `recovered` es la demanda latente
+#: recuperada; `observed` es la venta que registra el ERP.
+#:
+#: Vive en el contrato de modelo y no en el CLI de entrenamiento porque la API
+#: tambien la necesita: al cargar un artefacto verifica que el target con el que
+#: se entreno sea el de la base que va a servir. Un artefacto cruzado — el modelo
+#: de demanda latente servido como si fuera el observado — hace que el toggle de
+#: censura **parezca** funcionar devolviendo lo mismo en las dos posiciones, y eso
+#: es peor que un error: es una demo que miente sin fallar.
+TARGET_BY_BASIS: Final[dict[cfg.Basis, str]] = {
+    "recovered": S.DEMAND_LATENT,
+    "observed": S.SALE_AMOUNT,
+}
+
+
+def fitted_target(model: Forecaster) -> str | None:
+    """Target con el que se entreno un modelo, atravesando los envoltorios.
+
+    `ConformalForecaster` envuelve a otro `Forecaster`, asi que el atributo puede
+    estar en el envoltorio o en el modelo de abajo segun por donde paso el `fit`.
+    """
+    target = getattr(model, "_target", None)
+    if target is None:
+        base = getattr(model, "base", None)
+        target = getattr(base, "_target", None)
+    return target
 
 
 def quantile_col(q: float) -> str:
