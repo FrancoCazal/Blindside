@@ -77,6 +77,26 @@ class ConformalForecaster(Forecaster):
 
     supports_quantiles = True
 
+    @property
+    def quantiles(self) -> tuple[float, ...]:
+        """Los cuantiles del modelo envuelto, no los del config.
+
+        Sin esta propiedad el consumidor cae al default de `cfg.FORECAST` y pierde
+        los cuantiles que el modelo realmente entreno. Paso en la API: el artefacto
+        tiene un booster en q* = 0,625 y `/reorder` interpolaba q* entre 0,5 y 0,9
+        porque preguntaba `getattr(model, "quantiles", cfg.FORECAST.quantiles)` y
+        `hasattr` daba False. La cantidad servida era distinta de la cantidad que
+        el backtest media, sin que ninguna metrica lo notara.
+        """
+        return tuple(getattr(self.base, "quantiles", cfg.FORECAST.quantiles) or ())
+
+    def reorder_quantity(self, future: pd.DataFrame, **kwargs: object) -> pd.Series:
+        """Delega la orden en el modelo base, que sabe si tiene q* entrenado."""
+        base_reorder = getattr(self.base, "reorder_quantity", None)
+        if base_reorder is None:
+            raise AttributeError(f"{self.name}: el modelo base no emite orden")
+        return base_reorder(future, **kwargs)
+
     def __init__(
         self,
         base: Forecaster,
@@ -193,14 +213,34 @@ class ConformalForecaster(Forecaster):
         )
 
     def predict_quantile(self, future: pd.DataFrame, quantiles: Sequence[float]) -> pd.DataFrame:
-        """Cuantiles derivados del intervalo conformal.
+        """Cuantiles del modelo envuelto si los tiene; si no, derivados del intervalo.
 
-        Interpola linealmente entre el limite inferior, la prediccion puntual y el
-        limite superior. Es una aproximacion honesta y hay que decir que lo es: el
-        conformal entrega **un** intervalo a un nivel, no una distribucion
-        completa. Para cuantiles de verdad esta `LightGBMQuantileForecaster`, que
-        entrena una perdida cuantilica por cuantil.
+        **Por que hay dos caminos.** El conformal entrega *un* intervalo a *un*
+        nivel, no una distribucion. Cuando envuelve un modelo puntual no queda otra
+        que interpolar entre el limite inferior, la prediccion y el superior, y eso
+        es lo que hacia siempre.
+
+        Pero cuando el base es un modelo cuantilico, interpolar **descarta los
+        boosters que se entrenaron con perdida cuantilica en cada nivel** y los
+        reemplaza por la forma de la banda conformal. Eso no es una aproximacion
+        mas gruesa, es otra distribucion: medido sobre 25 series con q* = 0,625, la
+        banda daba q0,625 = 1,93 y el booster entrenado da 1,52, o sea una orden
+        **21,5 % mas alta**. Y como la banda esta sobre-inflada — cubre 99,5 %
+        cuando promete 90 % — el error va siempre en la misma direccion: pedir de
+        mas. La interfaz mostraba esa cantidad como si fuera la salida del cuantil
+        critico, que es lo que el README afirma.
+
+        Asi que si el base sabe dar cuantiles, manda el base. El conformal sigue
+        siendo el dueno del intervalo, que es para lo que tiene garantia de
+        cobertura. La version completa de esto es CQR — conformalizar los cuantiles
+        del base en vez de tratarlos como finales — y esta pendiente. Detalle en
+        `docs/decisiones.md` D20.
         """
+        if getattr(self.base, "supports_quantiles", False) and hasattr(
+            self.base, "predict_quantile"
+        ):
+            return self.base.predict_quantile(future, quantiles)
+
         from blindside.models.base import quantile_col
 
         interval = self.predict_interval(future)

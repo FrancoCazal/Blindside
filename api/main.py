@@ -35,6 +35,7 @@ from contextlib import asynccontextmanager
 from datetime import date
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import pandas as pd
 from api import schemas as sc
 from fastapi import FastAPI, HTTPException, Path, Query, status
@@ -66,6 +67,9 @@ STATE: dict[str, Any] = {
     "coverage_empirical": None,
     "coverage_by_horizon": None,
     "coverage_note": None,
+    #: Plan comercial por defecto, derivado de la mediana del panel. Se cachea
+    #: porque el panel no cambia entre requests, y se invalida cuando se recarga.
+    "plan_default": None,
 }
 
 
@@ -240,6 +244,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         path = loaders.resolve_path("demand")
         STATE["panel"] = loaders.load_demand(path=path)
         STATE["panel_info"] = _panel_info(STATE["panel"], path)
+        # El plan por defecto se deriva del panel, asi que se invalida con el.
+        STATE["plan_default"] = None
     except loaders.DataNotAvailableError as exc:
         log.warning("sin datos: %s", exc)
 
@@ -430,6 +436,32 @@ def _require_panel() -> pd.DataFrame:
     return panel
 
 
+def _policy_order(
+    panel: pd.DataFrame, series_ids: Sequence[str], basis: str, *, window: int
+) -> pd.Series:
+    """Promedio movil de los ultimos `window` dias, por serie. La politica actual.
+
+    Es el contrafactual del proyecto: la reposicion se decide hoy con el promedio
+    de las ultimas semanas, y contra eso se mide el modelo. Se calcula sobre la
+    **misma base** que el modelo — observada contra observada, recuperada contra
+    recuperada — porque comparar la orden del modelo de demanda latente contra un
+    promedio de venta observada mezclaria dos efectos y le regalaria al modelo la
+    diferencia que produce la correccion de censura.
+    """
+    target = TARGET_BY_BASIS[basis]
+    if target not in panel.columns:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"el panel no tiene la columna '{target}' que pide la base '{basis}'",
+        )
+    corte = pd.Timestamp(panel[S.DATE].max()) - pd.Timedelta(days=window - 1)
+    ventana = panel[
+        (panel[S.DATE] >= corte) & (panel[S.SERIES_ID].astype(str).isin(set(series_ids)))
+    ]
+    medias = ventana.groupby(ventana[S.SERIES_ID].astype(str))[target].mean()
+    return medias.clip(lower=0.0)
+
+
 def _series_refs(panel: pd.DataFrame, series_ids: Sequence[str]) -> dict[str, sc.SeriesRef]:
     """Metadatos de las series pedidas. Falla si alguna no existe."""
     index = S.series_index(panel).set_index(S.SERIES_ID)
@@ -450,13 +482,28 @@ def _series_refs(panel: pd.DataFrame, series_ids: Sequence[str]) -> dict[str, sc
     }
 
 
-def _future_index(panel: pd.DataFrame, series_ids: Sequence[str], horizon: int) -> pd.DataFrame:
+def _future_index(
+    panel: pd.DataFrame,
+    series_ids: Sequence[str],
+    horizon: int,
+    plan: sc.CommercialPlan | None = None,
+) -> pd.DataFrame:
     """Indice de futuro desde el ultimo dia del panel. Sin columnas de target.
 
     Se construye igual que en el arnes de backtesting, y por el mismo motivo: el
     modelo tiene que recibir exactamente la misma forma en produccion que en
     validacion, o las metricas reportadas no dicen nada sobre lo que pasa aca.
+
+    **Las tres covariables conocidas de antemano van explicitas.** El arnes las
+    toma del panel, que ya tiene los dias del fold. Aca el horizonte esta despues
+    del ultimo dia del panel, asi que no hay de donde leerlas. Sin completarlas
+    quedaban en NaN, y este es el tipo de desajuste train/serve que no falla:
+    LightGBM trata el NaN como una rama mas y contesta un numero plausible.
+    Medido: las tres en NaN dan **MASE 1,639 contra 0,879**, peor que el naive
+    estacional, con una orden 52,5 % mas alta. De 73 features eran exactamente
+    estas tres las unicas nulas.
     """
+    resuelto = _plan_echo(plan, panel).plan
     origin = pd.Timestamp(panel[S.DATE].max())
     dates = [origin + pd.Timedelta(days=h) for h in range(1, horizon + 1)]
     grid = pd.MultiIndex.from_product(
@@ -468,6 +515,14 @@ def _future_index(panel: pd.DataFrame, series_ids: Sequence[str], horizon: int) 
     # dependa de como se construyo el frame.
     grid[S.SERIES_ID] = grid[S.SERIES_ID].astype("string")
 
+    # Los dtypes se igualan a los del panel a proposito. El modelo entreno con
+    # discount en float32 y las banderas en int8; servir float64 no cambia la
+    # prediccion de un arbol, pero deja de ser la misma matriz y eso es lo que
+    # este proyecto viene tratando de no hacer.
+    grid[S.DISCOUNT] = np.float32(resuelto.discount)
+    grid[S.HOLIDAY_FLAG] = np.int8(resuelto.holiday_flag)
+    grid[S.ACTIVITY_FLAG] = np.int8(resuelto.activity_flag)
+
     static = S.series_index(panel)
     out = grid.merge(static, on=S.SERIES_ID, how="left")
     if out[S.STORE_ID].isna().any():
@@ -476,6 +531,64 @@ def _future_index(panel: pd.DataFrame, series_ids: Sequence[str], horizon: int) 
             detail="el cruce con los atributos de serie dejo filas sin jerarquia",
         )
     return out
+
+
+def _plan_from_panel(panel: pd.DataFrame) -> sc.PlanEcho | None:
+    """Plan por defecto: la mediana de las covariables en los ultimos dias del panel.
+
+    Es "la cadencia comercial reciente sigue". Esta elegido por medicion y no por
+    gusto: sobre un fold real, contra las covariables verdaderas, la mediana global
+    de 21 dias da MASE +7,4 % y una orden 6,4 % baja, mientras que asumir precio de
+    lista da +8,9 % y una orden **13,2 %** baja. Las cinco variantes evaluadas estan
+    en D19.
+
+    Se calcula una sola vez y se cachea: el panel no cambia entre requests, y
+    recalcular una mediana de 21 dias por cada consulta seria pagarla de gusto.
+    """
+    cacheado = STATE.get("plan_default")
+    if isinstance(cacheado, sc.PlanEcho):
+        return cacheado
+    if panel.empty or not all(c in panel.columns for c in S.KNOWN_FUTURE_COLS):
+        return None
+
+    corte = pd.Timestamp(panel[S.DATE].max()) - pd.Timedelta(days=sc.PLAN_WINDOW_DAYS - 1)
+    ventana = panel[panel[S.DATE] >= corte]
+    if ventana.empty:
+        return None
+
+    # El descuento se acota al rango valido del schema antes de construir el
+    # modelo: una mediana de 1,0000001 por redondeo de float32 haria fallar la
+    # validacion de Pydantic y tumbaria el endpoint por un epsilon.
+    descuento = float(np.clip(ventana[S.DISCOUNT].median(), 1e-6, 1.0))
+    eco = sc.PlanEcho(
+        plan=sc.CommercialPlan(
+            discount=descuento,
+            holiday_flag=int(round(float(ventana[S.HOLIDAY_FLAG].median()))),
+            activity_flag=int(round(float(ventana[S.ACTIVITY_FLAG].median()))),
+        ),
+        source="panel_median",
+        window_days=sc.PLAN_WINDOW_DAYS,
+    )
+    STATE["plan_default"] = eco
+    log.info(
+        "plan por defecto de los ultimos %d dias: descuento %.4f, feriado %d, campania %d",
+        sc.PLAN_WINDOW_DAYS,
+        eco.plan.discount,
+        eco.plan.holiday_flag,
+        eco.plan.activity_flag,
+    )
+    return eco
+
+
+def _plan_echo(plan: sc.CommercialPlan | None, panel: pd.DataFrame | None = None) -> sc.PlanEcho:
+    """El plan que se uso y de donde salio, para que la respuesta sea auditable."""
+    if plan is not None:
+        return sc.PlanEcho(plan=plan, source="request")
+    if panel is not None:
+        desde_panel = _plan_from_panel(panel)
+        if desde_panel is not None:
+            return desde_panel
+    return sc.PlanEcho(plan=sc.PLAN_NEUTRO, source="default")
 
 
 def _check_model_matches_panel(model, panel: pd.DataFrame) -> None:
@@ -770,7 +883,7 @@ def forecast(req: sc.ForecastRequest) -> sc.ForecastResponse:
     model = _require_model(basis)
     refs = _series_refs(panel, req.series_ids)
 
-    future = _future_index(panel, req.series_ids, req.horizon)
+    future = _future_index(panel, req.series_ids, req.horizon, req.plan)
     point = model.predict(future)
 
     lo = hi = None
@@ -799,6 +912,7 @@ def forecast(req: sc.ForecastRequest) -> sc.ForecastResponse:
         basis=sc.Basis(basis),
         coverage_nominal=req.coverage,
         coverage_empirical=STATE.get("coverage_empirical"),
+        plan=_plan_echo(req.plan, panel),
         forecasts=forecasts,
     )
 
@@ -809,8 +923,18 @@ def reorder(req: sc.ReorderRequest) -> sc.ReorderResponse:
 
     La salida del modelo **es** la orden. No es un pronostico que alguien tenga que
     interpretar y despues ajustar a mano con un stock de seguridad.
+
+    El faltante y el sobrante son **esperanzas bajo la distribucion predictiva del
+    modelo**, no resultados medidos: el horizonte todavia no paso, asi que no hay
+    realizacion contra la que contar. Antes se devolvian en cero y la interfaz
+    estimaba el impacto asumiendo la banda uniforme, o sea que el supuesto de
+    distribucion vivia en la capa de presentacion. Ahora vive aca, con test.
     """
-    from blindside.decision.newsvendor import critical_fraction
+    from blindside.decision.newsvendor import (
+        critical_fraction,
+        expected_cost_from_quantiles,
+        optimal_order_from_quantiles,
+    )
 
     basis = _basis_of(recover_censoring=req.recover_censoring)
     panel = _require_panel()
@@ -819,20 +943,9 @@ def reorder(req: sc.ReorderRequest) -> sc.ReorderResponse:
 
     economics = cfg.EconomicsConfig(cu=req.cu, co=req.co)
     q_star = critical_fraction(cu=req.cu, co=req.co)
-    future = _future_index(panel, req.series_ids, req.horizon)
+    future = _future_index(panel, req.series_ids, req.horizon, req.plan)
 
-    if hasattr(model, "reorder_quantity"):
-        qty = model.reorder_quantity(future, economics=economics)
-    elif hasattr(model, "predict_quantile") and getattr(model, "supports_quantiles", False):
-        from blindside.decision.newsvendor import optimal_order_from_quantiles
-
-        quantiles = getattr(model, "quantiles", cfg.FORECAST.quantiles)
-        qty = optimal_order_from_quantiles(
-            model.predict_quantile(future, quantiles),
-            quantiles=quantiles,
-            economics=economics,
-        )
-    else:
+    if not (hasattr(model, "predict_quantile") and getattr(model, "supports_quantiles", False)):
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
             detail=(
@@ -842,27 +955,70 @@ def reorder(req: sc.ReorderRequest) -> sc.ReorderResponse:
             ),
         )
 
+    # Los cuantiles se le preguntan al modelo, no al config. Con el default de
+    # config la API pedia (0,05 0,5 0,9 0,95) e interpolaba q*, cuando el
+    # artefacto tiene un booster entrenado en q* = 0,625.
+    quantiles = tuple(getattr(model, "quantiles", None) or cfg.FORECAST.quantiles)
+    if q_star not in quantiles:
+        log.info(
+            "q*=%.4f no esta entre los cuantiles entrenados %s: se interpola",
+            q_star,
+            quantiles,
+        )
+    preds = model.predict_quantile(future, quantiles)
+    qty = optimal_order_from_quantiles(preds, quantiles=quantiles, economics=economics)
+
+    # La politica actual: promedio movil de N dias de la base activa. Es con lo
+    # que repone la operacion hoy y es el denominador del ahorro.
+    policy = _policy_order(panel, req.series_ids, basis, window=req.policy_window)
+    policy_qty = future[S.SERIES_ID].astype(str).map(policy).fillna(0.0)
+
+    modelo = expected_cost_from_quantiles(
+        preds, quantiles=quantiles, order=qty, economics=economics
+    )
+    politica = expected_cost_from_quantiles(
+        preds, quantiles=quantiles, order=policy_qty, economics=economics
+    )
+
+    # Las dos ordenes se evaluan bajo la **misma** distribucion predictiva. Es lo
+    # que hace la comparacion justa: cambia la cantidad, no el supuesto.
+    costo_modelo = modelo["expected_cost"].to_numpy()
+    costo_politica = politica["expected_cost"].to_numpy()
+    with np.errstate(divide="ignore", invalid="ignore"):
+        delta = np.where(
+            costo_politica > 0, (costo_modelo - costo_politica) / costo_politica * 100.0, 0.0
+        )
+
+    total_politica = float(costo_politica.sum())
+    total_delta = (
+        (float(costo_modelo.sum()) - total_politica) / total_politica * 100.0
+        if total_politica > 0
+        else 0.0
+    )
+
     lines = [
         sc.ReorderLine(
             series=refs[str(r[S.SERIES_ID])],
             dt=r[S.DATE].date(),
             qty=float(qty.loc[i]),
             critical_fraction=q_star,
-            # Sin verdad de terreno no hay faltante ni sobrante realizado. Se
-            # informan en cero y el dashboard los toma del backtest, que si tiene
-            # con que compararse. Inventar una estimacion aca seria peor.
-            expected_shortfall=0.0,
-            expected_overage=0.0,
-            cost_delta_pct=0.0,
+            policy_qty=float(policy_qty.loc[i]),
+            expected_demand=float(modelo["expected_demand"].loc[i]),
+            expected_shortfall=float(modelo["expected_shortfall"].loc[i]),
+            expected_overage=float(modelo["expected_overage"].loc[i]),
+            cost_delta_pct=float(delta[pos]),
         )
-        for i, r in future.iterrows()
+        for pos, (i, r) in enumerate(future.iterrows())
     ]
     return sc.ReorderResponse(
         critical_fraction=q_star,
         basis=sc.Basis(basis),
         model_name=_model_name(basis),
+        plan=_plan_echo(req.plan, panel),
+        policy_window=req.policy_window,
+        tail_mass=float(modelo["tail_mass"].iloc[0]) if len(modelo) else 0.0,
         lines=lines,
-        total_cost_delta_pct=0.0,
+        total_cost_delta_pct=total_delta,
     )
 
 
@@ -925,7 +1081,7 @@ def explain(req: sc.ExplainRequest) -> sc.ExplainResponse:
             ),
         )
 
-    future = _future_index(panel, [req.series_id], cfg.FORECAST.horizon)
+    future = _future_index(panel, [req.series_id], cfg.FORECAST.horizon, req.plan)
     fila = future[future[S.DATE] == pd.Timestamp(req.dt)]
     if fila.empty:
         disponibles = sorted({pd.Timestamp(d).date().isoformat() for d in future[S.DATE]})
@@ -961,6 +1117,7 @@ def explain(req: sc.ExplainRequest) -> sc.ExplainResponse:
         quantile=getattr(interno, "_explainable_quantile", lambda: None)(),
         base_value=base_value,
         prediction=prediccion,
+        plan=_plan_echo(req.plan, panel),
         contributions=contribuciones,
     )
 

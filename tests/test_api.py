@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 
 from blindside import config as cfg
 from blindside.data import schema as S
+from blindside.models.baselines import SeasonalNaiveForecaster
 
 
 @pytest.fixture()
@@ -567,3 +568,191 @@ def test_cors_origins_can_be_overridden_by_env(monkeypatch) -> None:
 
     monkeypatch.setenv("BLINDSIDE_CORS_ORIGINS", "https://blindside.example, http://otro:3000")
     assert main.cors_origins() == ["https://blindside.example", "http://otro:3000"]
+
+
+# --- Plan comercial del horizonte ---------------------------------------
+# El desajuste que fijan estos tests era invisible: de 73 features, las tres
+# covariables conocidas de antemano llegaban en NaN porque el estado de origen las
+# descarta a proposito y el indice de futuro de la API no las repoblaba. LightGBM
+# trata el NaN como una rama mas, asi que la API contestaba 200 con un numero
+# plausible y `discount` era el mayor contribuyente de /explain con valor nulo.
+
+
+def _series_ids(client: TestClient, n: int = 5) -> list[str]:
+    return [i["series_id"] for i in client.get(f"/series?limit={n}").json()["items"]]
+
+
+class NaiveCuantilico(SeasonalNaiveForecaster):
+    """Naive estacional con cuantiles multiplicativos. Existe para probar /reorder.
+
+    El fixture normal guarda un `SeasonalNaiveForecaster`, que no emite cuantiles y
+    hace que `/reorder` conteste 501 — eso ya lo cubre
+    `test_reorder_honours_the_basis`. Para probar la **esperanza** hace falta una
+    distribucion predictiva, y entrenar un LightGBM de verdad en cada test seria
+    pagar minutos por algo que no agrega cobertura: lo que se verifica es la
+    aritmetica de la API, no el modelo.
+
+    Esta a nivel de modulo y no dentro de un test porque `joblib` serializa por
+    ruta de modulo: una clase local no se podria volver a cargar.
+    """
+
+    supports_quantiles = True
+    quantiles = (0.05, 0.5, 0.625, 0.9, 0.95)
+    #: Factores sobre la prediccion puntual. Asimetricos a proposito: la demanda de
+    #: perecederos tiene cola derecha y un spread simetrico esconderia errores de
+    #: signo en la integral del faltante.
+    _factores = {0.05: 0.35, 0.5: 1.0, 0.625: 1.2, 0.9: 1.9, 0.95: 2.3}
+
+    def predict_quantile(self, future: pd.DataFrame, quantiles) -> pd.DataFrame:  # noqa: ANN001
+        from blindside.models.base import quantile_col
+
+        punto = self.predict(future).to_numpy(dtype="float64")
+        return pd.DataFrame(
+            {
+                quantile_col(q): punto * self._factores.get(q, 1.0) + (1.0 - q) * 0.05
+                for q in sorted(quantiles)
+            },
+            index=future.index,
+        )
+
+
+def _save_quantile_bases(artifacts, panel: pd.DataFrame) -> None:
+    """Como `_save_both_bases`, pero con un modelo que si emite cuantiles."""
+    from blindside.models.base import TARGET_BY_BASIS
+
+    for basis, target in TARGET_BY_BASIS.items():
+        model = NaiveCuantilico().fit(panel, target=target)
+        model.save(artifacts / cfg.MODEL_FILES[basis])
+
+
+def test_el_futuro_no_deja_covariables_conocidas_en_nan(panel_on_disk, recovered_panel) -> None:
+    """Ninguna de las tres puede llegar nula al modelo."""
+    from api import main
+
+    with TestClient(main.app) as client:
+        sids = _series_ids(client)
+        futuro = main._future_index(main._require_panel(), sids, 7)
+
+    for col in S.KNOWN_FUTURE_COLS:
+        assert col in futuro.columns, f"el indice de futuro no trae {col}"
+        assert not futuro[col].isna().any(), f"{col} llega NaN al modelo"
+
+
+def test_el_plan_por_defecto_sale_de_la_mediana_del_panel(
+    panel_on_disk, recovered_panel
+) -> None:
+    """El default esta elegido por medicion y tiene que decir de donde salio.
+
+    Asumir precio de lista subestimaba la orden 13,2 % contra las covariables
+    reales; la mediana de los ultimos 21 dias la deja 6,4 % baja. Ver D13.
+    """
+    from api import main
+
+    _save_both_bases(panel_on_disk, recovered_panel)
+    with TestClient(main.app) as client:
+        sids = _series_ids(client)
+        body = client.post("/forecast", json={"series_ids": sids, "horizon": 3}).json()
+
+    eco = body["plan"]
+    assert eco["source"] == "panel_median"
+    assert eco["window_days"] == 21
+    # Tiene que ser la mediana real del panel de prueba, no el neutro por descarte.
+    corte = recovered_panel[S.DATE].max() - pd.Timedelta(days=20)
+    ventana = recovered_panel[recovered_panel[S.DATE] >= corte]
+    assert eco["plan"]["discount"] == pytest.approx(float(ventana[S.DISCOUNT].median()), abs=1e-6)
+    assert 0 < eco["plan"]["discount"] <= 1.0
+
+
+def test_el_plan_recibido_viaja_de_vuelta_y_dice_que_vino_del_request(
+    panel_on_disk, recovered_panel
+) -> None:
+    from api import main
+
+    _save_both_bases(panel_on_disk, recovered_panel)
+    with TestClient(main.app) as client:
+        sids = _series_ids(client)
+        body = client.post(
+            "/forecast",
+            json={"series_ids": sids, "horizon": 3, "plan": {"discount": 0.7, "activity_flag": 1}},
+        ).json()
+
+    assert body["plan"]["source"] == "request"
+    assert body["plan"]["plan"]["discount"] == pytest.approx(0.7)
+    assert body["plan"]["plan"]["activity_flag"] == 1
+
+
+def test_el_descuento_fuera_de_rango_se_rechaza(panel_on_disk, recovered_panel) -> None:
+    """`discount` es un multiplicador de precio, no un porcentaje.
+
+    Confundirlos es el error facil: mandar 20 pensando en "20 % off" tendria que
+    fallar y no multiplicar la demanda por veinte.
+    """
+    from api import main
+
+    _save_both_bases(panel_on_disk, recovered_panel)
+    with TestClient(main.app) as client:
+        sids = _series_ids(client)
+        for malo in (0.0, 1.5, 20.0, -1.0):
+            r = client.post(
+                "/forecast", json={"series_ids": sids, "horizon": 3, "plan": {"discount": malo}}
+            )
+            assert r.status_code == 422, f"discount={malo} tendria que ser invalido"
+
+
+# --- /reorder con esperanza real -----------------------------------------
+
+
+def test_reorder_devuelve_esperanzas_coherentes(panel_on_disk, recovered_panel) -> None:
+    """Antes devolvia ceros y la interfaz estimaba el impacto por su cuenta.
+
+    Se verifica la identidad del newsvendor linea por linea: faltante menos
+    sobrante tiene que ser la demanda esperada menos la orden. Si alguna de las
+    tres cifras se calculara aparte, esto se rompe.
+    """
+    from api import main
+
+    _save_quantile_bases(panel_on_disk, recovered_panel)
+    with TestClient(main.app) as client:
+        sids = _series_ids(client)
+        body = client.post("/reorder", json={"series_ids": sids, "horizon": 7}).json()
+
+    assert body["lines"], "sin lineas no hay nada que verificar"
+    assert body["tail_mass"] > 0, "la masa de cola no descrita tiene que declararse"
+    for linea in body["lines"]:
+        izq = linea["expected_shortfall"] - linea["expected_overage"]
+        der = linea["expected_demand"] - linea["qty"]
+        assert izq == pytest.approx(der, abs=1e-6)
+        assert linea["expected_shortfall"] >= 0
+        assert linea["expected_overage"] >= 0
+
+    # Y al menos una linea tiene que tener faltante o sobrante distinto de cero,
+    # porque devolver todo en cero es exactamente el estado que esto reemplaza.
+    assert any(x["expected_shortfall"] > 0 or x["expected_overage"] > 0 for x in body["lines"])
+
+
+def test_reorder_compara_contra_la_politica_de_la_misma_base(
+    panel_on_disk, recovered_panel
+) -> None:
+    """La politica se calcula sobre la base activa, no siempre sobre la observada.
+
+    Compararla contra la venta observada mientras el modelo pronostica demanda
+    latente le regalaria al modelo la diferencia que produce la correccion de
+    censura, que es justo lo que el proyecto quiere medir aparte.
+    """
+    from api import main
+
+    _save_quantile_bases(panel_on_disk, recovered_panel)
+    with TestClient(main.app) as client:
+        sids = _series_ids(client)
+        rec = client.post("/reorder", json={"series_ids": sids, "horizon": 7}).json()
+        obs = client.post(
+            "/reorder", json={"series_ids": sids, "horizon": 7, "recover_censoring": False}
+        ).json()
+
+    pol_rec = sum(x["policy_qty"] for x in rec["lines"])
+    pol_obs = sum(x["policy_qty"] for x in obs["lines"])
+    assert pol_rec > pol_obs, (
+        "la politica sobre demanda recuperada tiene que ser mayor que sobre venta "
+        f"observada, llegaron {pol_rec:.4f} y {pol_obs:.4f}"
+    )
+    assert rec["policy_window"] == 21

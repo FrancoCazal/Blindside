@@ -389,6 +389,143 @@ audiencia. `blindside` está libre en PyPI de todos modos.
 
 ---
 
+## D17 · Dos artefactos, uno por base de cálculo
+
+**Decisión.** `make train` serializa **dos** modelos con la misma arquitectura y los mismos
+hiperparámetros: `model.joblib` entrenado sobre demanda latente recuperada y `model_observed.joblib`
+sobre venta observada. La API elige según `recover_censoring` y **declara en la respuesta** con cuál
+contestó.
+
+**Por qué.** El toggle de censura es el control central de la interfaz y tenía que cambiar la
+**decisión**, no solo el dibujo. Con un solo artefacto lo único que se podía hacer era mostrar dos
+series históricas distintas y una única cantidad a pedir, y eso vacía el argumento del proyecto:
+si corregir la censura no mueve la orden, corregirla no sirve para nada operativo.
+
+Medido sobre 25 series con `q* = 0,625`: el pronóstico sube 25,3 % y la orden 27,3 %.
+
+**Por qué no un solo modelo con un ajuste a la salida.** Porque el sesgo de la censura se aprende
+**durante** el entrenamiento: el modelo sobre venta observada aprende que los días con quiebre
+tienen venta baja y lo propaga a sus lags y rollings. Escalar su salida después reproduciría el
+efecto que se quiere medir, en vez de medirlo. Es la misma razón que da D10 para que la ablación sea
+pareada.
+
+**Lo que costó.** Dos artefactos abren una falla nueva: servir el equivocado. Un artefacto cruzado
+—el de demanda latente servido como base observada— haría que las dos posiciones del toggle
+devuelvan el mismo número, y la interfaz mostraría una comparación que no existe **sin fallar**. Por
+eso al cargar se compara el target con el que se entrenó el artefacto contra el que la base declara
+y se **rechaza** si no coinciden. Hay un test que serializa un artefacto cruzado a propósito.
+
+---
+
+## D18 · CORS con allowlist explícito, nunca comodín
+
+**Decisión.** La API publica `BLINDSIDE_CORS_ORIGINS` con una lista explícita de orígenes; por
+defecto los puertos 5173 y 4173 de Vite. No usa `allow_origins=["*"]`.
+
+**Por qué.** La API **no tiene autenticación** — está declarado en el README y es deliberado para el
+alcance del prototipo. Con esas dos cosas juntas, el comodín significa que cualquier página abierta
+en el navegador de un usuario puede leer los pronósticos y las cantidades de reposición de todas las
+tiendas, que es información comercial sensible. El comodín es el default cómodo justamente en el
+caso en que es más peligroso.
+
+**Por qué el front no usa un proxy de Vite.** Sería más fácil y es lo que hace la mayoría de los
+tutoriales, pero volvería todas las llamadas same-origin y esconderían un CORS mal configurado
+**hasta el despliegue**, que es el peor momento para descubrirlo. Llamando por HTTP desde el
+principio, un origen faltante falla en desarrollo.
+
+---
+
+## D19 · El plan comercial del horizonte se declara, y su default está medido
+
+**Decisión.** Los tres endpoints que arman un índice de futuro aceptan un `plan` opcional con las
+tres covariables conocidas de antemano — descuento, feriado y actividad comercial. Cuando no viene,
+el servidor asume la **mediana de los últimos 21 días del panel** y lo declara en la respuesta con
+`source: "panel_median"`.
+
+**El problema que resuelve.** Esas tres covariables no son fuga porque se conocen antes del día
+objetivo, así que el modelo las usa. El estado congelado del origen las descarta a propósito: son
+del día objetivo y tienen que venir del índice de futuro. El arnés de backtesting las pone, porque
+el fold cae dentro del panel y esos días ya existen. **La API no las ponía**, porque su horizonte
+empieza después del último día del panel y no hay de dónde leerlas. Llegaban en NaN.
+
+De las 73 features del modelo eran exactamente esas tres las únicas nulas. Y no fallaba: LightGBM
+trata el NaN como una rama más, así que la API contestaba 200 con un número plausible.
+
+**Cuánto costaba.** Medido sobre un fold real (train hasta 2024-06-25, test del 26 de junio al 2 de
+julio, 21.462 filas):
+
+| Covariables del horizonte | MASE | vs. reales | Cantidad a pedir | vs. reales |
+|---|---|---|---|---|
+| Reales, del panel (oráculo) | **0,8790** | — | 35.011 | — |
+| **Mediana de 21 días, global** · el default | **0,9437** | **+7,4 %** | 32.787 | −6,4 % |
+| Mediana de 21 días, por serie | 0,9513 | +8,2 % | 33.692 | **−3,8 %** |
+| Precio de lista, sin campaña | 0,9571 | +8,9 % | 30.390 | −13,2 % |
+| Persistir el último día conocido | 0,9573 | +8,9 % | 33.406 | −4,6 % |
+| Las tres en NaN · lo que servía la API | **1,6392** | **+86,5 %** | 53.391 | **+52,5 %** |
+
+**1,64 es peor que el naive estacional**, que da 1,10. La API publicaba pronósticos peores que el
+baseline que el proyecto dice superar.
+
+**Por qué la mediana global y no las otras.** Gana en MASE y, sobre todo, **es un escalar**: entra
+en el contrato como tres números y no obliga a que el request o la respuesta lleven un plan por
+serie. La mediana por serie da una orden más cercana al oráculo (−3,8 % contra −6,4 %) y es la
+mejora natural siguiente, pero convierte `CommercialPlan` en una estructura por serie y eso cambia
+el contrato de la API para ganar 2,6 puntos en una sola métrica.
+
+Precio de lista se descartó aunque es el default más "obvio": subestima la orden **13,2 %**, porque
+el 45,9 % de las filas del panel tiene descuento y el descuento sube la demanda. Un default que
+parece neutro y sesga sistemáticamente hacia abajo es peor que uno que se ve raro y no sesga.
+
+**Por qué se declara en la respuesta y no solo en la documentación.** Porque el default se resuelve
+del lado del servidor. Una respuesta que no dice qué descuento asumió no se puede auditar, y el plan
+mueve la orden de verdad: con descuento 0,8 y campaña activa, la orden sube 12,4 % sobre el default.
+
+**Lo que sigue faltando.** Nada de esto es tan bueno como que quien consulta aporte su plan
+comercial, que es quien lo conoce. El campo existe para eso; el default es para que la demo no
+mienta mientras nadie lo aporta.
+
+---
+
+## D20 · El conformal no descarta los cuantiles del modelo que envuelve
+
+**Decisión.** `ConformalForecaster.predict_quantile` delega en el modelo base cuando el base sabe
+dar cuantiles. Solo interpola entre los límites del intervalo cuando envuelve un modelo puntual.
+
+**Por qué.** El artefacto servido es un conformal envolviendo un LightGBM cuantílico. Su
+`predict_quantile` interpolaba **siempre**, así que la cantidad a pedir salía de la forma de la
+banda conformal y no del cuantil `q*` entrenado con pérdida cuantílica. Medido sobre 25 series, la
+banda daba `q0,625 = 1,93` donde el booster entrenado da 1,52: una orden **21,5 % más alta**. Y como
+la banda está sobre-inflada —cubre 99,5 % cuando promete 90 %— el error iba siempre hacia arriba.
+
+Los niveles, para ver de dónde viene la diferencia:
+
+| Nivel | Booster entrenado | Derivado de la banda |
+|---|---|---|
+| q0,05 | 0,5967 | 0,0032 |
+| q0,50 | 1,3120 | 1,3136 |
+| **q0,625** | **1,5190** | **1,9339** |
+| q0,90 | 2,0573 | 3,2985 |
+| q0,95 | 2,3001 | 3,5466 |
+
+La mediana coincide, que es lo que hacía al defecto difícil de ver: un gráfico de pronóstico central
+se veía bien.
+
+**Por qué importa más que el 21,5 %.** El README afirma que «el modelo se entrena con pérdida
+cuantílica en ese `q*`, así que su salida **es** la orden». Para el artefacto servido eso no era
+cierto, y es la frase que sostiene el diferencial del proyecto.
+
+**Un segundo bug en el mismo camino.** La API pedía los cuantiles con
+`getattr(model, "quantiles", cfg.FORECAST.quantiles)`, y `ConformalForecaster` no exponía
+`quantiles`: `hasattr` daba `False` y caía al default del config, que **no incluye** `q* = 0,625`.
+O sea que incluso con los cuantiles del base, `q*` se habría interpolado entre 0,5 y 0,9 teniendo
+un booster entrenado exactamente en 0,625. Se agregó la propiedad que delega al base.
+
+**Lo que no se arregla acá.** La banda sigue sobre-inflada; lo que cambia es que la orden ya no
+depende de ella. La corrección de la banda es CQR y está en el Roadmap.
+
+---
+
+
 ## Roadmap
 
 Fuera del alcance de la entrega, en orden de valor:

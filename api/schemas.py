@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import date
 from enum import Enum
-from typing import Annotated, Literal
+from typing import Annotated, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -233,10 +233,83 @@ class SeriesHistoryBatch(BaseModel):
     series: list[SeriesHistory]
 
 
+# --- Plan comercial del horizonte ---------------------------------------
+class CommercialPlan(BaseModel):
+    """Covariables que se conocen de antemano, para los dias del horizonte.
+
+    **Por que existe este objeto.** El modelo usa tres covariables del dia
+    objetivo que no son fuga porque se conocen antes: descuento, feriado y
+    actividad comercial. En el backtest salen del panel, que ya tiene esos dias.
+    En produccion el horizonte esta **despues** del ultimo dia del panel, asi que
+    no hay de donde leerlas: o las aporta quien consulta, que es el que conoce su
+    plan comercial, o hay que asumir un valor.
+
+    Sin este campo la API las dejaba en NaN. Eso no era un detalle: medido sobre un
+    fold real, servir las tres en NaN da **MASE 1,639 contra 0,879** con las
+    covariables reales — 86 % peor, y peor que el naive estacional — y una orden
+    52,5 % mas alta de lo que corresponde. El backtest estaba perfecto porque el
+    arnes si las poblaba; el desajuste vivia solo en inferencia, y LightGBM trata
+    el NaN como una rama mas, asi que la API contestaba 200 con un numero plausible.
+
+    El default no es neutro sino medido: la mediana de los ultimos dias del panel.
+    Las cinco variantes evaluadas y por que gano esa estan en `docs/decisiones.md`
+    D19. Y se **declara en la respuesta**, porque una suposicion que no se ve es
+    peor que un error.
+    """
+
+    #: Multiplicador de precio: 1,0 es precio de lista y 0,31 el descuento mas
+    #: agresivo del panel. No es un porcentaje de descuento, es el factor.
+    discount: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
+    #: Feriado. Verificado que en el panel es atributo puro de la fecha: las 97
+    #: fechas tienen un solo valor para todas las series.
+    holiday_flag: Annotated[int, Field(ge=0, le=1)] = 0
+    #: Campania o actividad comercial de la serie.
+    activity_flag: Annotated[int, Field(ge=0, le=1)] = 0
+
+
+#: Plan neutro: precio de lista, sin feriado y sin campania. **No es el default**,
+#: es el ultimo recurso cuando no hay panel del que sacar la mediana. Medido sobre
+#: un fold real, asumir precio de lista subestima la orden un 13,2 % contra las
+#: covariables reales, porque el 45,9 % de las filas del panel tiene descuento y el
+#: descuento sube la demanda. El default es `panel_median`. Ver D19.
+PLAN_NEUTRO: Final = CommercialPlan()
+
+#: Dias de panel con los que se calcula la mediana del plan por defecto. Coincide
+#: con la ventana de la politica de reposicion a proposito: las dos responden a
+#: "que viene pasando ultimamente".
+PLAN_WINDOW_DAYS: Final = 21
+
+
+class PlanEcho(BaseModel):
+    """El plan con el que se contesto, y de donde salio.
+
+    Va en la respuesta y no solo en el request porque el default se resuelve del
+    lado del servidor: una respuesta que no dice que descuento asumio no se puede
+    auditar, y el descuento es la covariable que mas pesa de las tres.
+
+    `source` distingue tres casos:
+
+    - `request`: lo aporto quien consulta. Es el unico que no es una suposicion.
+    - `panel_median`: la mediana de los ultimos dias del panel, o sea "la cadencia
+      comercial reciente sigue". Es el default y esta elegido por medicion, no por
+      gusto: ver `docs/decisiones.md` D19.
+    - `default`: precio de lista sin campania. Se usa cuando no hay panel del que
+      sacar la mediana, y queda declarado porque subestima la orden un 13 %.
+    """
+
+    plan: CommercialPlan
+    source: Literal["request", "panel_median", "default"]
+    #: Dias de panel con los que se calculo la mediana, cuando aplica.
+    window_days: int | None = None
+
+
 # --- /forecast -----------------------------------------------------------
 class ForecastRequest(BaseModel):
     series_ids: Annotated[list[str], Field(min_length=1, max_length=500)]
     horizon: Annotated[int, Field(ge=1, le=28)] = 7
+    #: Plan comercial del horizonte. Si no viene, se resuelve con la mediana del
+    #: panel y la respuesta declara cual se uso.
+    plan: CommercialPlan | None = None
     #: Nivel nominal del intervalo. La cobertura empirica se reporta aparte,
     #: porque prometer 90 % y cubrir 60 % es el error que este proyecto mide.
     coverage: Annotated[float, Field(gt=0.5, lt=1.0)] = 0.90
@@ -274,6 +347,9 @@ class ForecastResponse(BaseModel):
     coverage_nominal: float
     #: Cobertura medida en el backtest para este modelo. Es la que importa.
     coverage_empirical: float | None = None
+    #: Plan comercial con el que se calculo, y si lo aporto quien consulta o lo
+    #: asumio el servidor.
+    plan: PlanEcho
     forecasts: list[SeriesForecast]
 
     model_config = ConfigDict(protected_namespaces=())
@@ -293,6 +369,11 @@ class ReorderRequest(BaseModel):
     #: campo el toggle de la interfaz movia el grafico y no la decision, que es
     #: la mitad del argumento del proyecto.
     recover_censoring: bool = True
+    #: Plan comercial del horizonte. Si no viene, se resuelve con la mediana del panel.
+    plan: CommercialPlan | None = None
+    #: Ventana de la politica contra la que se compara: promedio movil de N dias,
+    #: que es como repone hoy la operacion. Es el denominador de `cost_delta_pct`.
+    policy_window: Annotated[int, Field(ge=1, le=90)] = 21
 
 
 class ReorderLine(BaseModel):
@@ -303,10 +384,22 @@ class ReorderLine(BaseModel):
     qty: Annotated[float, Field(ge=0)]
     #: Cuantil critico usado, q* = Cu / (Cu + Co).
     critical_fraction: Annotated[float, Field(gt=0, lt=1)]
+    #: Cantidad que repondria la politica actual: promedio movil de
+    #: `policy_window` dias de la base activa. Va en la respuesta porque es el
+    #: numero contra el que se lee todo lo demas.
+    policy_qty: Annotated[float, Field(ge=0)]
+    #: Demanda esperada bajo la distribucion predictiva del modelo. No es el
+    #: pronostico puntual del cuantil critico: es la media de la distribucion.
+    expected_demand: Annotated[float, Field(ge=0)]
+    #: E[(D - q)+] bajo la distribucion del modelo. **Cota inferior**: la grilla
+    #: de cuantiles termina en 0,95 y la cola se trata como plana, asi que la
+    #: demanda extrema no esta descrita. `tail_mass` dice cuanta masa quedo afuera.
     expected_shortfall: Annotated[float, Field(ge=0)]
+    #: E[(q - D)+] bajo la misma distribucion. En perecederos es merma esperada.
     expected_overage: Annotated[float, Field(ge=0)]
-    #: Costo esperado relativo a la politica actual (promedio movil). Negativo
-    #: significa ahorro. Adimensional: el dataset primario esta normalizado.
+    #: Costo esperado relativo a la politica actual, las dos ordenes evaluadas
+    #: bajo la **misma** distribucion predictiva. Negativo significa ahorro.
+    #: Adimensional: el dataset primario esta normalizado.
     cost_delta_pct: float
 
 
@@ -316,6 +409,14 @@ class ReorderResponse(BaseModel):
     #: distintas y el numero no dice de cual salio, asi que va en la respuesta.
     basis: Basis
     model_name: str
+    #: Plan comercial asumido o recibido. Ver `CommercialPlan`.
+    plan: PlanEcho
+    #: Ventana de la politica de referencia, en dias.
+    policy_window: int
+    #: Masa de probabilidad por encima del ultimo cuantil de la grilla, que no
+    #: esta descrita. Es el motivo por el que el faltante esperado es una cota
+    #: inferior, y va en la respuesta para que la interfaz lo pueda decir.
+    tail_mass: float
     lines: list[ReorderLine]
     #: Ahorro agregado en porcentaje de costo esperado, no en moneda.
     total_cost_delta_pct: float
@@ -359,6 +460,10 @@ class ExplainRequest(BaseModel):
     top_k: Annotated[int, Field(ge=1, le=50)] = 12
     #: Misma semantica que en el resto: se explica el artefacto de esa base.
     recover_censoring: bool = True
+    #: Plan comercial del dia explicado. Importa mas aca que en el resto: el
+    #: descuento es el contribuyente mas grande de la explicacion, asi que
+    #: explicar con un supuesto sin declararlo es explicar otra cosa.
+    plan: CommercialPlan | None = None
 
 
 class ExplainResponse(BaseModel):
@@ -372,6 +477,8 @@ class ExplainResponse(BaseModel):
     quantile: float | None = None
     base_value: float
     prediction: float
+    #: Plan comercial con el que se armo la matriz de features explicada.
+    plan: PlanEcho
     contributions: list[ShapContribution]
 
     model_config = ConfigDict(protected_namespaces=())
@@ -478,6 +585,8 @@ class BacktestResponse(BaseModel):
 
 
 __all__ = [
+    "PLAN_NEUTRO",
+    "PLAN_WINDOW_DAYS",
     "Anomaly",
     "AnomalyKind",
     "AnomalyResponse",
@@ -485,6 +594,7 @@ __all__ = [
     "BacktestResponse",
     "BandMetric",
     "Basis",
+    "CommercialPlan",
     "CoveragePoint",
     "ExplainRequest",
     "ExplainResponse",
@@ -499,6 +609,7 @@ __all__ = [
     "ModelStatus",
     "OriginMetric",
     "PanelInfo",
+    "PlanEcho",
     "ProductMap",
     "ProductPoint",
     "ReorderLine",

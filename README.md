@@ -81,16 +81,49 @@ El control central es el **toggle de censura**, y cambia la decisión y no solo 
 arquitectura y los mismos hiperparámetros para que la comparación sea pareada. Medido sobre 25
 series con `q* = 0,625`:
 
-| Base | Pronóstico | Cantidad a pedir |
-|---|---|---|
-| Venta observada | 261,402 | 345,694 |
-| Demanda recuperada | 345,476 | **454,027** |
+| Base | Pronóstico | Cantidad a pedir | Política actual | Δ de costo esperado |
+|---|---|---|---|---|
+| Venta observada | 190,229 | 210,958 | 231,960 | −14,09 % |
+| Demanda recuperada | 238,413 | **268,478** | 278,596 | −8,64 % |
 
-Corregir la censura sube la orden **+31,3 %**. Con un solo artefacto el toggle habría movido el
-gráfico y no la cantidad, que es la mitad del argumento del proyecto.
+Corregir la censura sube el pronóstico **+25,3 %** y la orden **+27,3 %**. Con un solo artefacto el
+toggle habría movido el gráfico y no la cantidad, que es la mitad del argumento del proyecto.
+
+Las cuatro columnas salen de la API y ninguna se escribe a mano: el pronóstico es la suma de
+`/forecast`, y la orden, la política y el delta vienen de `/reorder` — `qty`, `policy_qty` y
+`total_cost_delta_pct`. La política es el promedio móvil de 21 días **de la misma base**, porque
+compararla contra venta observada mientras el modelo pronostica demanda latente le regalaría al
+modelo justo la diferencia que la tabla mide aparte.
+
+**El delta de costo no necesita saber qué demanda hubo.** Las dos cantidades — la del modelo y la
+de la política — se evalúan bajo la **misma** distribución predictiva, así que lo que cambia es la
+decisión y no el supuesto. El faltante y el sobrante esperados salen de integrar
+`E[(D−q)⁺]` sobre la inversa de la CDF que describen los cuantiles; son esperanzas implicadas por
+el modelo, no resultados medidos, y el faltante es una **cota inferior** porque la grilla termina
+en el cuantil 0,95 y el 5 % de masa de arriba no está descrito. La respuesta devuelve ese
+`tail_mass` para que la interfaz lo pueda decir.
 
 Todo número que no venga del backend vive en un solo archivo (`frontend/src/domain.ts`), lleva
 sello `sim` en pantalla y dice qué endpoint falta.
+
+### El plan comercial del horizonte se declara
+
+El modelo usa tres covariables del día objetivo que no son fuga porque se conocen antes:
+descuento, feriado y actividad comercial. En el backtest salen del panel, que ya tiene esos días.
+En producción el horizonte está **después** del último día del panel, así que no hay de dónde
+leerlas: o las aporta quien consulta, que es el que conoce su plan comercial, o hay que asumirlas.
+
+Los tres endpoints aceptan un `plan` opcional, y cuando no viene el servidor asume la mediana de
+los últimos 21 días del panel y **lo declara en la respuesta**:
+
+```json
+"plan": {"plan": {"discount": 0.967, "holiday_flag": 0, "activity_flag": 0},
+         "source": "panel_median", "window_days": 21}
+```
+
+Ese default está elegido por medición y no por gusto; las cinco variantes evaluadas están en
+`docs/decisiones.md` D19. Antes de esto las tres covariables llegaban en **NaN**, y el costo
+medido de eso era grande: ver la sección de antifugas.
 
 ## Resultados
 
@@ -220,7 +253,7 @@ blindside-app   Up (healthy)   127.0.0.1:8501->8501/tcp
 `/_stcore/health`, y la suite corre dentro del contenedor:
 
 ```bash
-make docker-test    # 146 tests en la imagen del pipeline
+make docker-test    # 188 tests en la imagen del pipeline
 ```
 
 ### Seguridad del despliegue
@@ -288,7 +321,7 @@ blindside-core/
 │   ├── evaluate/      # contracts.py (CONTRATO 3), metrics, backtest, ablation
 │   └── explain/       # SHAP  [pendiente]
 ├── notebooks/         # analisis; importan de src/, no contienen logica
-├── tests/             # 150 tests; test_leakage.py son los 8 items del checklist
+├── tests/             # 188 tests; test_leakage.py son los 8 items del checklist
 ├── app/               # streamlit_app.py, 7 pantallas
 ├── api/               # schemas.py (CONTRATO 4), main.py
 ├── frontend/          # React + Vite + TS; schema.d.ts generado del OpenAPI
@@ -351,6 +384,55 @@ Dos de estos tests encontraron fugas y bugs reales en este código, no hipotéti
 
 Detalle del segundo en `docs/decisiones.md` D12.
 
+### El desajuste train/serve que ninguna métrica detectaba
+
+Los asserts antifugas cubren el camino de **validación**. Hubo un tercer defecto que vivía solo en
+**inferencia**, y por eso ningún backtest lo veía: de las 73 features que recibe el modelo, las
+tres covariables conocidas de antemano — descuento, feriado y actividad — llegaban en **NaN**.
+
+El mecanismo es limpio de explicar. El estado congelado del origen las descarta a propósito,
+porque son del día objetivo y tienen que venir del índice de futuro. El arnés de backtesting las
+pone, porque el fold cae dentro del panel y esos días ya existen. La API no las ponía, porque su
+horizonte empieza después del último día del panel y no hay de dónde leerlas.
+
+Medido sobre un fold real (train hasta 2024-06-25, test del 26 de junio al 2 de julio, 21.462
+filas):
+
+| Covariables del horizonte | MASE | vs. reales | Cantidad a pedir | vs. reales |
+|---|---|---|---|---|
+| Reales, del panel | **0,8790** | — | 35.011 | — |
+| Mediana de 21 días, global · **el default** | 0,9437 | +7,4 % | 32.787 | −6,4 % |
+| Mediana de 21 días, por serie | 0,9513 | +8,2 % | 33.692 | −3,8 % |
+| Precio de lista, sin campaña | 0,9571 | +8,9 % | 30.390 | −13,2 % |
+| Persistir el último día conocido | 0,9573 | +8,9 % | 33.406 | −4,6 % |
+| **Las tres en NaN** · lo que servía la API | **1,6392** | **+86,5 %** | 53.391 | **+52,5 %** |
+
+La última fila es la que importa: **1,64 es peor que el naive estacional**, que da 1,10. La API
+publicaba pronósticos peores que el baseline que el proyecto dice superar, con órdenes 52 % más
+altas de lo que corresponde, y contestaba 200 sin una sola advertencia — LightGBM trata el NaN
+como una rama más, así que la salida era un número plausible.
+
+Por columna, asumiendo una sola por vez: `discount` +4,2 %, `holiday_flag` +2,6 %,
+`activity_flag` +0,02 %. El descuento pesa el doble que el feriado, y la bandera de actividad
+casi no mueve la aguja.
+
+Hay ahora un test que falla si cualquiera de las tres vuelve a llegar nula. La elección del
+default está en `docs/decisiones.md` D19.
+
+### Un segundo defecto de inferencia, en la capa de decisión
+
+El artefacto servido es un conformal envolviendo un LightGBM cuantílico. Su `predict_quantile`
+**descartaba los boosters entrenados con pérdida cuantílica** e interpolaba entre los límites del
+intervalo, así que la cantidad a pedir salía de la forma de la banda conformal y no del cuantil
+`q*`. Medido sobre 25 series: la banda daba `q0,625 = 1,93` donde el booster entrenado da 1,52,
+o sea una orden **21,5 % más alta**. Y como la banda está sobre-inflada, el error iba siempre en
+la misma dirección.
+
+Importa porque el README afirma que «el modelo se entrena con pérdida cuantílica en ese `q*`, así
+que su salida **es** la orden». Para el artefacto servido eso no era cierto. Ahora, cuando el
+modelo base sabe dar cuantiles, manda el base; el conformal sigue siendo dueño del intervalo, que
+es para lo que tiene garantía de cobertura. Detalle en `docs/decisiones.md` D20.
+
 ## Decisiones técnicas y limitaciones
 
 Están documentadas en `docs/decisiones.md`, cada una con qué se decidió, por qué, y qué
@@ -395,11 +477,20 @@ conviene haberlo citado primero.
 Implementado y verificado: contratos, carga y submuestreo, recuperación de censura, features
 ancladas en el origen, validación de origen móvil con asserts antifugas, métricas, arnés de
 backtesting, baselines, LightGBM (puntual y cuantílico), XGBoost, regresión regularizada,
-conformal por partición, newsvendor, simulador de política, API y dashboard.
+conformal por partición, newsvendor con esperanzas derivadas de la distribución predictiva,
+simulador de política, API, dashboard Streamlit, frontend React de 8 pantallas, TreeSHAP por
+predicción y PCA del catálogo de productos.
 
 Pendiente del alcance del plan: SARIMA y Prophet (M6), GRU/LSTM y transformer temporal (M5),
-clustering y detección de anomalías (M4), SHAP y drift (M9), reconciliación MinT (8.3), Optuna,
-frontend React y el generador sintético del caso Focal Point (frente K).
+clustering y detección de anomalías (M4), drift (M9), reconciliación MinT (8.3), Optuna, y el
+generador sintético del caso Focal Point (frente K).
+
+**Una limitación que conviene leer antes que los resultados:** el intervalo conformal está
+sobre-inflado. Cubre 99,5 % cuando promete 90 %, con un ancho de 9,5 veces el MAE, porque el
+cuantil de residuos absolutos se agrupa sobre un panel donde el p99 es doce veces la mediana. La
+orden **no** depende de eso — sale del booster entrenado en `q*` — pero la banda que se dibuja en
+la interfaz sí, y la cobertura empírica es una de las tres métricas de éxito declaradas. La
+corrección es CQR y está pendiente.
 
 Fuera del alcance de la entrega, en `docs/decisiones.md` sección Roadmap.
 

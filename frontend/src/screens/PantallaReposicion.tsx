@@ -21,8 +21,7 @@ import {
   cuantilCritico,
   deltaPct,
   diasConQuiebre,
-  impactoSimulado,
-  politicaMediaMovil,
+  impactoDeLinea,
 } from "../domain";
 import {
   conteo,
@@ -35,7 +34,7 @@ import {
 } from "../format";
 import { useAsincrono, useConteo, useEstado } from "../state";
 import { Esqueleto } from "../components/estados";
-import { SelloSim, Sparkline } from "../components/piezas";
+import { Sparkline } from "../components/piezas";
 
 /** Series que entran a la vista. Un `/forecast` de 500 series es costoso. */
 const FILAS = 25;
@@ -47,6 +46,10 @@ interface Fila {
   sugerido: number;
   delta: number;
   impacto: number;
+  /** E[(D-q)+] bajo la distribución del modelo. Cota inferior: ver tail_mass. */
+  faltante: number;
+  /** E[(q-D)+]. En perecederos es merma esperada. */
+  sobrante: number;
   quiebre14: number[];
   diasQuiebre28: number;
   rachaMax: number;
@@ -124,28 +127,36 @@ function Reposicion({
     // La cantidad de la fila es la del **primer** día del horizonte: la
     // pregunta de la pantalla es qué pedir hoy, no cuánto en total en la semana.
     const primeraFecha = orden?.lines[0]?.dt ?? null;
-    const cantidadPorSerie = new Map(
+    // Todo lo económico de la fila sale de la misma línea de `/reorder`, que
+    // ahora devuelve la política, el faltante y el sobrante esperados y el delta
+    // de costo. Antes la política se recalculaba acá desde la historia y el
+    // impacto se estimaba con la banda como uniforme; las dos cosas eran
+    // supuestos viviendo en la capa de presentación.
+    const lineaPorSerie = new Map(
       (orden?.lines ?? [])
         .filter((l) => l.dt === primeraFecha)
-        .map((l) => [l.series.series_id, l.qty]),
+        .map((l) => [l.series.series_id, l]),
     );
 
     const filas: Fila[] = pagina.items.map((serie) => {
       const historia = porSerie.get(serie.series_id)!;
       const puntos = pronosticoPorSerie.get(serie.series_id) ?? [];
-      const politica = politicaMediaMovil(historia.points, basis);
-      const sugerido =
-        cantidadPorSerie.get(serie.series_id) ?? puntos[0]?.y_pred ?? 0;
-      const impacto = puntos[0]
-        ? impactoSimulado(puntos[0], sugerido, politica, 1, ratio).ahorro
-        : 0;
+      const linea = lineaPorSerie.get(serie.series_id);
+      const politica = linea?.policy_qty ?? 0;
+      const sugerido = linea?.qty ?? puntos[0]?.y_pred ?? 0;
       return {
         serie,
         historia,
         politica,
         sugerido,
         delta: deltaPct(sugerido, politica),
-        impacto,
+        // El costo esperado de la política menos el de la orden, o sea cuánto
+        // ahorra la sugerencia en esta serie. Sale de `cost_delta_pct`, que el
+        // backend calcula evaluando las dos cantidades bajo la misma
+        // distribución predictiva.
+        impacto: impactoDeLinea(linea, ratio),
+        faltante: linea?.expected_shortfall ?? 0,
+        sobrante: linea?.expected_overage ?? 0,
         quiebre14: diasConQuiebre(historia.points, 14),
         diasQuiebre28: historia.summary.censored_days_last_28,
         rachaMax: historia.summary.max_run_days,
@@ -166,6 +177,8 @@ function Reposicion({
   const totalSugerido = filas.reduce((a, f) => a + f.sugerido, 0);
   const totalPolitica = filas.reduce((a, f) => a + f.politica, 0);
   const impactoTotal = filas.reduce((a, f) => a + f.impacto, 0);
+  const faltanteTotal = filas.reduce((a, f) => a + f.faltante, 0);
+  const sobranteTotal = filas.reduce((a, f) => a + f.sobrante, 0);
   const maxImpacto = filas.reduce((a, f) => Math.max(a, f.impacto), 0);
   const maxHoras = Math.max(1, ...filas.flatMap((f) => f.quiebre14));
   const enAlerta = filas.filter((f) => f.diasQuiebre28 >= 14).length;
@@ -258,12 +271,16 @@ function Reposicion({
                   paddingTop: 10,
                 }}
               >
-                El orden y la columna de impacto se calculan en el cliente a
-                partir de la banda conformal, tomándola como distribución
-                uniforme{" "}
-                <SelloSim titulo="/reorder devuelve expected_shortfall, expected_overage y cost_delta_pct en cero: sin verdad de terreno no hay faltante realizado" />
-                . La política es la media móvil de 21 días de la base activa.
-                Las cantidades, el pronóstico y la banda vienen de la API.
+                Todo lo económico de la tabla viene de <code>/reorder</code>. El
+                faltante y el sobrante esperados salen de integrar E[(D−q)⁺] sobre
+                la distribución que describen los cuantiles del modelo; son
+                esperanzas implicadas por el modelo, no resultados medidos. El
+                faltante es una <strong>cota inferior</strong>: la grilla termina en
+                el cuantil 0,95 y el {porcentaje((orden?.tail_mass ?? 0) * 100, 1)}{" "}
+                de masa de arriba no está descrito. El delta compara la orden contra
+                la media móvil de {orden?.policy_window ?? 21} días{" "}
+                <strong>de la misma base</strong>, con las dos cantidades evaluadas
+                bajo la misma distribución.
               </caption>
               <thead>
                 <tr>
@@ -281,7 +298,6 @@ function Reposicion({
                   <th scope="col">Δ</th>
                   <th scope="col">
                     Impacto
-                    <SelloSim titulo="Calculado en el cliente; el backend no lo sirve" />
                   </th>
                 </tr>
               </thead>
@@ -336,14 +352,21 @@ function Reposicion({
               <dl>
                 <dt>Política actual</dt>
                 <dd>{magnitud(totalPolitica)}</dd>
-                <dt>
-                  Impacto acumulado
-                  <SelloSim titulo="Calculado en el cliente" />
-                </dt>
+                <dt>Ahorro esperado</dt>
                 <dd>{magnitud(impactoTotal)}</dd>
+                <dt>Faltante esperado</dt>
+                <dd>{magnitud(faltanteTotal)}</dd>
+                <dt>Sobrante esperado</dt>
+                <dd>{magnitud(sobranteTotal)}</dd>
                 <dt>Cu / Co</dt>
                 <dd>1 / {magnitud(ratio, 1)}</dd>
               </dl>
+              <div className="nota" style={{ marginTop: 8 }}>
+                Esperanzas bajo la distribución del modelo, no resultados medidos.
+                El faltante es cota inferior: el{" "}
+                {porcentaje((orden?.tail_mass ?? 0) * 100, 1)} de masa por encima
+                del cuantil 0,95 no está descrito.
+              </div>
             </div>
 
             <div className="consecuencia" data-basis={basis}>

@@ -13,7 +13,7 @@ import {
   deltaPct,
   esperanzaFaltante,
   esperanzaSobrante,
-  politicaMediaMovil,
+  impactoDeLinea,
 } from "./domain";
 import { conteoDeTotal, magnitud, porcentaje, serieCorta } from "./format";
 import type { HistoryPoint, StockoutRun } from "./api/client";
@@ -62,18 +62,36 @@ describe("cuantil crítico", () => {
   });
 });
 
-describe("política de media móvil", () => {
-  it("promedia los últimos 21 días de la base activa", () => {
-    const puntos = Array.from({ length: 30 }, (_, i) => punto(`2024-06-${i + 1}`, i, i * 2));
-    // Últimos 21 días: índices 9..29.
-    const esperado = Array.from({ length: 21 }, (_, k) => 9 + k).reduce((a, b) => a + b, 0) / 21;
-    expect(politicaMediaMovil(puntos, "observed")).toBeCloseTo(esperado, 10);
-    expect(politicaMediaMovil(puntos, "recovered")).toBeCloseTo(esperado * 2, 10);
+describe("ahorro esperado de una línea de reorder", () => {
+  const linea = (faltante: number, sobrante: number, deltaPct: number) => ({
+    expected_shortfall: faltante,
+    expected_overage: sobrante,
+    cost_delta_pct: deltaPct,
   });
 
-  it("no explota con una serie más corta que la ventana", () => {
-    expect(politicaMediaMovil([punto("2024-06-01", 4)], "observed")).toBe(4);
-    expect(politicaMediaMovil([], "observed")).toBe(0);
+  it("reconstruye el ahorro absoluto desde el delta porcentual", () => {
+    // costo de la orden = 0,2 + 0,6 * 0,5 = 0,5. Si eso es 8 % menos que la
+    // política, la política cuesta 0,5 / 0,92 y el ahorro es la diferencia.
+    const costoOrden = 0.2 + 0.6 * 0.5;
+    const esperado = costoOrden / 0.92 - costoOrden;
+    expect(impactoDeLinea(linea(0.2, 0.5, -8), 0.6)).toBeCloseTo(esperado, 10);
+  });
+
+  it("da ahorro negativo cuando la orden cuesta más que la política", () => {
+    expect(impactoDeLinea(linea(0.2, 0.5, +10), 0.6)).toBeLessThan(0);
+  });
+
+  it("es cero sin línea, que es el caso de la API caída", () => {
+    expect(impactoDeLinea(undefined, 0.6)).toBe(0);
+  });
+
+  it("ordena por magnitud y no por porcentaje", () => {
+    // Dos series con el mismo ahorro relativo y bases muy distintas: la que
+    // mueve más plata tiene que quedar primera. Es el motivo de reconstruir el
+    // absoluto en vez de ordenar por cost_delta_pct.
+    const grande = impactoDeLinea(linea(2.0, 5.0, -10), 0.6);
+    const chica = impactoDeLinea(linea(0.02, 0.05, -10), 0.6);
+    expect(grande).toBeGreaterThan(chica);
   });
 });
 

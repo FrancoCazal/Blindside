@@ -188,6 +188,141 @@ def optimal_order_from_quantiles(
         np.clip(interpolated, 0.0, None), index=quantile_preds.index, name="reorder_qty"
     )
 
+def _inverse_cdf_grid(
+    quantile_preds: pd.DataFrame, *, quantiles: Sequence[float]
+) -> tuple[np.ndarray, np.ndarray]:
+    """Grilla `(u, y)` de la inversa de la CDF, ordenada y sin cruces.
+
+    Los cuantiles predichos pueden salir cruzados — LightGBM entrena un booster
+    por cuantil y nada los obliga a ser monotonos — asi que se ordenan por fila.
+    Ordenar es la correccion estandar de quantile crossing y no cambia la
+    cobertura marginal de cada nivel.
+    """
+    from blindside.models.base import quantile_col
+
+    ordered = sorted(quantiles)
+    cols = [quantile_col(q) for q in ordered]
+    missing = [c for c in cols if c not in quantile_preds.columns]
+    if missing:
+        raise KeyError(f"faltan columnas de cuantil {missing}")
+
+    y = quantile_preds[cols].to_numpy(dtype="float64")
+    y = np.sort(np.clip(y, 0.0, None), axis=1)
+    return np.asarray(ordered, dtype="float64"), y
+
+
+def expected_cost_from_quantiles(
+    quantile_preds: pd.DataFrame,
+    *,
+    quantiles: Sequence[float],
+    order: np.ndarray | pd.Series,
+    economics: cfg.EconomicsConfig = cfg.ECONOMICS,
+) -> pd.DataFrame:
+    """Faltante, sobrante y costo **esperados** bajo la distribucion del modelo.
+
+    Por que esto no es lo mismo que `evaluate_policy`
+    -------------------------------------------------
+    `evaluate_policy` cuenta sobre realizaciones: necesita saber que demanda
+    hubo. Sirve para el backtest y es lo que el README defiende, porque ahi el
+    numero sale de contar y no de suponer.
+
+    En produccion no hay realizacion: el horizonte todavia no paso. Lo que si hay
+    es la distribucion predictiva que el propio modelo emite como grilla de
+    cuantiles, y la esperanza del newsvendor sobre ella esta definida:
+
+        E[(D - q)+] = integral_0^1 max(F^-1(u) - q, 0) du
+
+    Se calcula tratando `F^-1` como lineal a tramos entre los niveles predichos.
+    Es **esperanza implicada por el modelo**, no resultado medido, y hereda la
+    calibracion de esos cuantiles: si el intervalo esta inflado, el sobrante
+    esperado sale inflado con el. Por eso se reporta al lado de la cobertura
+    empirica y no solo.
+
+    La alternativa era devolver cero, que es lo que hacia antes, y dejar que la
+    interfaz estimara el impacto asumiendo la banda uniforme. Eso ponia un
+    supuesto de distribucion en la capa de presentacion, que es el peor lugar
+    para tenerlo: invisible y sin test.
+
+    El sesgo conocido, declarado
+    ----------------------------
+    La grilla termina en el cuantil mas alto entrenado (0,95), asi que la masa de
+    arriba — el 5 % donde vive la demanda extrema — no esta descrita. La cola se
+    trata como **plana** en el ultimo valor, y eso hace que el faltante esperado
+    sea una **cota inferior**. Extrapolar la cola habria inventado una forma que
+    nadie estimo; se prefiere un numero que se sabe corto a uno que se cree
+    exacto. La masa no modelada se devuelve en la columna `tail_mass`.
+    """
+    levels, y = _inverse_cdf_grid(quantile_preds, quantiles=quantiles)
+    q = np.asarray(order, dtype="float64").reshape(-1)
+    if q.shape[0] != y.shape[0]:
+        raise ValueError(f"la orden tiene {q.shape[0]} filas y los cuantiles {y.shape[0]}")
+
+    # Grilla aumentada con las dos colas planas: u de 0 a 1 con los valores
+    # extremos repetidos. Plana por arriba es lo que hace la cota inferior.
+    u = np.concatenate(([0.0], levels, [1.0]))
+    yy = np.concatenate((y[:, :1], y, y[:, -1:]), axis=1)
+
+    mean = _integrate_piecewise(u, yy)
+    shortfall = _integrate_excess(u, yy, q)
+    # Identidad del newsvendor: (y-q)+ - (q-y)+ = y - q. Derivar el sobrante de
+    # ella en vez de integrarlo aparte garantiza que los dos numeros sean
+    # consistentes entre si, y el test lo verifica.
+    overage = shortfall - mean + q
+
+    cost = economics.cu * shortfall + economics.co * np.maximum(overage, 0.0)
+    return pd.DataFrame(
+        {
+            "expected_demand": mean,
+            "expected_shortfall": shortfall,
+            "expected_overage": np.maximum(overage, 0.0),
+            "expected_cost": cost,
+            "tail_mass": np.full(q.shape[0], 1.0 - float(levels[-1])),
+        },
+        index=quantile_preds.index,
+    )
+
+
+def _integrate_piecewise(u: np.ndarray, y: np.ndarray) -> np.ndarray:
+    """Integral de `F^-1` en `u` de 0 a 1, exacta para lineal a tramos."""
+    du = np.diff(u)
+    mid = (y[:, :-1] + y[:, 1:]) / 2.0
+    return mid @ du
+
+
+def _integrate_excess(u: np.ndarray, y: np.ndarray, q: np.ndarray) -> np.ndarray:
+    """Integral de `max(F^-1(u) - q, 0)`, partiendo el tramo en el cruce.
+
+    Integrar por trapecio sin partir el tramo donde `F^-1` cruza `q` sobreestima
+    el faltante, porque el trapecio no ve el codo. El error es chico pero es
+    sistematico y siempre en la misma direccion, asi que se parte.
+    """
+    ya, yb = y[:, :-1], y[:, 1:]
+    du = np.diff(u)[None, :]
+    qq = q[:, None]
+    ea, eb = ya - qq, yb - qq
+
+    both_above = (ea >= 0) & (eb >= 0)
+    both_below = (ea <= 0) & (eb <= 0)
+
+    # Tramo entero por encima: trapecio comun.
+    area = np.where(both_above, (ea + eb) / 2.0 * du, 0.0)
+
+    # Tramo que cruza: triangulo desde el cruce hasta el extremo que quedo arriba.
+    # La fraccion del tramo por encima es el excedente positivo sobre el salto
+    # total, y la altura media del triangulo es la mitad de ese excedente.
+    crossing = ~both_above & ~both_below
+    if crossing.any():
+        jump = eb - ea
+        with np.errstate(divide="ignore", invalid="ignore"):
+            frac_up = np.where(jump != 0, np.maximum(ea, eb) / jump, 0.0)
+        frac_up = np.abs(np.clip(frac_up, -1.0, 1.0))
+        tri = frac_up * du * np.maximum(ea, eb) / 2.0
+        area = np.where(crossing, tri, area)
+
+    return area.sum(axis=1)
+
+
+
 
 def compare_policies(outcomes: Sequence[PolicyOutcome], *, reference: str) -> pd.DataFrame:
     """Tabla comparativa con el ahorro **en porcentaje**, no en moneda.

@@ -10,7 +10,7 @@ import { useEffect, useRef } from "react";
 
 import { api, type ForecastResponse, type ReorderResponse, type SeriesHistory } from "../api/client";
 import { GraficoSerie } from "../charts/GraficoSerie";
-import { RATIOS, cuantilCritico, deltaPct, politicaMediaMovil } from "../domain";
+import { RATIOS, cuantilCritico, deltaPct } from "../domain";
 import { conteo, cuantil, magnitud, porcentaje, porcentajeSimple } from "../format";
 import { useAsincrono, useConteo, useEstado } from "../state";
 import { Esqueleto } from "../components/estados";
@@ -65,7 +65,11 @@ export function PantallaSerie({ serie }: { serie: string }) {
   if (!datos.datos) return null;
 
   const { historia, pronostico, orden, ordenError } = datos.datos;
-  const politica = politicaMediaMovil(historia.points, basis);
+  // La política sale de `/reorder` y no de recalcular la media móvil acá: es la
+  // misma cifra que usa la tabla de reposición, y calcularla en dos lugares es
+  // garantizar que en algún momento no coincidan.
+  const politica = orden?.lines[0]?.policy_qty ?? 0;
+  const ventana = orden?.policy_window ?? 21;
   const qEstrella = orden?.critical_fraction ?? cuantilCritico(1, ratio);
   const resumen = historia.summary;
 
@@ -114,7 +118,7 @@ export function PantallaSerie({ serie }: { serie: string }) {
               Contra la política actual
             </div>
             <dl>
-              <dt>Media móvil 21 d</dt>
+              <dt>Media móvil {ventana} d</dt>
               <dd>{magnitud(politica)}</dd>
               <dt>Δ sugerido</dt>
               <dd className={cantidad != null && cantidad > politica ? "acento" : undefined}>

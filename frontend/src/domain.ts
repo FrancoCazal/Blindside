@@ -8,7 +8,7 @@
  * una sola vez cuando el endpoint exista.
  */
 
-import type { ForecastPoint, HistoryPoint } from "./api/client";
+import type { HistoryPoint } from "./api/client";
 
 /**
  * Presets del control de ratio de costo. `cu` queda en 1 y se mueve `co`, así
@@ -35,81 +35,64 @@ export function cuantilCritico(cu: number, co: number): number {
 }
 
 /**
- * Política actual: media móvil de los últimos `ventana` días de la base activa.
+ * La política actual ya no se calcula acá.
  *
- * Es la regla que el proyecto viene a reemplazar — en el retail de perecederos
- * la reposición se decide con el promedio de las últimas semanas — y es también
- * uno de los baselines del backtest, así que la comparación de la tabla es
- * contra algo medido y no contra un hombre de paja.
+ * Era la media móvil de los últimos 21 días de la base activa, y estaba bien
+ * calculada, pero el backend la sirve en `policy_qty` sobre la **misma** base con
+ * la que pronostica. Tenerla en los dos lados garantizaba que en algún momento no
+ * coincidieran, y el número contra el que se lee toda la tabla no puede tener dos
+ * versiones. `/reorder` también declara la ventana en `policy_window`.
  */
-export function politicaMediaMovil(
-  points: HistoryPoint[],
-  basis: "observed" | "recovered",
-  ventana = 21,
-): number {
-  const serie = points.slice(-ventana).map((p) => (basis === "recovered" ? p.recovered : p.observed));
-  if (serie.length === 0) return 0;
-  return serie.reduce((a, b) => a + b, 0) / serie.length;
-}
 
 /** Días con quiebre de los últimos `n`, para la columna de la tabla. */
 export function diasConQuiebre(points: HistoryPoint[], n = 14): number[] {
   return points.slice(-n).map((p) => p.oos_hours_open);
 }
 
-export interface ImpactoSimulado {
-  /** Costo esperado de la cantidad sugerida, adimensional. */
-  costoSugerido: number;
-  /** Costo esperado de la política de media móvil. */
-  costoPolitica: number;
-  /** Cuánto se ahorra. Positivo = la sugerencia cuesta menos. */
-  ahorro: number;
-  /** Ahorro como fracción del costo de la política. */
-  ahorroPct: number;
+/**
+ * Ahorro esperado de una línea de `/reorder`, en unidades de costo.
+ *
+ * **Este número ya no es simulado.** El backend devuelve `expected_shortfall` y
+ * `expected_overage` integrados sobre la distribución predictiva del modelo, y
+ * `cost_delta_pct` comparando la orden contra la política de media móvil con las
+ * dos cantidades evaluadas bajo **la misma** distribución. Acá solo se reconstruye
+ * el ahorro absoluto a partir del costo de la orden y ese porcentaje, porque la
+ * tabla ordena por magnitud y no por porcentaje: una serie que ahorra 30 % sobre
+ * una base ínfima no es la que hay que mirar primero.
+ *
+ * Lo que había antes en este archivo era una estimación propia con la banda
+ * conformal tomada como uniforme. Se fue: un supuesto de distribución en la capa
+ * de presentación es invisible y no tiene test.
+ */
+export function impactoDeLinea(
+  linea:
+    | {
+        expected_shortfall: number;
+        expected_overage: number;
+        cost_delta_pct: number;
+      }
+    | undefined,
+  ratio: number,
+): number {
+  if (!linea) return 0;
+  const costoOrden = linea.expected_shortfall + ratio * linea.expected_overage;
+  const factor = 1 + linea.cost_delta_pct / 100;
+  // costoOrden = costoPolitica * factor, así que el ahorro es la diferencia.
+  if (factor <= 0) return 0;
+  const costoPolitica = costoOrden / factor;
+  return costoPolitica - costoOrden;
 }
 
 /**
- * Impacto esperado de usar la cantidad sugerida en vez de la política.
+ * E[(D − q)+] con D uniforme en [lo, hi].
  *
- * **Este número es simulado y va rotulado `sim` en la interfaz.** `/reorder`
- * devuelve `expected_shortfall`, `expected_overage` y `cost_delta_pct` en cero a
- * propósito: sin verdad de terreno no hay faltante ni sobrante realizado, y el
- * backend prefiere no inventar una estimación. Acá se calcula una, y el supuesto
- * es explícito: se toma la **banda conformal como distribución uniforme** entre
- * `pred_lo` y `pred_hi`.
- *
- * El supuesto es grueso y está mal en la dirección conocida: la demanda de
- * perecederos tiene cola derecha larga (el p99 sobre la mediana llega a 12× en
- * este panel), así que una uniforme subestima el faltante de los días de pico.
- * Sirve para **ordenar** series por impacto, que es para lo que se usa, y no
- * para prometer un ahorro.
+ * Quedan las dos esperanzas uniformes pero **ya no se usan para decidir nada**: el
+ * faltante y el sobrante los calcula el backend integrando sobre la grilla de
+ * cuantiles del modelo, que es una distribución estimada y no un supuesto de
+ * forma. Están acá porque son la referencia con la que se testeó esa integral: el
+ * caso uniforme tiene cierre analítico y es el único contra el que se puede
+ * verificar sin simular.
  */
-export function impactoSimulado(
-  punto: ForecastPoint,
-  cantidadSugerida: number,
-  cantidadPolitica: number,
-  cu: number,
-  co: number,
-): ImpactoSimulado {
-  const lo = punto.pred_lo ?? punto.y_pred;
-  const hi = punto.pred_hi ?? punto.y_pred;
-  const costo = (q: number) => {
-    const faltante = esperanzaFaltante(q, lo, hi);
-    const sobrante = esperanzaSobrante(q, lo, hi);
-    return cu * faltante + co * sobrante;
-  };
-  const costoSugerido = costo(cantidadSugerida);
-  const costoPolitica = costo(cantidadPolitica);
-  const ahorro = costoPolitica - costoSugerido;
-  return {
-    costoSugerido,
-    costoPolitica,
-    ahorro,
-    ahorroPct: costoPolitica > 0 ? ahorro / costoPolitica : 0,
-  };
-}
-
-/** E[(D − q)+] con D uniforme en [lo, hi]. */
 export function esperanzaFaltante(q: number, lo: number, hi: number): number {
   if (hi <= lo) return Math.max(0, lo - q);
   if (q <= lo) return (lo + hi) / 2 - q;

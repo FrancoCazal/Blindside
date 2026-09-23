@@ -175,10 +175,23 @@ function servidor(opciones: { muestra?: boolean } = {}) {
     if (ruta === "/reorder") {
       const ids = (cuerpo.series_ids as string[]) ?? [];
       const co = Number(cuerpo.co ?? 0.6);
+      // La política se simula por encima de la cantidad sugerida a propósito: en
+      // base observada pedir lo que ve el ERP es pedir de menos, y el test lo
+      // verifica leyendo el signo del delta de la primera fila.
+      const politica = CANTIDAD[base] * 1.4;
+      const faltante = 0.2;
+      const sobrante = 0.5;
       return json({
         critical_fraction: 1 / (1 + co),
         basis: base,
         model_name: "conformal_lgbm_quantile_adaptive",
+        plan: {
+          plan: { discount: 0.967, holiday_flag: 0, activity_flag: 0 },
+          source: "panel_median",
+          window_days: 21,
+        },
+        policy_window: 21,
+        tail_mass: 0.05,
         lines: ids.map((id) => {
           const [store, product] = id.split("_").map(Number);
           return {
@@ -186,12 +199,14 @@ function servidor(opciones: { muestra?: boolean } = {}) {
             dt: HOY,
             qty: CANTIDAD[base],
             critical_fraction: 1 / (1 + co),
-            expected_shortfall: 0,
-            expected_overage: 0,
-            cost_delta_pct: 0,
+            policy_qty: politica,
+            expected_demand: CANTIDAD[base] * 0.9,
+            expected_shortfall: faltante,
+            expected_overage: sobrante,
+            cost_delta_pct: -8.64,
           };
         }),
-        total_cost_delta_pct: 0,
+        total_cost_delta_pct: -8.64,
       });
     }
 

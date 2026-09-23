@@ -154,6 +154,12 @@ export interface paths {
          *
          *     La salida del modelo **es** la orden. No es un pronostico que alguien tenga que
          *     interpretar y despues ajustar a mano con un stock de seguridad.
+         *
+         *     El faltante y el sobrante son **esperanzas bajo la distribucion predictiva del
+         *     modelo**, no resultados medidos: el horizonte todavia no paso, asi que no hay
+         *     realizacion contra la que contar. Antes se devolvian en cero y la interfaz
+         *     estimaba el impacto asumiendo la banda uniforme, o sea que el supuesto de
+         *     distribucion vivia en la capa de presentacion. Ahora vive aca, con test.
          */
         post: operations["reorder_reorder_post"];
         delete?: never;
@@ -346,6 +352,46 @@ export interface components {
          */
         Basis: "observed" | "recovered";
         /**
+         * CommercialPlan
+         * @description Covariables que se conocen de antemano, para los dias del horizonte.
+         *
+         *     **Por que existe este objeto.** El modelo usa tres covariables del dia
+         *     objetivo que no son fuga porque se conocen antes: descuento, feriado y
+         *     actividad comercial. En el backtest salen del panel, que ya tiene esos dias.
+         *     En produccion el horizonte esta **despues** del ultimo dia del panel, asi que
+         *     no hay de donde leerlas: o las aporta quien consulta, que es el que conoce su
+         *     plan comercial, o hay que asumir un valor.
+         *
+         *     Sin este campo la API las dejaba en NaN. Eso no era un detalle: medido sobre un
+         *     fold real, servir las tres en NaN da **MASE 1,639 contra 0,879** con las
+         *     covariables reales — 86 % peor, y peor que el naive estacional — y una orden
+         *     52,5 % mas alta de lo que corresponde. El backtest estaba perfecto porque el
+         *     arnes si las poblaba; el desajuste vivia solo en inferencia, y LightGBM trata
+         *     el NaN como una rama mas, asi que la API contestaba 200 con un numero plausible.
+         *
+         *     El default no es neutro sino medido: la mediana de los ultimos dias del panel.
+         *     Las cinco variantes evaluadas y por que gano esa estan en `docs/decisiones.md`
+         *     D19. Y se **declara en la respuesta**, porque una suposicion que no se ve es
+         *     peor que un error.
+         */
+        CommercialPlan: {
+            /**
+             * Discount
+             * @default 1
+             */
+            discount: number;
+            /**
+             * Holiday Flag
+             * @default 0
+             */
+            holiday_flag: number;
+            /**
+             * Activity Flag
+             * @default 0
+             */
+            activity_flag: number;
+        };
+        /**
          * CoveragePoint
          * @description Cobertura empirica de un paso del horizonte contra la nominal.
          *
@@ -381,6 +427,7 @@ export interface components {
              * @default true
              */
             recover_censoring: boolean;
+            plan?: components["schemas"]["CommercialPlan"] | null;
         };
         /** ExplainResponse */
         ExplainResponse: {
@@ -399,6 +446,7 @@ export interface components {
             base_value: number;
             /** Prediction */
             prediction: number;
+            plan: components["schemas"]["PlanEcho"];
             /** Contributions */
             contributions: components["schemas"]["ShapContribution"][];
         };
@@ -427,6 +475,7 @@ export interface components {
              * @default 7
              */
             horizon: number;
+            plan?: components["schemas"]["CommercialPlan"] | null;
             /**
              * Coverage
              * @default 0.9
@@ -447,6 +496,7 @@ export interface components {
             coverage_nominal: number;
             /** Coverage Empirical */
             coverage_empirical?: number | null;
+            plan: components["schemas"]["PlanEcho"];
             /** Forecasts */
             forecasts: components["schemas"]["SeriesForecast"][];
         };
@@ -651,6 +701,33 @@ export interface components {
             reference_n_products?: number | null;
         };
         /**
+         * PlanEcho
+         * @description El plan con el que se contesto, y de donde salio.
+         *
+         *     Va en la respuesta y no solo en el request porque el default se resuelve del
+         *     lado del servidor: una respuesta que no dice que descuento asumio no se puede
+         *     auditar, y el descuento es la covariable que mas pesa de las tres.
+         *
+         *     `source` distingue tres casos:
+         *
+         *     - `request`: lo aporto quien consulta. Es el unico que no es una suposicion.
+         *     - `panel_median`: la mediana de los ultimos dias del panel, o sea "la cadencia
+         *       comercial reciente sigue". Es el default y esta elegido por medicion, no por
+         *       gusto: ver `docs/decisiones.md` D19.
+         *     - `default`: precio de lista sin campania. Se usa cuando no hay panel del que
+         *       sacar la mediana, y queda declarado porque subestima la orden un 13 %.
+         */
+        PlanEcho: {
+            plan: components["schemas"]["CommercialPlan"];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "request" | "panel_median" | "default";
+            /** Window Days */
+            window_days?: number | null;
+        };
+        /**
          * ProductMap
          * @description Proyeccion 2D del catalogo, con la varianza que realmente captura.
          *
@@ -696,6 +773,10 @@ export interface components {
             qty: number;
             /** Critical Fraction */
             critical_fraction: number;
+            /** Policy Qty */
+            policy_qty: number;
+            /** Expected Demand */
+            expected_demand: number;
             /** Expected Shortfall */
             expected_shortfall: number;
             /** Expected Overage */
@@ -727,6 +808,12 @@ export interface components {
              * @default true
              */
             recover_censoring: boolean;
+            plan?: components["schemas"]["CommercialPlan"] | null;
+            /**
+             * Policy Window
+             * @default 21
+             */
+            policy_window: number;
         };
         /** ReorderResponse */
         ReorderResponse: {
@@ -735,6 +822,11 @@ export interface components {
             basis: components["schemas"]["Basis"];
             /** Model Name */
             model_name: string;
+            plan: components["schemas"]["PlanEcho"];
+            /** Policy Window */
+            policy_window: number;
+            /** Tail Mass */
+            tail_mass: number;
             /** Lines */
             lines: components["schemas"]["ReorderLine"][];
             /** Total Cost Delta Pct */
@@ -918,6 +1010,8 @@ export interface operations {
                 q?: string | null;
                 /** @description filtra por tienda */
                 store_id?: number | null;
+                /** @description filtra por clase de rotacion: baja, media o alta */
+                rotation_band?: string | null;
                 limit?: number;
                 offset?: number;
             };

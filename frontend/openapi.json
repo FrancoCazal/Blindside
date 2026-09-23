@@ -75,6 +75,24 @@
             "description": "filtra por tienda"
           },
           {
+            "name": "rotation_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por clase de rotacion: baja, media o alta",
+              "title": "Rotation Band"
+            },
+            "description": "filtra por clase de rotacion: baja, media o alta"
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -277,7 +295,7 @@
           "decision"
         ],
         "summary": "Reorder",
-        "description": "Cantidad a reponer: el cuantil critico del newsvendor.\n\nLa salida del modelo **es** la orden. No es un pronostico que alguien tenga que\ninterpretar y despues ajustar a mano con un stock de seguridad.",
+        "description": "Cantidad a reponer: el cuantil critico del newsvendor.\n\nLa salida del modelo **es** la orden. No es un pronostico que alguien tenga que\ninterpretar y despues ajustar a mano con un stock de seguridad.\n\nEl faltante y el sobrante son **esperanzas bajo la distribucion predictiva del\nmodelo**, no resultados medidos: el horizonte todavia no paso, asi que no hay\nrealizacion contra la que contar. Antes se devolvian en cero y la interfaz\nestimaba el impacto asumiendo la banda uniforme, o sea que el supuesto de\ndistribucion vivia en la capa de presentacion. Ahora vive aca, con test.",
         "operationId": "reorder_reorder_post",
         "requestBody": {
           "content": {
@@ -578,6 +596,34 @@
         "title": "Basis",
         "description": "Base de calculo. Es el vocabulario del toggle de la interfaz (`?basis=`).\n\nNo reemplaza a `recover_censoring` en los requests: ese nombre ya esta en el\ncontrato y renombrarlo seria un rename en tres lugares mas. El booleano\nentra, la base sale — asi la respuesta dice con que artefacto se contesto."
       },
+      "CommercialPlan": {
+        "properties": {
+          "discount": {
+            "type": "number",
+            "maximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Discount",
+            "default": 1.0
+          },
+          "holiday_flag": {
+            "type": "integer",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Holiday Flag",
+            "default": 0
+          },
+          "activity_flag": {
+            "type": "integer",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Activity Flag",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "CommercialPlan",
+        "description": "Covariables que se conocen de antemano, para los dias del horizonte.\n\n**Por que existe este objeto.** El modelo usa tres covariables del dia\nobjetivo que no son fuga porque se conocen antes: descuento, feriado y\nactividad comercial. En el backtest salen del panel, que ya tiene esos dias.\nEn produccion el horizonte esta **despues** del ultimo dia del panel, asi que\nno hay de donde leerlas: o las aporta quien consulta, que es el que conoce su\nplan comercial, o hay que asumir un valor.\n\nSin este campo la API las dejaba en NaN. Eso no era un detalle: medido sobre un\nfold real, servir las tres en NaN da **MASE 1,639 contra 0,879** con las\ncovariables reales — 86 % peor, y peor que el naive estacional — y una orden\n52,5 % mas alta de lo que corresponde. El backtest estaba perfecto porque el\narnes si las poblaba; el desajuste vivia solo en inferencia, y LightGBM trata\nel NaN como una rama mas, asi que la API contestaba 200 con un numero plausible.\n\nEl default no es neutro sino medido: la mediana de los ultimos dias del panel.\nLas cinco variantes evaluadas y por que gano esa estan en `docs/decisiones.md`\nD19. Y se **declara en la respuesta**, porque una suposicion que no se ve es\npeor que un error."
+      },
       "CoveragePoint": {
         "properties": {
           "h": {
@@ -631,6 +677,16 @@
             "type": "boolean",
             "title": "Recover Censoring",
             "default": true
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CommercialPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -676,6 +732,9 @@
             "type": "number",
             "title": "Prediction"
           },
+          "plan": {
+            "$ref": "#/components/schemas/PlanEcho"
+          },
           "contributions": {
             "items": {
               "$ref": "#/components/schemas/ShapContribution"
@@ -692,6 +751,7 @@
           "model_name",
           "base_value",
           "prediction",
+          "plan",
           "contributions"
         ],
         "title": "ExplainResponse"
@@ -764,6 +824,16 @@
             "title": "Horizon",
             "default": 7
           },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CommercialPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "coverage": {
             "type": "number",
             "exclusiveMaximum": 1.0,
@@ -807,6 +877,9 @@
             ],
             "title": "Coverage Empirical"
           },
+          "plan": {
+            "$ref": "#/components/schemas/PlanEcho"
+          },
           "forecasts": {
             "items": {
               "$ref": "#/components/schemas/SeriesForecast"
@@ -820,6 +893,7 @@
           "model_name",
           "basis",
           "coverage_nominal",
+          "plan",
           "forecasts"
         ],
         "title": "ForecastResponse"
@@ -1340,6 +1414,40 @@
         "title": "PanelInfo",
         "description": "Que datos se estan sirviendo. Dispara el estado de muestra de la interfaz.\n\nLos conteos van **siempre contra su referencia**: \"60 de 3066 series\" dice\nalgo, \"60 series\" no. La referencia sale del manifiesto del submuestreo, asi\nque es `None` si no esta — y en ese caso la interfaz no puede afirmar que\nesta viendo el panel completo."
       },
+      "PlanEcho": {
+        "properties": {
+          "plan": {
+            "$ref": "#/components/schemas/CommercialPlan"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "request",
+              "panel_median",
+              "default"
+            ],
+            "title": "Source"
+          },
+          "window_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plan",
+          "source"
+        ],
+        "title": "PlanEcho",
+        "description": "El plan con el que se contesto, y de donde salio.\n\nVa en la respuesta y no solo en el request porque el default se resuelve del\nlado del servidor: una respuesta que no dice que descuento asumio no se puede\nauditar, y el descuento es la covariable que mas pesa de las tres.\n\n`source` distingue tres casos:\n\n- `request`: lo aporto quien consulta. Es el unico que no es una suposicion.\n- `panel_median`: la mediana de los ultimos dias del panel, o sea \"la cadencia\n  comercial reciente sigue\". Es el default y esta elegido por medicion, no por\n  gusto: ver `docs/decisiones.md` D19.\n- `default`: precio de lista sin campania. Se usa cuando no hay panel del que\n  sacar la mediana, y queda declarado porque subestima la orden un 13 %."
+      },
       "ProductMap": {
         "properties": {
           "method": {
@@ -1442,6 +1550,16 @@
             "exclusiveMinimum": 0.0,
             "title": "Critical Fraction"
           },
+          "policy_qty": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Policy Qty"
+          },
+          "expected_demand": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Expected Demand"
+          },
           "expected_shortfall": {
             "type": "number",
             "minimum": 0.0,
@@ -1463,6 +1581,8 @@
           "dt",
           "qty",
           "critical_fraction",
+          "policy_qty",
+          "expected_demand",
           "expected_shortfall",
           "expected_overage",
           "cost_delta_pct"
@@ -1503,6 +1623,23 @@
             "type": "boolean",
             "title": "Recover Censoring",
             "default": true
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CommercialPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "policy_window": {
+            "type": "integer",
+            "maximum": 90.0,
+            "minimum": 1.0,
+            "title": "Policy Window",
+            "default": 21
           }
         },
         "type": "object",
@@ -1524,6 +1661,17 @@
             "type": "string",
             "title": "Model Name"
           },
+          "plan": {
+            "$ref": "#/components/schemas/PlanEcho"
+          },
+          "policy_window": {
+            "type": "integer",
+            "title": "Policy Window"
+          },
+          "tail_mass": {
+            "type": "number",
+            "title": "Tail Mass"
+          },
           "lines": {
             "items": {
               "$ref": "#/components/schemas/ReorderLine"
@@ -1541,6 +1689,9 @@
           "critical_fraction",
           "basis",
           "model_name",
+          "plan",
+          "policy_window",
+          "tail_mass",
           "lines",
           "total_cost_delta_pct"
         ],

@@ -467,3 +467,185 @@ def _backtest_with_intervals(
     usan.
     """
     return run_backtest(panel, [model], forecast=forecast)
+
+
+# --- Esperanza del newsvendor sobre la distribucion predictiva -----------
+# Estos tests existen porque la alternativa era que el faltante y el sobrante los
+# estimara la interfaz asumiendo la banda uniforme. Un supuesto de distribucion en
+# la capa de presentacion no tiene forma de fallar en CI.
+
+
+def _grilla_uniforme(alto: float = 10.0) -> tuple[pd.DataFrame, tuple[float, ...]]:
+    """Uniforme(0, alto) descrita por 99 cuantiles.
+
+    La grilla va de 0,01 a 0,99 y no mas fina porque `quantile_col` redondea a dos
+    digitos: con mas niveles los nombres de columna colisionan y el test mediria
+    una grilla distinta de la que cree.
+    """
+    niveles = tuple(round(k / 100, 2) for k in range(1, 100))
+    fila = {quantile_col(q): alto * q for q in niveles}
+    return pd.DataFrame([fila]), niveles
+
+
+def test_esperanza_coincide_con_el_uniforme_analitico() -> None:
+    """E[(D-q)+] = (alto-q)^2 / (2*alto) para la uniforme. Es el caso con cierre."""
+    df, niveles = _grilla_uniforme(10.0)
+    for orden in (2.0, 5.0, 8.0):
+        r = nv.expected_cost_from_quantiles(
+            df, quantiles=niveles, order=np.array([orden]), economics=cfg.EconomicsConfig(1.0, 1.0)
+        )
+        esperado = (10.0 - orden) ** 2 / 20.0
+        # La tolerancia es el sesgo de las colas planas, que es conocido y esta
+        # declarado en el docstring: la grilla no describe fuera de [0,01, 0,99].
+        assert r["expected_shortfall"].iloc[0] == pytest.approx(esperado, abs=2e-3)
+    assert r["expected_demand"].iloc[0] == pytest.approx(5.0, abs=1e-9)
+
+
+def test_la_identidad_del_newsvendor_se_cumple_exacta() -> None:
+    """(D-q)+ menos (q-D)+ es D-q, asi que en esperanza tambien.
+
+    El sobrante se **deriva** de esa identidad en vez de integrarse aparte, para
+    que los dos numeros no puedan contradecirse. Este test es lo que lo fija.
+    """
+    niveles = (0.05, 0.5, 0.625, 0.9, 0.95)
+    df = pd.DataFrame(
+        [dict(zip([quantile_col(q) for q in niveles], [0.2, 1.0, 1.3, 2.4, 3.1], strict=False))]
+    )
+    orden = np.array([1.3])
+    r = nv.expected_cost_from_quantiles(df, quantiles=niveles, order=orden)
+    izq = float(r["expected_shortfall"].iloc[0] - r["expected_overage"].iloc[0])
+    der = float(r["expected_demand"].iloc[0] - orden[0])
+    assert izq == pytest.approx(der, abs=1e-12)
+
+
+def test_la_esperanza_coincide_con_monte_carlo() -> None:
+    """Contra simulacion de la misma inversa lineal a tramos, que es la definicion."""
+    niveles = (0.05, 0.5, 0.625, 0.9, 0.95)
+    valores = [0.2, 1.0, 1.3, 2.4, 3.1]
+    df = pd.DataFrame([dict(zip([quantile_col(q) for q in niveles], valores, strict=False))])
+    orden = 1.3
+    r = nv.expected_cost_from_quantiles(df, quantiles=niveles, order=np.array([orden]))
+
+    u = np.concatenate(([0.0], niveles, [1.0]))
+    y = np.array([valores[0], *valores, valores[-1]])
+    muestra = np.interp(np.random.default_rng(0).uniform(size=400_000), u, y)
+    assert r["expected_shortfall"].iloc[0] == pytest.approx(
+        np.maximum(muestra - orden, 0).mean(), abs=5e-3
+    )
+    assert r["expected_overage"].iloc[0] == pytest.approx(
+        np.maximum(orden - muestra, 0).mean(), abs=5e-3
+    )
+
+
+def test_pedir_mas_baja_el_faltante_y_sube_el_sobrante() -> None:
+    """Monotonia. Si esto se rompe, el signo de la integral se dio vuelta."""
+    df, niveles = _grilla_uniforme(10.0)
+    df = pd.concat([df] * 3, ignore_index=True)
+    r = nv.expected_cost_from_quantiles(df, quantiles=niveles, order=np.array([2.0, 5.0, 8.0]))
+    assert r["expected_shortfall"].is_monotonic_decreasing
+    assert r["expected_overage"].is_monotonic_increasing
+
+
+def test_el_costo_esperado_es_minimo_en_q_estrella() -> None:
+    """La razon de ser del cuantil critico, verificada sobre la propia integral.
+
+    Es el test que conecta las dos mitades del proyecto: si el minimo del costo
+    esperado no cayera en q*, la capa de decision estaria resolviendo otro problema
+    que el que dice resolver.
+    """
+    df, niveles = _grilla_uniforme(10.0)
+    eco = cfg.EconomicsConfig(cu=1.0, co=0.6)
+    q_star = nv.critical_fraction(cu=1.0, co=0.6)
+
+    candidatos = np.linspace(0.0, 10.0, 501)
+    grilla = pd.concat([df] * len(candidatos), ignore_index=True)
+    costos = nv.expected_cost_from_quantiles(
+        grilla, quantiles=niveles, order=candidatos, economics=eco
+    )["expected_cost"].to_numpy()
+
+    # El optimo de la uniforme(0, 10) es 10 * q*.
+    assert candidatos[int(np.argmin(costos))] == pytest.approx(10.0 * q_star, abs=0.05)
+
+
+def test_los_cuantiles_cruzados_se_ordenan() -> None:
+    """LightGBM entrena un booster por cuantil y nada los obliga a ser monotonos."""
+    niveles = (0.05, 0.5, 0.95)
+    # q05 por encima de q50: cruce inyectado a proposito.
+    df = pd.DataFrame(
+        [dict(zip([quantile_col(q) for q in niveles], [2.0, 1.0, 3.0], strict=False))]
+    )
+    r = nv.expected_cost_from_quantiles(df, quantiles=niveles, order=np.array([1.5]))
+    assert r["expected_overage"].iloc[0] >= 0.0
+    assert r["expected_shortfall"].iloc[0] >= 0.0
+
+
+def test_la_masa_de_cola_no_descrita_se_declara() -> None:
+    """Es lo que hace del faltante una cota inferior, asi que tiene que viajar."""
+    niveles = (0.05, 0.5, 0.9)
+    df = pd.DataFrame(
+        [dict(zip([quantile_col(q) for q in niveles], [0.2, 1.0, 2.4], strict=False))]
+    )
+    r = nv.expected_cost_from_quantiles(df, quantiles=niveles, order=np.array([1.0]))
+    assert r["tail_mass"].iloc[0] == pytest.approx(0.10)
+
+
+# --- El conformal no puede descartar los cuantiles del modelo que envuelve ---
+
+
+class _BaseCuantilico(SeasonalNaiveForecaster):
+    """Base de prueba que dice tener cuantiles y devuelve valores reconocibles."""
+
+    supports_quantiles = True
+    quantiles = (0.05, 0.5, 0.625, 0.9, 0.95)
+
+    def predict_quantile(self, future: pd.DataFrame, quantiles) -> pd.DataFrame:  # noqa: ANN001
+        # Valores marcados: si el conformal los reemplaza por su banda, el test lo ve.
+        return pd.DataFrame(
+            {quantile_col(q): np.full(len(future), 100.0 + q) for q in sorted(quantiles)},
+            index=future.index,
+        )
+
+
+def test_el_conformal_usa_los_cuantiles_del_base_y_no_su_banda(
+    recovered_panel: pd.DataFrame,
+) -> None:
+    """Regresion de un desajuste train/serve que ninguna metrica detectaba.
+
+    El artefacto servido es un conformal envolviendo un LightGBM cuantilico. Su
+    `predict_quantile` interpolaba entre los limites del intervalo y **descartaba
+    los boosters entrenados con perdida cuantilica**. Medido sobre 25 series, la
+    orden salia 21,5 % mas alta que la del booster de q*, siempre hacia arriba
+    porque la banda esta sobre-inflada. La interfaz mostraba ese numero como si
+    fuera la salida del cuantil critico, que es lo que el README afirma.
+    """
+    dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
+    origin = dates[-8]
+    history = recovered_panel[recovered_panel[S.DATE] <= origin]
+    futuro = _future_from(recovered_panel, origin)
+
+    modelo = ConformalForecaster(_BaseCuantilico(), alpha=0.1, horizon=7)
+    modelo.fit(history, target=S.DEMAND_LATENT)
+
+    salida = modelo.predict_quantile(futuro, (0.05, 0.5, 0.625, 0.9, 0.95))
+    assert salida[quantile_col(0.625)].iloc[0] == pytest.approx(100.625)
+    # Y la propiedad tiene que reportar los cuantiles del base, no los del config:
+    # con el default de config la API interpolaba q* entre 0,5 y 0,9.
+    assert modelo.quantiles == (0.05, 0.5, 0.625, 0.9, 0.95)
+
+
+def test_el_conformal_sigue_interpolando_si_el_base_es_puntual(
+    recovered_panel: pd.DataFrame,
+) -> None:
+    """El camino viejo no se elimina: para un base puntual es lo unico que hay."""
+    dates = pd.DatetimeIndex(sorted(recovered_panel[S.DATE].unique()))
+    origin = dates[-8]
+    history = recovered_panel[recovered_panel[S.DATE] <= origin]
+    futuro = _future_from(recovered_panel, origin)
+
+    modelo = ConformalForecaster(SeasonalNaiveForecaster(), alpha=0.1, horizon=7)
+    modelo.fit(history, target=S.DEMAND_LATENT)
+
+    salida = modelo.predict_quantile(futuro, (0.05, 0.5, 0.95))
+    intervalo = modelo.predict_interval(futuro)
+    assert salida[quantile_col(0.5)].iloc[0] == pytest.approx(intervalo["y_pred"].iloc[0])
+    assert salida[quantile_col(0.95)].iloc[0] == pytest.approx(intervalo["pred_hi"].iloc[0])
