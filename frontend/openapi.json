@@ -1,0 +1,1487 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Blindside",
+    "summary": "Pronostico de demanda de perecederos con recuperacion de demanda censurada y capa de decision de reposicion",
+    "description": "FastAPI · superficie de servicio.\n\nImplementa el contrato de `api/schemas.py`, que se congelo antes que este archivo\njustamente para que el frontend pudiera arrancar contra datos simulados sin\nesperar al backend (seccion 13 del plan).\n\nEstado de seguridad, declarado y no escondido\n---------------------------------------------\n**Esta API no tiene autenticacion.** Es deliberado para el alcance del proyecto —\nes un prototipo de demostracion que corre en `127.0.0.1` y detras de Docker\nCompose — pero hay que decirlo en vez de dejarlo implicito:\n\n* No hay autenticacion ni autorizacion. Cualquiera que alcance el puerto puede\n  consultar todos los pronosticos y todas las cantidades de reposicion.\n* No hay limite de tasa. Un `/forecast` con 500 series es una consulta costosa.\n* El binding por defecto es local. **No exponer a una red publica sin agregar\n  antes autenticacion**, porque las cantidades a reponer y los pronosticos por\n  tienda son informacion comercial sensible.\n* El CORS es un **allowlist explicito** con los origenes del dev server del\n  frontend, no un comodin. Sin autenticacion, `allow_origins=[\"*\"]` significaria\n  que cualquier pagina abierta en el navegador del usuario puede leer estos datos\n  desde su maquina. Se sobreescribe con `BLINDSIDE_CORS_ORIGINS`.\n\nPara la Fase 2 multi-tenant esto se vuelve bloqueante: hace falta autenticacion\npor tenant y aislamiento de datos antes de que sirva a mas de una organizacion.\nEsta en el roadmap de `docs/decisiones.md`.\n",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "infra"
+        ],
+        "summary": "Health",
+        "description": "Healthcheck. Distingue \"arranco\" de \"arranco con modelo\".\n\nEs tambien el endpoint del que la interfaz deriva su estado global: que capa de\ndatos se esta sirviendo, si el toggle de censura tiene las dos bases cargadas y\ncuanta de la cobertura prometida se cumple de verdad.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/series": {
+      "get": {
+        "tags": [
+          "datos"
+        ],
+        "summary": "List Series",
+        "description": "Series disponibles, con busqueda y paginacion. Es el selector de la interfaz.\n\nDevuelve `total` aparte de la pagina porque el selector muestra el conteo de\nresultados sobre el total: con 3066 series un desplegable no es usable y el\nusuario necesita saber si lo que busca esta filtrado o no existe.\n\nLa busqueda corre sobre el codigo de la serie y sobre la jerarquia. Como el\ndataset no trae nombres de producto, la jerarquia es una lista de ids, asi que\nun numero suelto (\"2\") tambien aparece en el producto o en la categoria y la\nbusqueda trae de mas. Para filtrar con precision esta `store_id`; la busqueda\nesta para descubrir. Con nombres de producto esto se resolveria solo, pero\ninventarlos seria inventar datos.",
+        "operationId": "list_series_series_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "busqueda incremental sobre el codigo de la serie y su jerarquia. Varias palabras se combinan con AND",
+              "title": "Q"
+            },
+            "description": "busqueda incremental sobre el codigo de la serie y su jerarquia. Varias palabras se combinan con AND"
+          },
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por tienda",
+              "title": "Store Id"
+            },
+            "description": "filtra por tienda"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/series/{series_id}/history": {
+      "get": {
+        "tags": [
+          "datos"
+        ],
+        "summary": "Series History",
+        "description": "Venta observada contra demanda latente, dia por dia, con los tramos de quiebre.\n\nEs el endpoint de la pantalla principal y el unico lugar de la API donde las\ndos series se devuelven juntas. Van juntas a proposito: el argumento del\nproyecto es la **brecha** entre ellas, y dos llamadas separadas invitan a\ndibujarlas desalineadas o a comparar rangos de fechas distintos.\n\nEn los dias sin quiebre las dos series son identicas por diseno, no por\ncasualidad: son la verdad de terreno con la que se mide el sesgo, asi que\ncorregirlas destruiria la medicion. `summary.uplift_pct_clean_days` lo\ndevuelve como comprobacion, y tiene que dar 0.",
+        "operationId": "series_history_series__series_id__history_get",
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "id de la serie, '<store_id>_<product_id>'",
+              "title": "Series Id"
+            },
+            "description": "id de la serie, '<store_id>_<product_id>'"
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 400,
+                  "minimum": 7
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ultimos N dias; por defecto toda la historia",
+              "title": "Days"
+            },
+            "description": "ultimos N dias; por defecto toda la historia"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesHistory"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/series/history": {
+      "post": {
+        "tags": [
+          "datos"
+        ],
+        "summary": "Series History Batch",
+        "description": "La misma historia para varias series de una vez.\n\nExiste porque la pantalla de reposicion la necesita **por fila**: el sparkline\nde quiebre de los ultimos 14 dias y la comparacion contra la politica de media\nmovil salen de la historia, no del pronostico. Una llamada por fila seria un\nN+1 contra un panel que ya esta en memoria.",
+        "operationId": "series_history_batch_series_history_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeriesHistoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeriesHistoryBatch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/forecast": {
+      "post": {
+        "tags": [
+          "pronostico"
+        ],
+        "summary": "Forecast",
+        "description": "Pronostico con intervalo, si el modelo cargado esta conformalizado.\n\n`recover_censoring` elige el artefacto: el entrenado sobre demanda latente o el\nentrenado sobre venta observada. Es un modelo distinto y no un ajuste del\nmismo, porque el sesgo de la censura se aprende durante el entrenamiento —\ncorregir la salida despues seria inventar el efecto que el proyecto mide.",
+        "operationId": "forecast_forecast_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForecastRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForecastResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/reorder": {
+      "post": {
+        "tags": [
+          "decision"
+        ],
+        "summary": "Reorder",
+        "description": "Cantidad a reponer: el cuantil critico del newsvendor.\n\nLa salida del modelo **es** la orden. No es un pronostico que alguien tenga que\ninterpretar y despues ajustar a mano con un stock de seguridad.",
+        "operationId": "reorder_reorder_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReorderResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/backtest": {
+      "get": {
+        "tags": [
+          "evaluacion"
+        ],
+        "summary": "Backtest",
+        "description": "Metricas del ultimo backtest, con dispersion entre origenes.\n\nLee `reports/backtest_models.parquet`, que produce `make models`. No corre el\nbacktest en el request: son minutos de entrenamiento y una API no es el lugar.",
+        "operationId": "backtest_backtest_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BacktestResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/censoring": {
+      "get": {
+        "tags": [
+          "evaluacion"
+        ],
+        "summary": "Censoring",
+        "description": "Resumen de censura del panel: observado contra latente recuperado.",
+        "operationId": "censoring_censoring_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Censoring Censoring Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BacktestResponse": {
+        "properties": {
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "horizon": {
+            "type": "integer",
+            "title": "Horizon"
+          },
+          "season_length": {
+            "type": "integer",
+            "title": "Season Length"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/MetricRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "external_baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MetricRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "horizon",
+          "season_length",
+          "rows"
+        ],
+        "title": "BacktestResponse"
+      },
+      "Basis": {
+        "type": "string",
+        "enum": [
+          "observed",
+          "recovered"
+        ],
+        "title": "Basis",
+        "description": "Base de calculo. Es el vocabulario del toggle de la interfaz (`?basis=`).\n\nNo reemplaza a `recover_censoring` en los requests: ese nombre ya esta en el\ncontrato y renombrarlo seria un rename en tres lugares mas. El booleano\nentra, la base sale — asi la respuesta dice con que artefacto se contesto."
+      },
+      "CoveragePoint": {
+        "properties": {
+          "h": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "H"
+          },
+          "coverage_nominal": {
+            "type": "number",
+            "title": "Coverage Nominal"
+          },
+          "coverage_empirical": {
+            "type": "number",
+            "title": "Coverage Empirical"
+          },
+          "n": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "N"
+          }
+        },
+        "type": "object",
+        "required": [
+          "h",
+          "coverage_nominal",
+          "coverage_empirical",
+          "n"
+        ],
+        "title": "CoveragePoint",
+        "description": "Cobertura empirica de un paso del horizonte contra la nominal.\n\nLa degradacion **no** es monotona y eso es correcto: con estacionalidad\nsemanal el objetivo de h7 cae el mismo dia de la semana que el origen."
+      },
+      "ForecastPoint": {
+        "properties": {
+          "dt": {
+            "type": "string",
+            "format": "date",
+            "title": "Dt"
+          },
+          "h": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "H"
+          },
+          "y_pred": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Y Pred"
+          },
+          "pred_lo": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred Lo"
+          },
+          "pred_hi": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred Hi"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dt",
+          "h",
+          "y_pred"
+        ],
+        "title": "ForecastPoint"
+      },
+      "ForecastRequest": {
+        "properties": {
+          "series_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Series Ids"
+          },
+          "horizon": {
+            "type": "integer",
+            "maximum": 28.0,
+            "minimum": 1.0,
+            "title": "Horizon",
+            "default": 7
+          },
+          "coverage": {
+            "type": "number",
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.5,
+            "title": "Coverage",
+            "default": 0.9
+          },
+          "recover_censoring": {
+            "type": "boolean",
+            "title": "Recover Censoring",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "series_ids"
+        ],
+        "title": "ForecastRequest"
+      },
+      "ForecastResponse": {
+        "properties": {
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/Basis"
+          },
+          "coverage_nominal": {
+            "type": "number",
+            "title": "Coverage Nominal"
+          },
+          "coverage_empirical": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Empirical"
+          },
+          "forecasts": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesForecast"
+            },
+            "type": "array",
+            "title": "Forecasts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_name",
+          "basis",
+          "coverage_nominal",
+          "forecasts"
+        ],
+        "title": "ForecastResponse"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "default": "ok"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "model_loaded": {
+            "type": "boolean",
+            "title": "Model Loaded"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "trained_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trained Until"
+          },
+          "model_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Error"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelStatus"
+            },
+            "type": "array",
+            "title": "Models",
+            "default": []
+          },
+          "panel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PanelInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "coverage_nominal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Nominal"
+          },
+          "coverage_by_horizon": {
+            "items": {
+              "$ref": "#/components/schemas/CoveragePoint"
+            },
+            "type": "array",
+            "title": "Coverage By Horizon",
+            "default": []
+          },
+          "coverage_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "model_loaded"
+        ],
+        "title": "Health",
+        "description": "Respuesta de /health. Sirve para el healthcheck de Docker Compose."
+      },
+      "HistoryPoint": {
+        "properties": {
+          "dt": {
+            "type": "string",
+            "format": "date",
+            "title": "Dt"
+          },
+          "observed": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Observed"
+          },
+          "recovered": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Recovered"
+          },
+          "is_censored": {
+            "type": "boolean",
+            "title": "Is Censored"
+          },
+          "oos_hours_open": {
+            "type": "number",
+            "title": "Oos Hours Open"
+          },
+          "available_weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available Weight"
+          },
+          "inflation_factor": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inflation Factor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dt",
+          "observed",
+          "recovered",
+          "is_censored",
+          "oos_hours_open"
+        ],
+        "title": "HistoryPoint"
+      },
+      "HistorySummary": {
+        "properties": {
+          "n_days": {
+            "type": "integer",
+            "title": "N Days"
+          },
+          "n_censored_days": {
+            "type": "integer",
+            "title": "N Censored Days"
+          },
+          "censored_days_last_28": {
+            "type": "integer",
+            "title": "Censored Days Last 28"
+          },
+          "share_censored_days": {
+            "type": "number",
+            "title": "Share Censored Days"
+          },
+          "max_run_days": {
+            "type": "integer",
+            "title": "Max Run Days"
+          },
+          "mean_oos_hours_when_censored": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Oos Hours When Censored"
+          },
+          "uplift_pct": {
+            "type": "number",
+            "title": "Uplift Pct"
+          },
+          "uplift_pct_clean_days": {
+            "type": "number",
+            "title": "Uplift Pct Clean Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n_days",
+          "n_censored_days",
+          "censored_days_last_28",
+          "share_censored_days",
+          "max_run_days",
+          "uplift_pct",
+          "uplift_pct_clean_days"
+        ],
+        "title": "HistorySummary"
+      },
+      "MetricRow": {
+        "properties": {
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "metric": {
+            "type": "string",
+            "title": "Metric"
+          },
+          "mean": {
+            "type": "number",
+            "title": "Mean"
+          },
+          "std": {
+            "type": "number",
+            "title": "Std"
+          },
+          "worst_origin": {
+            "type": "number",
+            "title": "Worst Origin"
+          },
+          "best_origin": {
+            "type": "number",
+            "title": "Best Origin"
+          },
+          "n_origins": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "N Origins"
+          }
+        },
+        "type": "object",
+        "required": [
+          "model_name",
+          "metric",
+          "mean",
+          "std",
+          "worst_origin",
+          "best_origin",
+          "n_origins"
+        ],
+        "title": "MetricRow",
+        "description": "Una metrica de un modelo, con dispersion entre origenes.\n\n`std` no es opcional por diseno: la metodologia del proyecto prohibe\nreportar un numero unico, porque un promedio bueno esconde un origen\ncatastrofico."
+      },
+      "ModelStatus": {
+        "properties": {
+          "basis": {
+            "$ref": "#/components/schemas/Basis"
+          },
+          "artifact": {
+            "type": "string",
+            "title": "Artifact"
+          },
+          "loaded": {
+            "type": "boolean",
+            "title": "Loaded"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "trained_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trained Until"
+          },
+          "n_series_seen": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Series Seen"
+          },
+          "n_series_in_panel": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Series In Panel"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "basis",
+          "artifact",
+          "loaded"
+        ],
+        "title": "ModelStatus",
+        "description": "Estado de un artefacto. Hay uno por base de calculo.\n\n`n_series_seen` contra `n_series_in_panel` existe porque el desajuste\ntrain/serve que ninguna metrica detecta es servir un artefacto entrenado\nsobre `data/sample/` contra el panel completo. Paso en este proyecto."
+      },
+      "PanelInfo": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "processed",
+              "sample"
+            ],
+            "title": "Source"
+          },
+          "is_sample": {
+            "type": "boolean",
+            "title": "Is Sample"
+          },
+          "n_series": {
+            "type": "integer",
+            "title": "N Series"
+          },
+          "n_stores": {
+            "type": "integer",
+            "title": "N Stores"
+          },
+          "n_products": {
+            "type": "integer",
+            "title": "N Products"
+          },
+          "n_days": {
+            "type": "integer",
+            "title": "N Days"
+          },
+          "date_min": {
+            "type": "string",
+            "format": "date",
+            "title": "Date Min"
+          },
+          "date_max": {
+            "type": "string",
+            "format": "date",
+            "title": "Date Max"
+          },
+          "reference_n_series": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference N Series"
+          },
+          "reference_n_stores": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference N Stores"
+          },
+          "reference_n_products": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference N Products"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "is_sample",
+          "n_series",
+          "n_stores",
+          "n_products",
+          "n_days",
+          "date_min",
+          "date_max"
+        ],
+        "title": "PanelInfo",
+        "description": "Que datos se estan sirviendo. Dispara el estado de muestra de la interfaz.\n\nLos conteos van **siempre contra su referencia**: \"60 de 3066 series\" dice\nalgo, \"60 series\" no. La referencia sale del manifiesto del submuestreo, asi\nque es `None` si no esta — y en ese caso la interfaz no puede afirmar que\nesta viendo el panel completo."
+      },
+      "ReorderLine": {
+        "properties": {
+          "series": {
+            "$ref": "#/components/schemas/SeriesRef"
+          },
+          "dt": {
+            "type": "string",
+            "format": "date",
+            "title": "Dt"
+          },
+          "qty": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Qty"
+          },
+          "critical_fraction": {
+            "type": "number",
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Critical Fraction"
+          },
+          "expected_shortfall": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Expected Shortfall"
+          },
+          "expected_overage": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Expected Overage"
+          },
+          "cost_delta_pct": {
+            "type": "number",
+            "title": "Cost Delta Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series",
+          "dt",
+          "qty",
+          "critical_fraction",
+          "expected_shortfall",
+          "expected_overage",
+          "cost_delta_pct"
+        ],
+        "title": "ReorderLine"
+      },
+      "ReorderRequest": {
+        "properties": {
+          "series_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Series Ids"
+          },
+          "horizon": {
+            "type": "integer",
+            "maximum": 28.0,
+            "minimum": 1.0,
+            "title": "Horizon",
+            "default": 7
+          },
+          "cu": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Cu",
+            "default": 1.0
+          },
+          "co": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Co",
+            "default": 0.6
+          },
+          "recover_censoring": {
+            "type": "boolean",
+            "title": "Recover Censoring",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "series_ids"
+        ],
+        "title": "ReorderRequest"
+      },
+      "ReorderResponse": {
+        "properties": {
+          "critical_fraction": {
+            "type": "number",
+            "title": "Critical Fraction"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/Basis"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/ReorderLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "total_cost_delta_pct": {
+            "type": "number",
+            "title": "Total Cost Delta Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "critical_fraction",
+          "basis",
+          "model_name",
+          "lines",
+          "total_cost_delta_pct"
+        ],
+        "title": "ReorderResponse"
+      },
+      "SeriesForecast": {
+        "properties": {
+          "series": {
+            "$ref": "#/components/schemas/SeriesRef"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastPoint"
+            },
+            "type": "array",
+            "title": "Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series",
+          "points"
+        ],
+        "title": "SeriesForecast"
+      },
+      "SeriesHistory": {
+        "properties": {
+          "series": {
+            "$ref": "#/components/schemas/SeriesRef"
+          },
+          "open_hours": {
+            "type": "integer",
+            "title": "Open Hours"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryPoint"
+            },
+            "type": "array",
+            "title": "Points"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/StockoutRun"
+            },
+            "type": "array",
+            "title": "Runs"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/HistorySummary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series",
+          "open_hours",
+          "points",
+          "runs",
+          "summary"
+        ],
+        "title": "SeriesHistory"
+      },
+      "SeriesHistoryBatch": {
+        "properties": {
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesHistory"
+            },
+            "type": "array",
+            "title": "Series"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series"
+        ],
+        "title": "SeriesHistoryBatch"
+      },
+      "SeriesHistoryRequest": {
+        "properties": {
+          "series_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Series Ids"
+          },
+          "days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 400.0,
+                "minimum": 7.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series_ids"
+        ],
+        "title": "SeriesHistoryRequest",
+        "description": "Historia de varias series. Es lo que pide la tabla de reposicion por fila."
+      },
+      "SeriesItem": {
+        "properties": {
+          "series_id": {
+            "type": "string",
+            "title": "Series Id",
+            "examples": [
+              "12_403"
+            ]
+          },
+          "store_id": {
+            "type": "integer",
+            "title": "Store Id"
+          },
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "city_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City Id"
+          },
+          "management_group_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Management Group Id"
+          },
+          "first_category_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Category Id"
+          },
+          "second_category_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Second Category Id"
+          },
+          "third_category_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Third Category Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series_id",
+          "store_id",
+          "product_id",
+          "label"
+        ],
+        "title": "SeriesItem",
+        "description": "Serie con su jerarquia de catalogo, para el selector.\n\nFreshRetailNet-50K **no trae nombres de producto**: la jerarquia son ids\nnumericos. Asi que la \"descripcion\" que muestra y busca el selector es la\njerarquia formateada, no un nombre comercial que el dataset no tiene.\nInventar nombres seria mas lindo y seria falso."
+      },
+      "SeriesPage": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "query": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset",
+          "items"
+        ],
+        "title": "SeriesPage",
+        "description": "Pagina de resultados del selector.\n\nTrae `total` porque el diseno muestra el conteo de resultados sobre el total\ny porque 3066 series no entran en un desplegable."
+      },
+      "SeriesRef": {
+        "properties": {
+          "series_id": {
+            "type": "string",
+            "title": "Series Id",
+            "examples": [
+              "12_403"
+            ]
+          },
+          "store_id": {
+            "type": "integer",
+            "title": "Store Id"
+          },
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "city_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series_id",
+          "store_id",
+          "product_id"
+        ],
+        "title": "SeriesRef",
+        "description": "Referencia a una serie tienda-producto."
+      },
+      "StockoutRun": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "n_days": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "N Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "n_days"
+        ],
+        "title": "StockoutRun",
+        "description": "Racha de dias consecutivos con quiebre. Es el sombreado del grafico.\n\nSe entregan los tramos ya agrupados y no solo la bandera por dia porque el\ngrafico necesita el tramo como unidad: una racha de un dia se dibuja con\nancho minimo, y la mediana del panel real es de 2 dias."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

@@ -41,6 +41,7 @@ la fracción crítica `q* = Cu / (Cu + Co)`. El modelo se entrena con pérdida c
 ```bash
 make app     # dashboard Streamlit, 7 pantallas
 make api     # FastAPI en localhost:8000, /docs para el OpenAPI
+make front   # frontend React en localhost:5173 (necesita la API arriba)
 ```
 
 > **La API no tiene autenticación.** Es deliberado para el alcance del prototipo — bindea en
@@ -52,6 +53,44 @@ make api     # FastAPI en localhost:8000, /docs para el OpenAPI
 > tenant y aislamiento de datos.
 
 > Pendiente: screenshot del dashboard + enlace al despliegue.
+
+## Frontend
+
+React + Vite + TypeScript en `frontend/`, dos pantallas hero y el cromo completo. La dirección
+visual sale de `docs/design_handoff_dfcore/`; los datos, de la API.
+
+```bash
+make front-setup    # npm install
+make front          # dev server en http://127.0.0.1:5173
+make front-test     # vitest: logica pura + render con fetch simulado
+make api-schema     # regenera los tipos TS desde el OpenAPI
+```
+
+**Los tipos no se escriben a mano**: `frontend/src/api/schema.d.ts` se genera del OpenAPI que
+produce FastAPI, así que un rename en `api/schemas.py` rompe la compilación del front en vez de
+romper la demo.
+
+**El front llama a la API por HTTP, no por un proxy de Vite.** Un proxy volvería las llamadas
+same-origin y esconderían un CORS mal configurado hasta el despliegue. Por eso la API publica un
+allowlist explícito de orígenes (`BLINDSIDE_CORS_ORIGINS`, por defecto los puertos 5173 y 4173 de
+Vite) y no un comodín: sin autenticación, `allow_origins=["*"]` significaría que cualquier página
+abierta en el navegador del usuario puede leer los pronósticos de todas las tiendas.
+
+El control central es el **toggle de censura**, y cambia la decisión y no solo el dibujo: hay
+**dos artefactos**, uno entrenado sobre venta observada y otro sobre demanda latente, con la misma
+arquitectura y los mismos hiperparámetros para que la comparación sea pareada. Medido sobre 25
+series con `q* = 0,625`:
+
+| Base | Pronóstico | Cantidad a pedir |
+|---|---|---|
+| Venta observada | 261,402 | 345,694 |
+| Demanda recuperada | 345,476 | **454,027** |
+
+Corregir la censura sube la orden **+31,3 %**. Con un solo artefacto el toggle habría movido el
+gráfico y no la cantidad, que es la mitad del argumento del proyecto.
+
+Todo número que no venga del backend vive en un solo archivo (`frontend/src/domain.ts`), lleva
+sello `sim` en pantalla y dice qué endpoint falta.
 
 ## Resultados
 
@@ -252,6 +291,11 @@ blindside-core/
 ├── tests/             # 150 tests; test_leakage.py son los 8 items del checklist
 ├── app/               # streamlit_app.py, 7 pantallas
 ├── api/               # schemas.py (CONTRATO 4), main.py
+├── frontend/          # React + Vite + TS; schema.d.ts generado del OpenAPI
+│   ├── src/api/       # cliente tipado contra el contrato
+│   ├── src/charts/    # SVG a mano: viewBox fijo y orden de capas
+│   ├── src/screens/   # reposicion (landing), serie individual, salud
+│   └── src/domain.ts  # UNICO lugar con numeros que no vienen del backend
 ├── docs/              # decisiones tecnicas, ROI, plan del proyecto
 ├── artifacts/         # modelos serializados (no commiteados)
 └── reports/           # metrics.md, censoring_ablation.md (generados)

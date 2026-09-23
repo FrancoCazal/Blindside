@@ -1,0 +1,636 @@
+/*
+ * Base. Radio de esquina 0 px sin excepciones y sin sombras: la jerarquía la
+ * llevan las reglas y el peso tipográfico.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-radius: 0;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--papel);
+  color: var(--secundaria);
+  font-family: var(--fuente-cuerpo);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Toda cifra usa tabular-nums. No es estético: evita el salto de ancho al
+   alternar la base de cálculo. */
+.cifra,
+table,
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--fuente-titulo);
+  font-weight: 600;
+  color: var(--tinta);
+  margin: 0;
+}
+
+h1 {
+  font-size: 34px;
+  letter-spacing: -0.018em;
+}
+
+h2 {
+  font-size: 21px;
+  letter-spacing: -0.018em;
+}
+
+h3 {
+  font-size: 16px;
+  letter-spacing: -0.01em;
+  text-transform: uppercase;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+/* Contorno de foco de 2 px en tinta con 2 px de separación. Nunca se suprime:
+   la app se opera con teclado en la demo. */
+:focus-visible {
+  outline: 2px solid var(--tinta);
+  outline-offset: 2px;
+}
+
+.rotulo {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--rotulo);
+}
+
+.nota {
+  font-size: 11.5px;
+  color: var(--apagada);
+  line-height: 1.55;
+}
+
+.apagada {
+  color: var(--apagada);
+}
+
+.tinta {
+  color: var(--tinta);
+}
+
+.acento {
+  color: var(--recuperado);
+}
+
+/* --- Layout de página ---------------------------------------------------- */
+.pagina {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--e6) var(--e5);
+}
+
+.tarjeta {
+  background: var(--papel);
+  border: 1px solid var(--regla-seccion);
+}
+
+/* --- Shell: 119 px de cromo fijo en tres regiones ----------------------- */
+.shell {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--papel);
+  border-bottom: 1px solid var(--regla-seccion);
+}
+
+/* La franja de estado y la navegación son dos contenedores visualmente
+   distintos. El toggle y el selector no son navegación y no pueden compartir
+   contenedor con ella: los separa el cambio de fondo más la regla de 18 %. */
+.franja-estado {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 44px;
+  padding: 0 var(--e5);
+  background: var(--superficie);
+  border-bottom: 1px solid var(--regla-seccion);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 42px;
+  padding: 0 var(--e5);
+  background: var(--papel);
+}
+
+.nav-primario {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  height: 100%;
+}
+
+/* Dos niveles. Un sidebar de siete ítems iguales sería la estructura
+   equivocada: repite el error del Streamlit, donde todo pesa lo mismo. */
+.nav-primario button {
+  font-family: var(--fuente-titulo);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.012em;
+  color: var(--apagada);
+  height: 100%;
+  border-bottom: 2px solid transparent;
+}
+
+.nav-primario button[aria-current="page"] {
+  color: var(--tinta);
+  border-bottom-color: var(--tinta);
+}
+
+.nav-separador {
+  width: 1px;
+  align-self: stretch;
+  margin: 0 8px;
+  background: var(--regla-seccion);
+}
+
+.nav-grupo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-grupo button {
+  font-size: 12.5px;
+  color: var(--apagada);
+}
+
+.nav-grupo button[aria-current="page"] {
+  color: var(--tinta);
+  font-weight: 600;
+}
+
+.franja-contexto {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 26px;
+  min-height: 33px;
+  align-items: center;
+  padding: var(--e2) var(--e5);
+  border-top: 1px solid var(--regla-fina);
+  font-size: 11.5px;
+  color: var(--apagada);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Toggle de censura --------------------------------------------------- */
+.toggle {
+  display: flex;
+  border: 1px solid var(--regla-control);
+}
+
+.toggle button {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--apagada);
+  transition: background var(--t-relleno) var(--curva), color var(--t-relleno) var(--curva);
+}
+
+.toggle button + button {
+  border-left: 1px solid var(--regla-control);
+}
+
+.toggle button[aria-pressed="true"] {
+  background: var(--tinta);
+  color: var(--papel);
+}
+
+/* La ausencia de color es la advertencia: en base observada el acento no
+   aparece en ninguna parte de la pantalla, y por eso el cambio se percibe como
+   una inundación de color. */
+.regla-acento {
+  height: 2px;
+  background: var(--recuperado);
+  opacity: 0;
+  transition: opacity var(--t-acento) var(--curva) 60ms;
+}
+
+.regla-acento[data-activa="true"] {
+  opacity: 1;
+}
+
+/* --- Sellos ------------------------------------------------------------- */
+.sello-muestra {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--papel);
+  background: var(--advertencia);
+  padding: 3px 7px;
+}
+
+.sello-sim {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--advertencia-texto);
+  border: 1px solid var(--advertencia-borde);
+  padding: 1px 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.banda-muestra {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 13px var(--e5);
+  background: var(--advertencia-fondo);
+  border-bottom: 1px solid var(--advertencia-borde);
+}
+
+/* --- Tabla de reposición ------------------------------------------------ */
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.tabla thead tr {
+  border-bottom: 1px solid var(--regla-cabecera);
+}
+
+.tabla th {
+  text-align: right;
+  padding: 6px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--rotulo);
+  white-space: nowrap;
+}
+
+.tabla th.izq,
+.tabla td.izq {
+  text-align: left;
+}
+
+.tabla tbody tr.fila {
+  border-bottom: 1px solid var(--regla-fina);
+  cursor: pointer;
+}
+
+.tabla tbody tr.fila:hover,
+.tabla tbody tr.fila[aria-expanded="true"] {
+  background: var(--superficie);
+}
+
+.tabla td {
+  height: 34px;
+  padding: 0 8px;
+  text-align: right;
+  color: var(--secundaria);
+}
+
+.tabla td.serie {
+  font-weight: 500;
+  color: var(--tinta);
+}
+
+.tabla td.sugerido {
+  font-weight: 600;
+  color: var(--tinta);
+}
+
+.fila-expandida > td {
+  background: var(--superficie);
+  padding: 4px 0 14px;
+  height: auto;
+}
+
+.detalle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 232px;
+  gap: 24px;
+  padding: 0 8px;
+}
+
+.dia {
+  display: grid;
+  grid-template-columns: 58px 1fr 92px 56px;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  font-size: 11.5px;
+}
+
+.barra-dia {
+  height: 9px;
+  background: var(--banda);
+  border-right: 2px solid var(--recuperado);
+  transition: width 500ms var(--curva);
+}
+
+.barra-impacto {
+  display: inline-block;
+  height: 5px;
+  background: var(--recuperado);
+  opacity: 0.75;
+  transition: width 500ms var(--curva);
+}
+
+/* --- Panel lateral ------------------------------------------------------ */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--e4);
+}
+
+.cifra-decision {
+  font-family: var(--fuente-titulo);
+  font-weight: 600;
+  font-size: 42px;
+  letter-spacing: -0.02em;
+  color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.cifra-total {
+  font-size: 38px;
+}
+
+.bloque {
+  border-top: 1px solid var(--regla-fina);
+  padding-top: 14px;
+}
+
+.bloque dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.bloque dt {
+  color: var(--apagada);
+}
+
+.bloque dd {
+  margin: 0;
+  text-align: right;
+  color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+}
+
+.consecuencia {
+  background: var(--superficie);
+  border-left: 2px solid var(--recuperado);
+  padding: 10px 12px;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--secundaria);
+}
+
+.consecuencia[data-basis="observed"] {
+  border-left-color: var(--advertencia);
+}
+
+/* --- Control de ratio de costo ------------------------------------------ */
+.ratios {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border: 1px solid var(--regla-control);
+}
+
+.ratios button {
+  height: 42px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  color: var(--apagada);
+  font-variant-numeric: tabular-nums;
+}
+
+.ratios button + button {
+  border-left: 1px solid var(--regla-control);
+}
+
+.ratios button[aria-pressed="true"] {
+  color: var(--tinta);
+}
+
+.ratios .valor {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ratios .cuantil {
+  font-size: 10px;
+  opacity: 0.72;
+}
+
+/* --- Gráfico ------------------------------------------------------------ */
+.grafico {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.capa-evidencia {
+  opacity: 0;
+  transition: opacity var(--t-evidencia) var(--curva) var(--d-evidencia);
+}
+
+.capa-evidencia[data-visible="true"] {
+  opacity: 1;
+}
+
+.leyenda {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--apagada);
+  padding-top: var(--e2);
+}
+
+.leyenda span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --- Selector (overlay) ------------------------------------------------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 26, 24, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  z-index: 50;
+}
+
+.selector {
+  width: 556px;
+  max-width: calc(100vw - 32px);
+  background: var(--papel);
+  border: 1px solid var(--regla-seccion);
+}
+
+.selector-campo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 44px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--regla-fina);
+}
+
+.selector-campo input {
+  flex: 1;
+  font: inherit;
+  font-size: 15px;
+  color: var(--tinta);
+  background: none;
+  border: none;
+  outline: none;
+  caret-color: var(--recuperado);
+}
+
+.resultado {
+  display: grid;
+  grid-template-columns: 58px 96px 1fr;
+  align-items: center;
+  gap: 10px;
+  height: 36px;
+  padding: 0 16px;
+  width: 100%;
+  text-align: left;
+}
+
+/* El seleccionado lleva fondo superficie, sin acento: no es un hallazgo. */
+.resultado[data-activo="true"] {
+  background: var(--superficie);
+}
+
+.resultado .codigo {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tinta);
+  font-variant-numeric: tabular-nums;
+}
+
+.resultado .descripcion {
+  font-size: 11.5px;
+  color: var(--apagada);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selector-pie {
+  display: flex;
+  gap: 16px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--regla-fina);
+  font-size: 10.5px;
+  color: var(--rotulo);
+}
+
+/* --- Esqueleto de carga ------------------------------------------------- */
+/* Reserva la geometría exacta de la pantalla final: nada se mueve al llegar los
+   datos. Sin brillo animado — el único elemento en movimiento es la regla de
+   progreso de 2 px del borde superior. */
+.hueso {
+  background: var(--guia);
+}
+
+.progreso {
+  height: 2px;
+  background: var(--recuperado);
+  animation: avanza 1.1s var(--curva) infinite;
+  transform-origin: left;
+}
+
+@keyframes avanza {
+  0% {
+    transform: scaleX(0);
+  }
+  60% {
+    transform: scaleX(0.75);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progreso {
+    animation: none;
+    transform: scaleX(0.4);
+  }
+}
+
+/* --- Aviso de ancho mínimo --------------------------------------------- */
+/* Diseñado a 1180 px, soportado hasta 1024. La demo va a proyector: ningún
+   texto baja de 11,5 px y las cifras de decisión no bajan de 19 px. */
+.solo-angosto {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .solo-ancho {
+    display: none;
+  }
+  .solo-angosto {
+    display: block;
+  }
+}
+
+/* Entre 1024 y 1179 el panel lateral pasa arriba de la tabla en una tira de
+   tres bloques, y se ocultan las columnas de clase y de quiebre: la evidencia
+   queda en la fila abierta. */
+@media (max-width: 1179px) {
+  .cuerpo-reposicion {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .panel-reposicion {
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+    align-items: start;
+  }
+  .col-opcional {
+    display: none;
+  }
+}

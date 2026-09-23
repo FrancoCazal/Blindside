@@ -1,0 +1,119 @@
+/*
+ * Tokens de diseño. Una sola regla gobierna la paleta: el mundo observado es
+ * desaturado y **solo lo recuperado lleva acento**. Si algo nuevo necesita
+ * color, la respuesta por defecto es un gris de la escala.
+ *
+ * Cuatro significados no se reasignan nunca, y cada uno lleva redundancia no
+ * cromática además del color:
+ *
+ *   observado   gris  #8A8A84  · 1,4 px, la mitad de grosor que la recuperada
+ *   recuperado  vermellón      · 2,4 px y cuña rellena
+ *   pronóstico  tinta 55 %     · guionado 5/4. Nunca lleva acento: el futuro
+ *                                no es un hallazgo
+ *   advertencia ocre           · triángulo o sello con borde, nunca solo color
+ */
+
+:root {
+  --papel: #faf8f5;
+  --superficie: #f2eee8;
+  --tinta: #1a1a18;
+  --secundaria: #44443e;
+  --apagada: #5f5f59;
+  --rotulo: #6b6b64;
+
+  /* El gris de observado NO cambia entre modos: a 8A8A84 pasa 3:1 contra los
+     dos fondos, y el grosor ya lo distingue de la línea recuperada. */
+  --observado: #8a8a84;
+  --recuperado: #d6451a;
+  --advertencia: #7a5c10;
+  --advertencia-texto: #5c4508;
+
+  /* Reglas. Tres pesos y no uno: la jerarquía la llevan las reglas y el peso
+     tipográfico, porque no hay sombras ni radio de esquina. */
+  --regla-fina: rgba(26, 26, 24, 0.12);
+  --regla-seccion: rgba(26, 26, 24, 0.18);
+  --regla-cabecera: rgba(26, 26, 24, 0.35);
+  --regla-control: rgba(26, 26, 24, 0.22);
+
+  /* Capas del gráfico. El sombreado de quiebre es tinta al 7 % sobre papel. */
+  --quiebre: rgba(26, 26, 24, 0.07);
+  --guia: rgba(26, 26, 24, 0.1);
+  --eje: rgba(26, 26, 24, 0.35);
+  --pronostico: rgba(26, 26, 24, 0.55);
+  --corte: rgba(26, 26, 24, 0.3);
+  --horas-quiebre: rgba(26, 26, 24, 0.42);
+  --cuna: rgba(214, 69, 26, 0.16);
+  --banda: rgba(214, 69, 26, 0.12);
+  --advertencia-fondo: rgba(122, 92, 16, 0.1);
+  --advertencia-borde: rgba(122, 92, 16, 0.35);
+
+  /* Tipografía */
+  --fuente-titulo: "Archivo", system-ui, sans-serif;
+  --fuente-cuerpo: "IBM Plex Sans", system-ui, sans-serif;
+
+  /* Espaciado: múltiplos de 2 en seis pasos. 4 rótulo a cifra, 8 interno de
+     fila, 12 vertical de celda, 18 entre bloques del panel, 22 horizontal de
+     tarjeta, 44 entre pantallas. */
+  --e1: 4px;
+  --e2: 8px;
+  --e3: 12px;
+  --e4: 18px;
+  --e5: 22px;
+  --e6: 44px;
+
+  /* Secuencia del toggle: 740 ms en total. El orden importa — primero responde
+     el control, después aparece la evidencia, al final se mueven los números.
+     Invertirlo hace que los números parezcan la causa. */
+  --curva: cubic-bezier(0.4, 0, 0.2, 1);
+  --t-relleno: 120ms;
+  --t-acento: 180ms;
+  --t-evidencia: 600ms;
+  --d-evidencia: 120ms;
+}
+
+:root[data-theme="dark"] {
+  --papel: #141310;
+  --superficie: #1e1c18;
+  --tinta: #f2eee8;
+  --secundaria: #c9c4bb;
+  --apagada: #9a958c;
+  --rotulo: #86817a;
+
+  --observado: #8a8a84;
+  /* El vermellón sube ~10 puntos de luminosidad para mantener 4,5:1 contra el
+     fondo oscuro. */
+  --recuperado: #f0602e;
+  --advertencia: #d9a93a;
+  --advertencia-texto: #e8c977;
+
+  --regla-fina: rgba(242, 238, 232, 0.14);
+  --regla-seccion: rgba(242, 238, 232, 0.16);
+  --regla-cabecera: rgba(242, 238, 232, 0.3);
+  --regla-control: rgba(242, 238, 232, 0.24);
+
+  /* El sombreado de quiebre no invierte su valor sino su **referencia**: en
+     claro es tinta al 7 % sobre papel, en oscuro es papel al 7 % sobre tinta.
+     En los dos casos es más claro que su fondo por la misma cantidad, así que
+     pesa igual. Un gris translúcido fijo desaparecería en uno de los dos. */
+  --quiebre: rgba(242, 238, 232, 0.07);
+  --guia: rgba(242, 238, 232, 0.1);
+  --eje: rgba(242, 238, 232, 0.35);
+  --pronostico: rgba(242, 238, 232, 0.55);
+  --corte: rgba(242, 238, 232, 0.3);
+  --horas-quiebre: rgba(242, 238, 232, 0.42);
+  --cuna: rgba(240, 96, 46, 0.16);
+  --banda: rgba(240, 96, 46, 0.12);
+  --advertencia-fondo: rgba(217, 169, 58, 0.12);
+  --advertencia-borde: rgba(217, 169, 58, 0.35);
+}
+
+/* Con prefers-reduced-motion todo pasa a 0 ms y los valores se reemplazan en
+   seco, sin conteo. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-relleno: 0ms;
+    --t-acento: 0ms;
+    --t-evidencia: 0ms;
+    --d-evidencia: 0ms;
+  }
+}
