@@ -145,6 +145,42 @@ def test_summarize_reports_dispersion(recovered_panel: pd.DataFrame, small_forec
     assert (mase["best_origin"] <= mase["mean"]).all()
 
 
+def test_backtest_records_the_calibrated_interval(
+    recovered_panel: pd.DataFrame, small_forecast_config
+) -> None:
+    """Sin `pred_lo`/`pred_hi` en el resultado, la cobertura no se puede medir.
+
+    El arnes guardaba solo la prediccion puntual, asi que el parquet del backtest
+    no tenia con que verificar el 90 % nominal y la seccion de calibracion del
+    reporte salia vacia. El proyecto se apoya en cuantiles calibrados: la
+    cobertura **medida** es evidencia central, no un extra.
+    """
+    from blindside.decision.conformal import ConformalForecaster
+    from blindside.evaluate import contracts as C
+    from blindside.evaluate.backtest import run_backtest
+    from blindside.models.baselines import SeasonalNaiveForecaster
+
+    conformal = ConformalForecaster(
+        SeasonalNaiveForecaster(), alpha=0.1, horizon=small_forecast_config.horizon
+    )
+    result = run_backtest(
+        recovered_panel,
+        [conformal, SeasonalNaiveForecaster()],
+        forecast=small_forecast_config,
+    )
+
+    con_intervalo = result[result[C.MODEL] == conformal.name]
+    sin_intervalo = result[result[C.MODEL] == "seasonal_naive"]
+    assert con_intervalo[[C.PRED_LO, C.PRED_HI]].notna().all().all()
+    # Y el modelo puntual no inventa un intervalo: queda nulo, no en cero.
+    assert sin_intervalo[[C.PRED_LO, C.PRED_HI]].isna().all().all()
+    assert (con_intervalo[C.PRED_HI] >= con_intervalo[C.PRED_LO]).all()
+
+    cobertura = M.coverage_report(result, nominal=0.9)
+    assert list(cobertura["model"]) == [conformal.name]
+    assert 0 <= cobertura["coverage_empirical"].iloc[0] <= 1
+
+
 def test_improvement_vs_baseline_computes_the_smart_objective(
     recovered_panel: pd.DataFrame, small_forecast_config
 ) -> None:

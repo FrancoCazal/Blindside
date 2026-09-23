@@ -457,33 +457,13 @@ def _future_from(panel: pd.DataFrame, origin: pd.Timestamp) -> pd.DataFrame:
 def _backtest_with_intervals(
     panel: pd.DataFrame, model: ConformalForecaster, forecast: cfg.ForecastConfig
 ) -> pd.DataFrame:
-    """Backtest que ademas guarda los limites del intervalo.
+    """Backtest de un modelo conformal, con sus limites de intervalo.
 
-    El arnes general devuelve el contrato sin intervalos; aca se agregan llamando
-    a `predict_interval` con el mismo indice de futuro de cada fold.
+    Antes este helper reentrenaba el modelo fold por fold para pedirle
+    `predict_interval`, porque el arnes general devolvia el contrato sin
+    intervalos. Ya no: `run_fold` guarda `pred_lo` y `pred_hi` cuando el modelo
+    los produce, asi que esto es una llamada directa y una pasada de
+    entrenamiento menos. Se conserva el nombre para no tocar los tests que lo
+    usan.
     """
-    from blindside.evaluate.backtest import _future_index
-    from blindside.validation.splits import RollingOriginSplitter
-
-    splitter = RollingOriginSplitter(
-        horizon=forecast.horizon,
-        n_origins=forecast.n_origins,
-        step=forecast.step,
-        min_train_days=forecast.min_train_days,
-    )
-    base = run_backtest(panel, [model], forecast=forecast, splitter=splitter)
-
-    pieces = []
-    for fold in splitter.folds(panel):
-        history = panel[fold.train_mask(panel[S.DATE])]
-        model.fit(history, target=S.DEMAND_LATENT)
-        future = _future_index(panel, fold)
-        interval = model.predict_interval(future)
-        piece = future[[S.SERIES_ID, S.DATE]].copy()
-        piece[C.ORIGIN] = fold.index
-        piece[C.PRED_LO] = interval["pred_lo"].to_numpy()
-        piece[C.PRED_HI] = interval["pred_hi"].to_numpy()
-        pieces.append(piece)
-
-    bounds = pd.concat(pieces, ignore_index=True)
-    return base.merge(bounds, on=[S.SERIES_ID, S.DATE, C.ORIGIN], how="inner")
+    return run_backtest(panel, [model], forecast=forecast)

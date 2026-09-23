@@ -107,6 +107,16 @@ def run_fold(
             for i, q in enumerate(sorted(quantiles)):
                 block[quantile_col(q)] = ordered[:, i]
 
+        # El intervalo calibrado se guarda cuando el modelo lo produce. Sin esto
+        # el parquet del backtest no tiene con que medir la cobertura empirica, y
+        # la promesa de 90 % queda sin verificar: el proyecto se apoya en
+        # cuantiles calibrados, asi que la cobertura **medida** es evidencia
+        # central y no un extra.
+        if hasattr(model, "predict_interval"):
+            interval = model.predict_interval(future)
+            block[C.PRED_LO] = np.asarray(interval["pred_lo"], dtype="float64")
+            block[C.PRED_HI] = np.asarray(interval["pred_hi"], dtype="float64")
+
         block = block.merge(truth_slim, on=[S.SERIES_ID, S.DATE], how="inner")
         block[C.MODEL] = model.name
         block[C.ORIGIN] = fold.index
@@ -455,9 +465,48 @@ def _model_factories() -> dict[str, object]:
 
         return ElasticNetForecaster()
 
+    def conformal_lgbm():
+        """El modelo que la API sirve, medido con el mismo arnes que el resto.
+
+        Es el unico del registro que produce intervalos, asi que es el que llena
+        la seccion de cobertura del reporte. El cuantil critico entra a la lista
+        de cuantiles entrenados igual que en `blindside.models train`, para que lo
+        que se mide sea el artefacto que se sirve y no un primo cercano.
+        """
+        from blindside.decision.conformal import ConformalForecaster
+        from blindside.models.gbdt import LightGBMQuantileForecaster
+
+        quantiles = tuple(sorted({*cfg.FORECAST.quantiles, cfg.ECONOMICS.critical_fraction}))
+        return ConformalForecaster(
+            LightGBMQuantileForecaster(quantiles=quantiles),
+            alpha=1 - cfg.FORECAST.coverage,
+            horizon=cfg.FORECAST.horizon,
+            adaptive=True,
+        )
+
+    def conformal_lgbm_point():
+        """Variante barata: intervalo conformal sobre el LightGBM puntual.
+
+        Entrena un modelo por fold en vez de uno por cuantil, asi que sirve para
+        medir cobertura cuando el presupuesto de computo no alcanza para el
+        cuantilico. El intervalo sale de los residuos de calibracion en los dos
+        casos, no de los cuantiles del modelo de abajo.
+        """
+        from blindside.decision.conformal import ConformalForecaster
+        from blindside.models.gbdt import LightGBMForecaster
+
+        return ConformalForecaster(
+            LightGBMForecaster(),
+            alpha=1 - cfg.FORECAST.coverage,
+            horizon=cfg.FORECAST.horizon,
+            adaptive=True,
+        )
+
     return {
         "lgbm_global": lgbm,
         "lgbm_quantile": lgbm_quantile,
+        "conformal_lgbm": conformal_lgbm,
+        "conformal_lgbm_point": conformal_lgbm_point,
         "xgb_global": xgb,
         "ridge": ridge,
         "lasso": lasso,
