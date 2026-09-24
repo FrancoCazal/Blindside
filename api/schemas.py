@@ -203,6 +203,33 @@ class HistorySummary(BaseModel):
     censored_days_last_28: int
     share_censored_days: float
     max_run_days: int
+    #: Dias de quiebre consecutivos que **terminan en el ultimo dia** de la serie.
+    #: Cero si el ultimo dia estuvo sano. Es distinto de `max_run_days` y es el que
+    #: importa para decidir: una serie con la racha mas larga en el pasado ya se
+    #: recupero, y una que sigue en quiebre hoy no tiene senal reciente de la que
+    #: partir. El pronostico para esa serie es una extrapolacion de historia vieja,
+    #: y la interfaz tiene que poder decirlo en vez de mostrar un numero con la
+    #: misma confianza que el resto.
+    current_run_days: int
+    #: Dias desde la ultima venta registrada mayor que cero. Complementa la racha:
+    #: una serie puede no estar marcada en quiebre y llevar semanas sin vender.
+    days_since_last_sale: int | None = None
+    #: Fraccion de la demanda de los ultimos 28 dias que es **estimada y no
+    #: observada**, o sea `sum(latente - observada) / sum(latente)`.
+    #:
+    #: Es la cifra que dice cuanto del pronostico se apoya en imputaciones. Los
+    #: lags y los rolling que alimentan al modelo se calculan sobre demanda latente,
+    #: asi que con una fraccion alta el modelo esta aprendiendo de su propia
+    #: correccion y no de ventas registradas. El intervalo **no** refleja esa
+    #: incertidumbre extra: la calibracion conformal mide el error del modelo, no el
+    #: de la recuperacion.
+    #:
+    #: Discrimina mucho mejor que contar dias censurados. Medido sobre el panel: la
+    #: mediana de dias censurados en 28 es 12, asi que un umbral de 14 dias marca el
+    #: 35,6 % del catalogo y no distingue nada. Esta fraccion tiene mediana 0,17 y
+    #: p90 0,28, asi que un corte en 0,30 aisla el 6,6 % que de verdad esta sostenido
+    #: por estimacion.
+    estimated_share_last_28: float = 0.0
     mean_oos_hours_when_censored: float | None = None
     #: Uplift de la recuperacion sobre toda la serie.
     uplift_pct: float

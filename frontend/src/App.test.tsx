@@ -9,7 +9,7 @@
  * `schema.d.ts` cambian y esto deja de compilar.
  */
 
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
@@ -45,6 +45,11 @@ function historia(id: string, uplift: number) {
       censored_days_last_28: 10,
       share_censored_days: 0.357,
       max_run_days: 1,
+      current_run_days: 0,
+      days_since_last_sale: 0,
+      // Por debajo de SENAL.parcial (0,30): la serie simulada tiene señal
+      // observada, así que el estado de la celda es el normal.
+      estimated_share_last_28: 0.12,
       mean_oos_hours_when_censored: 6,
       uplift_pct: uplift * 100,
       uplift_pct_clean_days: 0,
@@ -53,6 +58,9 @@ function historia(id: string, uplift: number) {
 }
 
 const IDS = ["12_412", "4_871", "4_233"];
+
+/** Series distintas para la segunda página, para que el test la pueda distinguir. */
+const IDS_PAGINA_2 = ["7_101", "7_202"];
 
 /** Cantidades distintas por base: es lo que el toggle tiene que mover. */
 const CANTIDAD = { observed: 0.96, recovered: 1.35 };
@@ -121,13 +129,18 @@ function servidor(opciones: { muestra?: boolean } = {}) {
     }
 
     if (ruta.startsWith("/series?")) {
-      const limite = Number(new URLSearchParams(ruta.split("?")[1]).get("limit") ?? 100);
+      const q = new URLSearchParams(ruta.split("?")[1]);
+      const limite = Number(q.get("limit") ?? 100);
+      const desplazamiento = Number(q.get("offset") ?? 0);
+      // El simulacro respeta el offset a propósito: sin eso, la paginación
+      // "funcionaría" en el test mostrando siempre la misma página.
+      const ids = desplazamiento > 0 ? IDS_PAGINA_2 : IDS;
       return json({
         total: 3066,
         limit: limite,
-        offset: 0,
+        offset: desplazamiento,
         query: null,
-        items: IDS.slice(0, limite).map((id) => {
+        items: ids.slice(0, limite).map((id) => {
           const [store, product] = id.split("_").map(Number);
           return {
             series_id: id,
@@ -269,13 +282,74 @@ describe("pantalla de reposición", () => {
     expect(filas.length).toBeGreaterThanOrEqual(IDS.length + 1);
     expect(within(tabla).getByText("T12 · P0412")).toBeTruthy();
 
-    // Columnas: Serie · Clase · Quiebre 14 d · Política · Sugerido · Δ · Impacto.
+    // La celda se busca por el encabezado y no por índice fijo: este test ya se
+    // rompió dos veces al agregar una columna, y lo que quiere verificar es el
+    // contenido de «Sugerido», no en qué posición está.
+    const encabezados = within(tabla)
+      .getAllByRole("columnheader")
+      .map((th) => th.textContent?.replace(/[▾▴]/g, "").trim() ?? "");
+    const col = (nombre: string) => {
+      const i = encabezados.indexOf(nombre);
+      expect(i, `no hay columna «${nombre}» en ${encabezados.join(" · ")}`).toBeGreaterThanOrEqual(0);
+      return i;
+    };
+
     const primera = within(tabla).getByText("T12 · P0412").closest("tr")!;
     const celdas = within(primera).getAllByRole("cell");
-    expect(celdas[4].textContent).toBe("0,96");
-    // La política es la media móvil de la historia, así que el delta es negativo
-    // en base observada: pedir lo que ve el ERP es pedir de menos.
-    expect(celdas[5].textContent?.startsWith("\u2212")).toBe(true);
+    expect(celdas[col("Sugerido")].textContent).toBe("0,96");
+    // La política sale de /reorder y el simulacro la pone por encima de la
+    // cantidad sugerida, así que el delta es negativo: pedir lo que ve el ERP es
+    // pedir de menos.
+    expect(celdas[col("Δ")].textContent?.startsWith("\u2212")).toBe(true);
+  });
+
+  it("pagina de verdad: la página siguiente pide otro offset y trae otras series", async () => {
+    montar();
+    await screen.findByText("T12 · P0412");
+
+    const siguiente = screen.getByRole("button", { name: "Página siguiente" });
+    expect(siguiente.hasAttribute("disabled")).toBe(false);
+    // En la primera página no hay a dónde volver.
+    expect(screen.getByRole("button", { name: "Página anterior" }).hasAttribute("disabled")).toBe(
+      true,
+    );
+
+    await act(async () => {
+      siguiente.click();
+    });
+
+    // Las series de la segunda página, y las de la primera ya no están.
+    expect(await screen.findByText("T07 · P0101")).toBeTruthy();
+    expect(screen.queryByText("T12 · P0412")).toBeNull();
+    // Y el offset viaja en la URL, así que la página se puede enlazar.
+    expect(new URLSearchParams(window.location.search).get("offset")).toBe("25");
+  });
+
+  it("ordenar por una columna lo refleja en aria-sort y en la URL", async () => {
+    montar();
+    const tabla = await screen.findByRole("table");
+
+    // Por defecto ordena por impacto, descendente, y no ensucia la URL.
+    const th = (nombre: string) =>
+      within(tabla)
+        .getAllByRole("columnheader")
+        .find((h) => h.textContent?.includes(nombre))!;
+    expect(th("Impacto").getAttribute("aria-sort")).toBe("descending");
+    expect(new URLSearchParams(window.location.search).get("sort")).toBeNull();
+
+    await act(async () => {
+      within(th("Sugerido")).getByRole("button").click();
+    });
+    expect(th("Sugerido").getAttribute("aria-sort")).toBe("descending");
+    expect(th("Impacto").getAttribute("aria-sort")).toBe("none");
+    expect(new URLSearchParams(window.location.search).get("sort")).toBe("sugerido");
+
+    // Repetir la misma columna invierte la dirección.
+    await act(async () => {
+      within(th("Sugerido")).getByRole("button").click();
+    });
+    expect(th("Sugerido").getAttribute("aria-sort")).toBe("ascending");
+    expect(new URLSearchParams(window.location.search).get("dir")).toBe("asc");
   });
 
   it("los botones de ratio muestran el cuantil que producen", async () => {

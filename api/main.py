@@ -842,12 +842,36 @@ def _build_history(panel: pd.DataFrame, series_id: str, days: int | None) -> sc.
 
     clean = ~censored
     last28 = censored[-28:]
+
+    # Racha vigente: dias de quiebre consecutivos que terminan en el ultimo dia.
+    # Se cuenta hacia atras desde el final y se corta en el primer dia sano. Cero
+    # si el ultimo dia estuvo sano, que es el caso normal.
+    vigente = 0
+    for flag in reversed(censored.tolist()):
+        if not flag:
+            break
+        vigente += 1
+
+    # Dias desde la ultima venta registrada positiva. `None` si no hubo ninguna en
+    # la ventana, que es peor que un numero grande y por eso se distingue.
+    con_venta = np.flatnonzero(observed > 0)
+    desde_venta = int(len(observed) - 1 - con_venta[-1]) if con_venta.size else None
+
+    # Que fraccion de la demanda reciente es estimada y no observada. Es la cifra
+    # que dice cuanto del pronostico se apoya en la propia correccion.
+    masa = float(recovered[-28:].sum())
+    estimada = float((recovered[-28:] - observed[-28:]).sum())
+    frac_estimada = estimada / masa if masa > 0 else 0.0
+
     summary = sc.HistorySummary(
         n_days=len(rows),
         n_censored_days=int(censored.sum()),
         censored_days_last_28=int(last28.sum()),
         share_censored_days=float(censored.mean()),
         max_run_days=max((r.n_days for r in runs), default=0),
+        current_run_days=vigente,
+        days_since_last_sale=desde_venta,
+        estimated_share_last_28=max(0.0, min(1.0, frac_estimada)),
         mean_oos_hours_when_censored=(
             float(rows.loc[censored, S.OOS_HOURS_OPEN].mean()) if censored.any() else None
         ),

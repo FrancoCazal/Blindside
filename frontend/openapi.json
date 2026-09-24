@@ -1097,6 +1097,26 @@
             "type": "integer",
             "title": "Max Run Days"
           },
+          "current_run_days": {
+            "type": "integer",
+            "title": "Current Run Days"
+          },
+          "days_since_last_sale": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Since Last Sale"
+          },
+          "estimated_share_last_28": {
+            "type": "number",
+            "title": "Estimated Share Last 28",
+            "default": 0.0
+          },
           "mean_oos_hours_when_censored": {
             "anyOf": [
               {
@@ -1124,6 +1144,7 @@
           "censored_days_last_28",
           "share_censored_days",
           "max_run_days",
+          "current_run_days",
           "uplift_pct",
           "uplift_pct_clean_days"
         ],

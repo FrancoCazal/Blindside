@@ -113,3 +113,106 @@ export function deltaPct(sugerido: number, politica: number): number {
   if (politica <= 0) return 0;
   return 100 * (sugerido / politica - 1);
 }
+
+/**
+ * Umbrales del estado de señal, medidos sobre el panel y no elegidos a ojo.
+ *
+ * La cantidad que discrimina es qué **fracción de la demanda reciente es estimada
+ * y no observada**: los lags y rolling que alimentan al modelo se calculan sobre
+ * demanda latente, así que con una fracción alta el modelo aprende de su propia
+ * corrección. Distribución medida sobre las 3.066 series: mediana 0,17, p90 0,28,
+ * máximo 0,46.
+ *
+ * El corte en 0,30 aísla el 6,6 % del catálogo; el de 0,40, el 0,5 %.
+ *
+ * **Por qué no se cuentan días censurados.** Era el criterio anterior y estaba mal
+ * calibrado: la mediana del panel es 12 días censurados de 28, así que el umbral de
+ * 14 marcaba el 35,6 % del catálogo. Una alerta que dispara para un tercio de la
+ * población no separa nada.
+ */
+export const SENAL = {
+  /** Por encima de esto, buena parte del pronóstico se apoya en la corrección. */
+  parcial: 0.3,
+  /** Por encima de esto, la serie casi no tiene venta observada reciente. */
+  escasa: 0.4,
+  /** Días de quiebre consecutivos al último día que ya ameritan decirlo. */
+  rachaVigente: 3,
+} as const;
+
+export type EstadoSenal = "observada" | "parcial" | "escasa";
+
+export interface Senal {
+  estado: EstadoSenal;
+  /** Fracción de la demanda de los últimos 28 días que es estimada. */
+  fraccionEstimada: number;
+  /** Días de quiebre consecutivos que terminan en el último día. */
+  rachaVigente: number;
+  /** Texto corto para la celda. */
+  rotulo: string;
+  /** Explicación para el `title`, que es donde va el detalle. */
+  detalle: string;
+}
+
+/**
+ * Clasifica cuánto se puede confiar en la señal reciente de una serie.
+ *
+ * No es un juicio sobre el modelo sino sobre sus **insumos**: una serie cuya
+ * demanda reciente es mayormente estimada recibe un pronóstico construido sobre la
+ * propia corrección de censura. El intervalo conformal **no** refleja esa
+ * incertidumbre extra — mide el error del modelo, no el de la recuperación —, así
+ * que la interfaz tiene que decirlo por su cuenta.
+ */
+export function clasificarSenal(resumen: {
+  estimated_share_last_28: number;
+  current_run_days: number;
+  days_since_last_sale?: number | null;
+}): Senal {
+  const frac = resumen.estimated_share_last_28;
+  const racha = resumen.current_run_days;
+  const sinVenta = resumen.days_since_last_sale;
+
+  const estado: EstadoSenal =
+    frac >= SENAL.escasa ? "escasa" : frac >= SENAL.parcial ? "parcial" : "observada";
+
+  const partes = [`${(frac * 100).toFixed(0)} % de la demanda de los últimos 28 días es estimada`];
+  if (racha > 0) {
+    partes.push(`${racha} ${racha === 1 ? "día" : "días"} de quiebre hasta hoy`);
+  }
+  if (sinVenta != null && sinVenta > 0) {
+    partes.push(`${sinVenta} sin venta registrada`);
+  }
+
+  const rotulo =
+    estado === "escasa"
+      ? "casi sin observar"
+      : estado === "parcial"
+        ? "parcial"
+        : racha >= SENAL.rachaVigente
+          ? `en quiebre ${racha} d`
+          : "observada";
+
+  return {
+    estado,
+    fraccionEstimada: frac,
+    rachaVigente: racha,
+    rotulo,
+    detalle: partes.join(" · "),
+  };
+}
+
+/**
+ * Arma un CSV a partir de filas ya calculadas.
+ *
+ * Existe acá y no en la pantalla porque es lógica pura y tiene test. El separador
+ * es la coma y los campos de texto van entre comillas con las comillas internas
+ * duplicadas, que es lo que pide RFC 4180: un `series_id` no las lleva hoy, pero
+ * escribir un generador de CSV que se rompe con una coma es sembrar un bug.
+ */
+export function aCsv(encabezados: string[], filas: (string | number | null)[][]): string {
+  const celda = (v: string | number | null): string => {
+    if (v == null) return "";
+    if (typeof v === "number") return Number.isFinite(v) ? String(v) : "";
+    return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+  };
+  return [encabezados.map(celda).join(","), ...filas.map((f) => f.map(celda).join(","))].join("\r\n");
+}

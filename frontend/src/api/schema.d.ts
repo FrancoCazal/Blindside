@@ -573,6 +573,15 @@ export interface components {
             share_censored_days: number;
             /** Max Run Days */
             max_run_days: number;
+            /** Current Run Days */
+            current_run_days: number;
+            /** Days Since Last Sale */
+            days_since_last_sale?: number | null;
+            /**
+             * Estimated Share Last 28
+             * @default 0
+             */
+            estimated_share_last_28: number;
             /** Mean Oos Hours When Censored */
             mean_oos_hours_when_censored?: number | null;
             /** Uplift Pct */

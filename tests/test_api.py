@@ -570,7 +570,77 @@ def test_cors_origins_can_be_overridden_by_env(monkeypatch) -> None:
     assert main.cors_origins() == ["https://blindside.example", "http://otro:3000"]
 
 
-# --- Plan comercial del horizonte ---------------------------------------
+# --- Estado de la senal reciente de una serie ---------------------------
+
+
+def test_la_racha_vigente_no_es_la_racha_maxima(panel_on_disk, recovered_panel) -> None:
+    """Son dos cosas distintas y la interfaz necesita la vigente.
+
+    Una serie con su racha mas larga en el pasado ya se recupero; una que sigue en
+    quiebre hoy no tiene senal reciente de la que partir. Confundirlas haria que la
+    interfaz marcara series que ya estan bien.
+    """
+    from api import main
+
+    with TestClient(main.app) as client:
+        sids = _series_ids(client, 12)
+        cuerpo = client.post("/series/history", json={"series_ids": sids}).json()
+
+    for serie in cuerpo["series"]:
+        res = serie["summary"]
+        assert res["current_run_days"] <= res["max_run_days"], (
+            f"{serie['series']['series_id']}: la racha vigente "
+            f"({res['current_run_days']}) no puede superar la maxima ({res['max_run_days']})"
+        )
+        # Y la vigente tiene que ser consistente con el ultimo punto de la serie.
+        ultimo_censurado = serie["points"][-1]["is_censored"]
+        if not ultimo_censurado:
+            assert res["current_run_days"] == 0, "el ultimo dia esta sano y la racha no es cero"
+        else:
+            assert res["current_run_days"] >= 1
+
+
+def test_la_fraccion_estimada_esta_en_rango_y_es_cero_sin_censura(
+    panel_on_disk, recovered_panel
+) -> None:
+    """Es una fraccion de masa de demanda, asi que vive en [0, 1].
+
+    Y en una serie sin ningun dia censurado tiene que ser exactamente cero: si no
+    lo fuera, la correccion estaria tocando dias limpios y toda la validacion del
+    proyecto se apoya en que no lo hace.
+    """
+    from api import main
+
+    with TestClient(main.app) as client:
+        sids = _series_ids(client, 20)
+        cuerpo = client.post("/series/history", json={"series_ids": sids}).json()
+
+    for serie in cuerpo["series"]:
+        res = serie["summary"]
+        frac = res["estimated_share_last_28"]
+        assert 0.0 <= frac <= 1.0, f"fraccion fuera de rango: {frac}"
+        if res["n_censored_days"] == 0:
+            assert frac == pytest.approx(0.0), (
+                "una serie sin dias censurados no puede tener demanda estimada"
+            )
+
+
+def test_los_dias_sin_venta_se_cuentan_desde_el_final(panel_on_disk, recovered_panel) -> None:
+    """Cero cuando el ultimo dia vendio; `None` si no hubo ninguna venta positiva."""
+    from api import main
+
+    with TestClient(main.app) as client:
+        sids = _series_ids(client, 12)
+        cuerpo = client.post("/series/history", json={"series_ids": sids}).json()
+
+    for serie in cuerpo["series"]:
+        dias = serie["summary"]["days_since_last_sale"]
+        ultima_venta = serie["points"][-1]["observed"]
+        if ultima_venta > 0:
+            assert dias == 0, f"vendio el ultimo dia y dice {dias} dias sin venta"
+        if dias is not None:
+            assert 0 <= dias < serie["summary"]["n_days"]
+
 # El desajuste que fijan estos tests era invisible: de 73 features, las tres
 # covariables conocidas de antemano llegaban en NaN porque el estado de origen las
 # descarta a proposito y el indice de futuro de la API no las repoblaba. LightGBM

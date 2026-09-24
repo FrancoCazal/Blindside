@@ -29,6 +29,19 @@ export type Pantalla = "reorder" | "series" | "overview" | "compare" | "explain"
 export type Basis = "observed" | "recovered";
 export type Tema = "claro" | "oscuro";
 
+/** Columnas por las que la tabla de reposición se puede ordenar. */
+export type Columna = "impacto" | "sugerido" | "politica" | "delta" | "senal" | "serie";
+export type Direccion = "asc" | "desc";
+
+export const COLUMNAS: Columna[] = [
+  "impacto",
+  "sugerido",
+  "politica",
+  "delta",
+  "senal",
+  "serie",
+];
+
 export interface AppState {
   pantalla: Pantalla;
   basis: Basis;
@@ -38,6 +51,16 @@ export interface AppState {
   tienda: number | null;
   /** Filtro de clase de rotación: baja, media o alta. */
   clase: string | null;
+  /** Columna de ordenamiento de la tabla de reposición. */
+  orden: Columna;
+  /** Dirección del ordenamiento. */
+  direccion: Direccion;
+  /**
+   * Desplazamiento de la página, en filas. Va en la URL porque una tabla
+   * paginada cuya página no se puede enlazar obliga a repetir la navegación para
+   * mostrarle a otra persona lo que se está viendo.
+   */
+  offset: number;
   tema: Tema;
   /**
    * Estado del panel y de los artefactos. Es estado **global**: de acá salen la
@@ -55,6 +78,9 @@ export interface AppState {
   setRatio: (ratio: number) => void;
   setTienda: (tienda: number | null) => void;
   setClase: (clase: string | null) => void;
+  /** Ordena por una columna. Repetir la misma invierte la dirección. */
+  ordenarPor: (columna: Columna) => void;
+  setOffset: (offset: number) => void;
   alternarTema: () => void;
   /** Texto que lee el lector de pantalla cuando cambia un valor. */
   anuncio: string;
@@ -80,6 +106,9 @@ function leerUrl() {
   const ratio = Number(p.get("ratio"));
   const tienda = p.get("store");
   const clase = p.get("class");
+  const orden = p.get("sort");
+  const direccion = p.get("dir");
+  const offset = Number(p.get("offset"));
   return {
     pantalla: (PANTALLAS.includes(pantalla as Pantalla) ? pantalla : "reorder") as Pantalla,
     basis: (basis === "recovered" ? "recovered" : "observed") as Basis,
@@ -87,6 +116,9 @@ function leerUrl() {
     ratio: Number.isFinite(ratio) && ratio > 0 ? ratio : RATIO_POR_DEFECTO,
     tienda: tienda != null && tienda !== "" && Number.isFinite(Number(tienda)) ? Number(tienda) : null,
     clase: clase === "baja" || clase === "media" || clase === "alta" ? clase : null,
+    orden: (COLUMNAS.includes(orden as Columna) ? orden : "impacto") as Columna,
+    direccion: (direccion === "asc" ? "asc" : "desc") as Direccion,
+    offset: Number.isFinite(offset) && offset >= 0 ? Math.floor(offset) : 0,
   };
 }
 
@@ -112,6 +144,10 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
     if (url.ratio !== RATIO_POR_DEFECTO) p.set("ratio", String(url.ratio));
     if (url.tienda != null) p.set("store", String(url.tienda));
     if (url.clase) p.set("class", url.clase);
+    // Solo lo que no es el default, para que la URL siga siendo legible.
+    if (url.orden !== "impacto") p.set("sort", url.orden);
+    if (url.direccion !== "desc") p.set("dir", url.direccion);
+    if (url.offset > 0) p.set("offset", String(url.offset));
     const nueva = `${window.location.pathname}?${p.toString()}`;
     if (nueva !== `${window.location.pathname}${window.location.search}`) {
       window.history.pushState(null, "", nueva);
@@ -141,8 +177,21 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
       setBasis: (basis) => setUrl((u) => ({ ...u, basis })),
       setSerie: (serie) => setUrl((u) => ({ ...u, serie })),
       setRatio: (ratio) => setUrl((u) => ({ ...u, ratio })),
-      setTienda: (tienda) => setUrl((u) => ({ ...u, tienda })),
-      setClase: (clase) => setUrl((u) => ({ ...u, clase })),
+      // Cambiar de filtro vuelve a la primera página: mantener el offset dejaría
+      // la tabla vacía cuando el filtro nuevo tiene menos filas que el
+      // desplazamiento anterior, y eso se lee como un error de la app.
+      setTienda: (tienda) => setUrl((u) => ({ ...u, tienda, offset: 0 })),
+      setClase: (clase) => setUrl((u) => ({ ...u, clase, offset: 0 })),
+      ordenarPor: (columna) =>
+        setUrl((u) => ({
+          ...u,
+          orden: columna,
+          // Repetir la misma columna invierte; cambiar de columna arranca
+          // descendente, que es lo que se espera de una tabla de impacto.
+          direccion: u.orden === columna && u.direccion === "desc" ? "asc" : "desc",
+          offset: 0,
+        })),
+      setOffset: (offset) => setUrl((u) => ({ ...u, offset: Math.max(0, offset) })),
       alternarTema: () => setTema((t) => (t === "claro" ? "oscuro" : "claro")),
       anuncio,
       anunciar: setAnuncio,

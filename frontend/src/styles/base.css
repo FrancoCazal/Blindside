@@ -580,6 +580,97 @@ button {
   text-align: left;
 }
 
+/* Encabezado ordenable. El botón hereda la tipografía del th para que el
+   ordenamiento no cambie el aspecto de la cabecera: se siente como un th que
+   responde, no como un control agregado encima. */
+.tabla th .th-orden {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+}
+
+.tabla th .th-orden:hover {
+  color: var(--texto);
+}
+
+.tabla th[aria-sort="ascending"] .th-orden,
+.tabla th[aria-sort="descending"] .th-orden {
+  color: var(--texto);
+}
+
+.tabla th .flecha {
+  /* Ancho fijo para que activar el orden no corra el encabezado de lugar. */
+  display: inline-block;
+  width: 0.7em;
+  font-size: 0.9em;
+}
+
+/* Estado de la señal reciente. El color no alcanza para distinguir tres niveles
+   con contraste suficiente, así que el nivel más grave lleva además un borde. */
+.senal {
+  font-size: 11px;
+  color: var(--rotulo);
+  white-space: nowrap;
+}
+
+.senal[data-estado="parcial"] {
+  color: var(--advertencia-texto);
+}
+
+.senal[data-estado="escasa"] {
+  color: var(--advertencia-texto);
+  border: 1px solid var(--advertencia-borde);
+  border-radius: 2px;
+  padding: 1px 5px;
+}
+
+.paginador {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px var(--e5) 4px;
+  border-top: 1px solid var(--regla-fina);
+  margin-top: 6px;
+}
+
+.paginador-botones {
+  display: flex;
+  gap: 4px;
+}
+
+.paginador-botones button,
+.boton-sutil {
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--texto);
+  background: var(--papel);
+  border: 1px solid var(--regla);
+  border-radius: 3px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+
+.paginador-botones button:hover:not(:disabled),
+.boton-sutil:hover {
+  background: var(--superficie);
+}
+
+.paginador-botones button:disabled {
+  /* Sin opacidad: bajarla rompe el contraste. Se apaga con el token de rótulo,
+     que sí está medido contra el papel. */
+  color: var(--rotulo);
+  cursor: default;
+}
+
 .tabla tbody tr.fila {
   border-bottom: 1px solid var(--regla-fina);
   cursor: pointer;

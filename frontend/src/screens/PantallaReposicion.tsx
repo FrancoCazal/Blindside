@@ -18,6 +18,10 @@ import {
 } from "../api/client";
 import {
   RATIOS,
+  SENAL,
+  type Senal,
+  aCsv,
+  clasificarSenal,
   cuantilCritico,
   deltaPct,
   diasConQuiebre,
@@ -25,6 +29,7 @@ import {
 } from "../domain";
 import {
   conteo,
+  conteoDeTotal,
   cuantil,
   error as fmtError,
   etiquetaFecha,
@@ -32,12 +37,22 @@ import {
   porcentaje,
   serieCorta,
 } from "../format";
-import { useAsincrono, useConteo, useEstado } from "../state";
+import { type Columna, useAsincrono, useConteo, useEstado } from "../state";
 import { Esqueleto } from "../components/estados";
 import { Sparkline } from "../components/piezas";
 
 /** Series que entran a la vista. Un `/forecast` de 500 series es costoso. */
 const FILAS = 25;
+
+/** Cómo se nombra cada columna en el subtítulo de la tabla. */
+const ROTULO_ORDEN: Record<Columna, string> = {
+  impacto: "impacto esperado",
+  sugerido: "cantidad sugerida",
+  politica: "política actual",
+  delta: "delta contra la política",
+  senal: "fracción de demanda estimada",
+  serie: "identificador de serie",
+};
 
 interface Fila {
   serie: SeriesItem;
@@ -50,6 +65,8 @@ interface Fila {
   faltante: number;
   /** E[(q-D)+]. En perecederos es merma esperada. */
   sobrante: number;
+  /** Cuánto de la señal reciente es observada y cuánto estimada. */
+  senal: Senal;
   quiebre14: number[];
   diasQuiebre28: number;
   rachaMax: number;
@@ -75,6 +92,88 @@ export function PantallaReposicion({
   );
 }
 
+/**
+ * Encabezado que ordena al hacer clic.
+ *
+ * Es un `<button>` dentro del `<th>` y no un `<th onClick>`: un th con manejador
+ * no es alcanzable por teclado ni se anuncia como control. `aria-sort` en el th es
+ * lo que le dice al lector de pantalla por qué columna está ordenada la tabla.
+ */
+function ThOrden({
+  columna,
+  etiqueta,
+  className,
+}: {
+  columna: Columna;
+  etiqueta: string;
+  className?: string;
+}) {
+  const { orden, direccion, ordenarPor } = useEstado();
+  const activa = orden === columna;
+  const aria = activa ? (direccion === "desc" ? "descending" : "ascending") : "none";
+  return (
+    <th scope="col" className={className} aria-sort={aria}>
+      <button
+        type="button"
+        className="th-orden"
+        onClick={() => ordenarPor(columna)}
+        aria-label={`Ordenar por ${etiqueta}`}
+      >
+        {etiqueta}
+        <span aria-hidden="true" className="flecha">
+          {activa ? (direccion === "desc" ? "▾" : "▴") : ""}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+/** Navegación entre páginas. El total viene del envelope de `/series`. */
+function Paginador({ total }: { total: number }) {
+  const { offset, setOffset } = useEstado();
+  const desde = total === 0 ? 0 : offset + 1;
+  const hasta = Math.min(offset + FILAS, total);
+  const haySiguiente = hasta < total;
+  const hayAnterior = offset > 0;
+  const pagina = Math.floor(offset / FILAS) + 1;
+  const paginas = Math.max(1, Math.ceil(total / FILAS));
+
+  return (
+    <div className="paginador">
+      <span className="nota">
+        {conteoDeTotal(desde, total).replace(/^\d+/, `${desde}–${hasta}`)} · página {pagina} de{" "}
+        {paginas}
+      </span>
+      <div className="paginador-botones">
+        <button
+          type="button"
+          onClick={() => setOffset(0)}
+          disabled={!hayAnterior}
+          aria-label="Primera página"
+        >
+          ««
+        </button>
+        <button
+          type="button"
+          onClick={() => setOffset(offset - FILAS)}
+          disabled={!hayAnterior}
+          aria-label="Página anterior"
+        >
+          «
+        </button>
+        <button
+          type="button"
+          onClick={() => setOffset(offset + FILAS)}
+          disabled={!haySiguiente}
+          aria-label="Página siguiente"
+        >
+          »
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Reposicion({
   backtest,
   onElegirSerie,
@@ -82,7 +181,7 @@ function Reposicion({
   backtest: BacktestResponse | null;
   onElegirSerie: (id: string) => void;
 }) {
-  const { basis, ratio, setRatio, tienda, clase } = useEstado();
+  const { basis, ratio, setRatio, tienda, clase, orden: columna, direccion, offset } = useEstado();
   const recoverCensoring = basis === "recovered";
   const [abierta, setAbierta] = useState(0);
 
@@ -94,6 +193,7 @@ function Reposicion({
   }>(async () => {
     const pagina = await api.series({
       limit: FILAS,
+      offset,
       storeId: tienda ?? undefined,
       rotationBand: clase ?? undefined,
     });
@@ -157,6 +257,7 @@ function Reposicion({
         impacto: impactoDeLinea(linea, ratio),
         faltante: linea?.expected_shortfall ?? 0,
         sobrante: linea?.expected_overage ?? 0,
+        senal: clasificarSenal(historia.summary),
         quiebre14: diasConQuiebre(historia.points, 14),
         diasQuiebre28: historia.summary.censored_days_last_28,
         rachaMax: historia.summary.max_run_days,
@@ -164,9 +265,36 @@ function Reposicion({
       };
     });
 
-    filas.sort((a, b) => b.impacto - a.impacto);
+    // El orden se aplica sobre la página, no sobre las 3.066 series: `/series`
+    // no ordena por impacto porque el impacto no existe hasta pedir `/reorder`.
+    // Es una limitación real y está dicha al pie de la tabla.
+    const signo = direccion === "desc" ? -1 : 1;
+    const clave = (f: Fila): number | string => {
+      switch (columna) {
+        case "serie":
+          return f.serie.series_id;
+        case "politica":
+          return f.politica;
+        case "sugerido":
+          return f.sugerido;
+        case "delta":
+          return f.delta;
+        case "senal":
+          return f.senal.fraccionEstimada;
+        default:
+          return f.impacto;
+      }
+    };
+    filas.sort((a, b) => {
+      const ka = clave(a);
+      const kb = clave(b);
+      if (typeof ka === "string" || typeof kb === "string") {
+        return signo * String(ka).localeCompare(String(kb), "es");
+      }
+      return signo * (ka - kb);
+    });
     return { filas, total: pagina.total, orden, motivo };
-  }, [basis, ratio, tienda, clase]);
+  }, [basis, ratio, tienda, clase, columna, direccion, offset]);
 
   if (datos.cargando && !datos.datos) return <Esqueleto filas={FILAS} />;
   if (datos.error) throw datos.error;
@@ -181,10 +309,65 @@ function Reposicion({
   const sobranteTotal = filas.reduce((a, f) => a + f.sobrante, 0);
   const maxImpacto = filas.reduce((a, f) => Math.max(a, f.impacto), 0);
   const maxHoras = Math.max(1, ...filas.flatMap((f) => f.quiebre14));
-  const enAlerta = filas.filter((f) => f.diasQuiebre28 >= 14).length;
+  // La alerta es "el pronóstico de esta serie se apoya en la corrección de
+  // censura", no "esta serie tuvo quiebres". El criterio anterior contaba días
+  // censurados con umbral 14 de 28, y la mediana del panel es 12: marcaba el
+  // 35,6 % del catálogo, o sea que no separaba nada. Ver SENAL en domain.ts.
+  const enAlerta = filas.filter((f) => f.senal.estado !== "observada").length;
   const mase = (backtest?.rows ?? [])
     .filter((r) => r.metric === "mase")
     .sort((a, b) => a.mean - b.mean)[0];
+
+  /**
+   * Descarga la página visible como CSV.
+   *
+   * Exporta **lo que se está viendo** y no las 3.066 series, y eso es deliberado:
+   * las columnas económicas salen de `/reorder`, que se pide por lote de series, así
+   * que un export completo serían 123 llamadas y una espera sin indicación de
+   * progreso. El nombre del archivo lleva la base y los filtros para que dos
+   * descargas distintas no se pisen.
+   */
+  const exportar = () => {
+    const csv = aCsv(
+      [
+        "serie",
+        "tienda",
+        "producto",
+        "clase",
+        "politica",
+        "sugerido",
+        "delta_pct",
+        "impacto",
+        "faltante_esperado",
+        "sobrante_esperado",
+        "fraccion_estimada_28d",
+        "racha_quiebre_vigente_d",
+        "dias_quiebre_28d",
+      ],
+      filas.map((f) => [
+        f.serie.series_id,
+        f.serie.store_id,
+        f.serie.product_id,
+        f.serie.rotation_band ?? "",
+        f.politica,
+        f.sugerido,
+        f.delta,
+        f.impacto,
+        f.faltante,
+        f.sobrante,
+        f.senal.fraccionEstimada,
+        f.senal.rachaVigente,
+        f.diasQuiebre28,
+      ]),
+    );
+    const partes = ["reposicion", basis, tienda != null ? `t${tienda}` : null, clase].filter(Boolean);
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const enlace = document.createElement("a");
+    enlace.href = url;
+    enlace.download = `${partes.join("-")}.csv`;
+    enlace.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (filas.length === 0) {
     return (
@@ -224,14 +407,16 @@ function Reposicion({
           <div className="kpi-pie">media móvil 21 d: {magnitud(totalPolitica)}</div>
         </div>
         <div className="kpi">
-          <div className="rotulo">Series en alerta</div>
+          <div className="rotulo">Señal recuperada</div>
           <div
             className="kpi-valor"
             style={enAlerta > 0 ? { color: "var(--advertencia-texto)" } : undefined}
           >
-            {conteo(enAlerta)}
+            {conteoDeTotal(enAlerta, filas.length)}
           </div>
-          <div className="kpi-pie">con quiebre en la mitad de los últimos 28 días</div>
+          <div className="kpi-pie">
+            más del {Math.round(SENAL.parcial * 100)} % de su demanda reciente es estimada
+          </div>
         </div>
         <div className="kpi">
           <div className="rotulo">MASE del mejor modelo</div>
@@ -256,10 +441,14 @@ function Reposicion({
               }}
             >
               <h2>Qué pedir hoy</h2>
-              <span className="nota">
-                {conteo(filas.length)} de {conteo(total)} series · ordenadas por
-                impacto esperado
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <span className="nota">
+                  {conteoDeTotal(filas.length, total)} · ordenadas por {ROTULO_ORDEN[columna]}
+                </span>
+                <button type="button" className="boton-sutil" onClick={exportar}>
+                  Exportar CSV
+                </button>
+              </div>
             </div>
 
             <table className="tabla">
@@ -284,21 +473,18 @@ function Reposicion({
               </caption>
               <thead>
                 <tr>
-                  <th scope="col" className="izq">
-                    Serie
-                  </th>
+                  <ThOrden columna="serie" etiqueta="Serie" className="izq" />
                   <th scope="col" className="col-opcional">
                     Clase
                   </th>
                   <th scope="col" className="col-opcional">
                     Quiebre 14 d
                   </th>
-                  <th scope="col">Política</th>
-                  <th scope="col">Sugerido</th>
-                  <th scope="col">Δ</th>
-                  <th scope="col">
-                    Impacto
-                  </th>
+                  <ThOrden columna="senal" etiqueta="Señal" className="col-opcional" />
+                  <ThOrden columna="politica" etiqueta="Política" />
+                  <ThOrden columna="sugerido" etiqueta="Sugerido" />
+                  <ThOrden columna="delta" etiqueta="Δ" />
+                  <ThOrden columna="impacto" etiqueta="Impacto" />
                 </tr>
               </thead>
               <tbody>
@@ -315,6 +501,8 @@ function Reposicion({
                 ))}
               </tbody>
             </table>
+
+            <Paginador total={total} />
           </div>
 
           <div className="panel panel-reposicion">
@@ -464,6 +652,16 @@ function FilaSerie({
             <span className="apagada">{conteo(fila.diasQuiebre28)} d</span>
           </div>
         </td>
+        {/* Cuánto de la señal reciente es observada. No es un juicio sobre el
+            modelo sino sobre sus insumos: con una fracción alta el pronóstico se
+            apoya en la propia corrección de censura, y el intervalo conformal no
+            refleja esa incertidumbre porque mide el error del modelo y no el de la
+            recuperación. */}
+        <td className="col-opcional">
+          <span className="senal" data-estado={fila.senal.estado} title={fila.senal.detalle}>
+            {fila.senal.rotulo}
+          </span>
+        </td>
         <td className="apagada">{magnitud(fila.politica)}</td>
         <td className="sugerido">{magnitud(fila.sugerido)}</td>
         <td style={{ fontWeight: fila.delta >= 20 ? 600 : 400 }}>
@@ -492,7 +690,7 @@ function FilaSerie({
 
       {abierta && (
         <tr className="fila-expandida">
-          <td colSpan={7} id={idDetalle}>
+          <td colSpan={8} id={idDetalle}>
             <div className="detalle">
               <div>
                 <div className="rotulo" style={{ marginBottom: 6 }}>

@@ -9,6 +9,9 @@ import { describe, expect, it } from "vitest";
 import { areaHoras, escalaX, escalaY, maximoEje, rangosRecuperados, tramosDibujables } from "./chart";
 import {
   RATIOS,
+  SENAL,
+  aCsv,
+  clasificarSenal,
   cuantilCritico,
   deltaPct,
   esperanzaFaltante,
@@ -92,6 +95,67 @@ describe("ahorro esperado de una línea de reorder", () => {
     const grande = impactoDeLinea(linea(2.0, 5.0, -10), 0.6);
     const chica = impactoDeLinea(linea(0.02, 0.05, -10), 0.6);
     expect(grande).toBeGreaterThan(chica);
+  });
+});
+
+describe("estado de la señal reciente", () => {
+  const resumen = (frac: number, racha = 0, sinVenta: number | null = 0) => ({
+    estimated_share_last_28: frac,
+    current_run_days: racha,
+    days_since_last_sale: sinVenta,
+  });
+
+  it("clasifica en los tres estados según los umbrales medidos", () => {
+    expect(clasificarSenal(resumen(0.1)).estado).toBe("observada");
+    expect(clasificarSenal(resumen(0.29)).estado).toBe("observada");
+    expect(clasificarSenal(resumen(SENAL.parcial)).estado).toBe("parcial");
+    expect(clasificarSenal(resumen(0.35)).estado).toBe("parcial");
+    expect(clasificarSenal(resumen(SENAL.escasa)).estado).toBe("escasa");
+  });
+
+  it("no usa el conteo de días censurados, que era el criterio mal calibrado", () => {
+    // La mediana del panel es 12 de 28 días censurados, así que un umbral de 14
+    // marcaba el 35,6 % del catálogo. Una serie con muchos días censurados pero
+    // poca masa estimada tiene señal observada, y esto lo fija.
+    const muchosDiasPocaMasa = clasificarSenal(resumen(0.05, 5));
+    expect(muchosDiasPocaMasa.estado).toBe("observada");
+  });
+
+  it("menciona la racha vigente en el rótulo cuando es larga", () => {
+    const enQuiebre = clasificarSenal(resumen(0.1, 4));
+    expect(enQuiebre.rotulo).toContain("4");
+    // Pero si la racha es corta no ensucia el rótulo.
+    expect(clasificarSenal(resumen(0.1, 1)).rotulo).toBe("observada");
+  });
+
+  it("el detalle siempre dice la fracción, que es la cifra del criterio", () => {
+    expect(clasificarSenal(resumen(0.42, 3, 2)).detalle).toContain("42 %");
+    expect(clasificarSenal(resumen(0.42, 3, 2)).detalle).toContain("3 días de quiebre");
+    expect(clasificarSenal(resumen(0.42, 3, 2)).detalle).toContain("2 sin venta");
+  });
+});
+
+describe("armado de CSV", () => {
+  it("escribe encabezados y filas separados por CRLF", () => {
+    const csv = aCsv(["a", "b"], [[1, 2], [3, 4]]);
+    expect(csv).toBe("a,b\r\n1,2\r\n3,4");
+  });
+
+  it("entrecomilla lo que lleva coma, comilla o salto de línea", () => {
+    expect(aCsv(["x"], [["con,coma"]])).toBe('x\r\n"con,coma"');
+    expect(aCsv(["x"], [['con"comilla']])).toBe('x\r\n"con""comilla"');
+    expect(aCsv(["x"], [["con\nsalto"]])).toBe('x\r\n"con\nsalto"');
+  });
+
+  it("deja vacío lo nulo y lo no finito en vez de escribir NaN", () => {
+    // Un "NaN" en una celda de Excel es peor que un vacío: se lee como dato.
+    expect(aCsv(["x", "y", "z"], [[null, NaN, Infinity]])).toBe("x,y,z\r\n,,");
+  });
+
+  it("no toca los números, que van sin formato local", () => {
+    // El CSV lo consume una planilla, no una persona: un separador decimal de
+    // coma acá rompería el archivo que la propia coma separa.
+    expect(aCsv(["x"], [[1.5]])).toBe("x\r\n1.5");
   });
 });
 
