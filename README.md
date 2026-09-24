@@ -167,24 +167,53 @@ Dos cosas que aparecieron **al escribirlos**, y que quedaron dentro:
 
 Medidos sobre **3066 series** tienda-producto (38 tiendas, 97 días), backtesting de origen
 móvil con **8 orígenes**, horizonte de **7 días**, target de demanda latente recuperada.
-Reporte completo generado en `reports/metrics.md` por `make models`.
+1.545.264 predicciones evaluadas. Reporte completo en `reports/metrics.md`, generado por
+`make models`.
 
 | Modelo | MASE | Desvío entre orígenes | Peor origen | Δ vs naive estacional |
 |---|---|---|---|---|
-| **LightGBM global** | **0,8311** | 0,0462 | 0,8849 | **+24,5 %** |
+| **CQR sobre LightGBM cuantílico** · el artefacto servido | **0,8217** | 0,0454 | 0,8790 | **+25,3 %** |
+| Conformal de residuos sobre el mismo base | 0,8217 | 0,0454 | 0,8790 | +25,3 % |
+| LightGBM global (puntual) | 0,8222 | 0,0457 | 0,8791 | +25,3 % |
 | Croston SBA | 0,8952 | 0,0683 | 0,9631 | +18,6 % |
+| Ridge | 0,9018 | 0,0626 | 1,0088 | +18,0 % |
 | Media móvil 21 d | 0,9048 | 0,0654 | 0,9779 | +17,8 % |
 | Media móvil estacional | 0,9460 | 0,0655 | 1,0189 | +14,0 % |
 | Naive estacional | 1,1002 | 0,0636 | 1,1579 | — |
 | Naive | 1,1606 | 0,1099 | 1,3105 | −5,5 % |
 
 El objetivo SMART era **reducir MASE al menos 20 %** frente al naive estacional. Se cumple con
-24,5 %, y el **peor** de los ocho orígenes sigue por debajo de 0,89 — o sea que no depende de
+25,3 %, y el **peor** de los ocho orígenes sigue por debajo de 0,88 — o sea que no depende de
 promediar un origen bueno con uno malo.
+
+Las dos primeras filas dan el mismo MASE hasta el cuarto decimal, y eso es correcto: son el
+mismo modelo base con dos envoltorios conformales distintos, y **ninguno de los dos toca la
+predicción central**. Lo que cambia entre ellas es el intervalo, y ahí la diferencia es grande.
 
 Todas las métricas van **con su dispersión entre orígenes**, nunca como número único: un
 promedio bueno puede esconder un origen catastrófico, y el origen catastrófico es el que pasa en
 producción.
+
+### Cobertura del intervalo, que es la segunda métrica de éxito
+
+| Modelo | Nominal | Empírica | Brecha | Ancho medio | Desvío del ancho |
+|---|---|---|---|---|---|
+| **CQR** | 90 % | **88,0 %** | **−2,0 pts** | **1,805** | 0,153 |
+| Conformal de residuos, adaptativo | 90 % | 98,7 % | +8,7 pts | 3,834 | 0,526 |
+
+El conformal de residuos absolutos cubre casi nueve puntos **por encima** de lo que promete, y
+eso no es prudencia: lo paga con un intervalo del doble de ancho. El caso degenerado de esa
+lógica es `[0, ∞)`, que cubre el 100 % y no informa nada.
+
+CQR queda dos puntos por debajo del nominal con un intervalo **53 % más angosto**. Dos puntos de
+sub-cobertura son una desviación real y conviene decirla: la garantía del split-conformal supone
+intercambiabilidad, y en una serie temporal con partición temporal eso se cumple de forma
+aproximada. La alternativa era seguir cubriendo 98,7 % con una banda inútil.
+
+**Por qué el otro no se podía arreglar ajustando un parámetro.** Su score de conformidad es un
+residuo **absoluto**, así que el cuantil sale siempre positivo y la mecánica solo sabe ensanchar.
+El score de CQR es `max(q_lo − y, y − q_hi)`, que es negativo cuando el punto cayó dentro del
+intervalo, así que la corrección puede **apretar**. Detalle y medición en `docs/decisiones.md` D21.
 
 ### Dos aclaraciones sobre cómo leer la tabla
 
@@ -193,8 +222,8 @@ sobre el train de cada fold, y el numerador es *fuera de muestra*. Que el segund
 lo normal y es la definición estándar.
 
 **Los baselines de media móvil son duros.** Croston y la media móvil de 21 días le ganan al
-naive estacional por 18 %, así que el 24,5 % del modelo global no se mide contra un rival
-elegido para perder. Un proyecto que solo compara contra el naive simple se regala 6 puntos.
+naive estacional por 18 %, así que el 25,3 % del modelo no se mide contra un rival elegido para
+perder. Un proyecto que solo compara contra el naive simple se regala 7 puntos.
 
 ### Recuperación de demanda censurada
 
@@ -215,7 +244,27 @@ que el supuesto se verifica en cada corrida.
 
 Ver `reports/censoring_ablation.md` para la comparación pareada del mismo modelo entrenado sobre
 venta observada contra demanda latente, y `docs/decisiones.md` D10 para por qué tiene que ser
-pareada.
+pareada. El resultado, medido sobre 99.721 días limpios:
+
+| Entrenado sobre | Sesgo re-censurado | MASE días limpios |
+|---|---|---|
+| Venta observada | **−18,19 %** | 0,8117 |
+| Demanda latente | **−6,61 %** | 0,8958 |
+
+**11,57 puntos porcentuales de reducción de sesgo**, y es el número que el proyecto defiende
+porque las dos ramas son el mismo modelo con el mismo denominador de MASE.
+
+Dos cosas que hay que leer con cuidado en esa tabla, y las dos están explicadas en el reporte:
+
+- **El MASE empeora en la rama corregida** (0,8958 contra 0,8117). No es una contradicción: las
+  dos se evalúan contra la venta observada de los días limpios, y un modelo que aprendió a
+  predecir demanda **latente** sobrepredice ahí por construcción. Es el precio de corregir el
+  sesgo, y el sesgo es lo que importa para decidir cuánto pedir.
+- **El sesgo sin corregir de este panel es 2,2 veces el que publica CADRE** (−18,19 % contra
+  −8,1 %), así que las dos cifras no son directamente comparables y el reporte ya no finge que lo
+  sean. La causa más probable es el submuestreo: 3066 series elegidas por tienda completa no son
+  las 50.000 del dataset. Lo que sí se compara es la **reducción**: 11,57 puntos acá contra 6,8
+  de CADRE.
 
 ## Datos
 
@@ -523,12 +572,16 @@ Pendiente del alcance del plan: SARIMA y Prophet (M6), GRU/LSTM y transformer te
 clustering y detección de anomalías (M4), drift (M9), reconciliación MinT (8.3), Optuna, y el
 generador sintético del caso Focal Point (frente K).
 
-**Una limitación que conviene leer antes que los resultados:** el intervalo conformal está
-sobre-inflado. Cubre 99,5 % cuando promete 90 %, con un ancho de 9,5 veces el MAE, porque el
-cuantil de residuos absolutos se agrupa sobre un panel donde el p99 es doce veces la mediana. La
-orden **no** depende de eso — sale del booster entrenado en `q*` — pero la banda que se dibuja en
-la interfaz sí, y la cobertura empírica es una de las tres métricas de éxito declaradas. La
-corrección es CQR y está pendiente.
+**La limitación que queda del lado del intervalo**, ahora que CQR está medido: cubre 88,0 %
+cuando promete 90 %, o sea dos puntos **por debajo**. La garantía del split-conformal supone
+intercambiabilidad y una partición temporal la cumple de forma aproximada, así que la brecha es
+esperable y está declarada. La orden no depende de eso — sale del booster entrenado en `q*` —
+pero la banda que se dibuja en la interfaz sí.
+
+La otra limitación, más de fondo: la cobertura garantizada es **marginal, no condicional**. El
+88 % global puede esconder subgrupos peores, y el desglose por horizonte del notebook `05` muestra
+que los pasos intermedios bajan a 0,85. Desagregar es lo que la hace visible; corregirla exigiría
+conformal condicional o por grupo, y eso está en el Roadmap.
 
 Fuera del alcance de la entrega, en `docs/decisiones.md` sección Roadmap.
 

@@ -526,6 +526,68 @@ depende de ella. La corrección de la banda es CQR y está en el Roadmap.
 ---
 
 
+## D21 · CQR en vez del conformal de residuos absolutos
+
+**Decisión.** El artefacto servido es **CQR** — Conformalized Quantile Regression, Romano,
+Patterson y Candès, NeurIPS 2019 — envolviendo el LightGBM cuantílico. El conformal de residuos
+absolutos queda en el registro del backtest como contrafactual, no como modelo servido.
+
+**El problema, medido.** La cobertura empírica del intervalo es una de las **tres métricas de
+éxito** que el proyecto declara en su formulario de aprobación, y era la única que no se cumplía.
+Sobre las 3066 series con 8 orígenes:
+
+| Modelo | Nominal | Empírica | Brecha | Ancho medio | Desvío del ancho |
+|---|---|---|---|---|---|
+| Conformal de residuos, adaptativo | 90 % | 98,7 % | +8,7 pts | 3,834 | 0,526 |
+| **CQR** | 90 % | **88,0 %** | **−2,0 pts** | **1,805** | 0,153 |
+
+Cubrir 98,7 % cuando se promete 90 % no es prudencia. Se paga con un intervalo del **doble** de
+ancho, y un intervalo ancho no sirve para decidir: el caso degenerado de esa lógica es
+`[0, ∞)`, que cubre el 100 % y no informa nada.
+
+**El MASE es idéntico en los dos: 0,8217.** CQR no toca la predicción central, solo el intervalo.
+Es lo que hace la comparación limpia — no hay que descontar ninguna mejora de exactitud.
+
+**Por qué el otro no se podía arreglar ajustando un parámetro.** Y esta es la parte que importa,
+porque el primer instinto es subir o bajar un cuantil. Su score de conformidad es un residuo
+**absoluto**, así que el cuantil sale siempre positivo y la mecánica **solo sabe ensanchar**. No
+tiene forma de expresar «esto está demasiado ancho». El score de CQR es
+
+    E_i = max(q_lo(x_i) − y_i,  y_i − q_hi(x_i))
+
+que es **negativo cuando el punto cayó dentro** del intervalo, así que la corrección puede
+apretar. Esa es la diferencia estructural, no un ajuste de calibración.
+
+**De dónde venía la inflación.** Del notebook `01`: el p99 de la demanda diaria es doce veces la
+mediana. Un cuantil de residuos agrupado sobre ese panel queda dominado por la cola y le pega una
+semiamplitud enorme a la serie típica. Medido sobre un fold, las semiamplitudes del conformal de
+residuos van de 6,44 a 7,05 mientras las correcciones de CQR van de +0,11 a +0,59: **dos órdenes
+de magnitud**. La variante `adaptive` intentaba lo mismo escalando por una dispersión *por serie*,
+que es una aproximación mucho más gruesa — no ve el día, ni la promoción, ni el quiebre. Los
+cuantiles del base sí.
+
+**Lo que CQR no hace.** No toca la cantidad a pedir. Esa sale del booster entrenado en `q*`, que
+es lo que arregla D20, y `predict_quantile` delega en el base sin tocar. Mezclar el intervalo con
+la decisión fue el defecto anterior y hay un test que lo fija.
+
+**Los dos puntos de sub-cobertura, declarados.** 88,0 % contra un nominal de 90 % es una
+desviación real. La garantía del split-conformal supone intercambiabilidad, y una partición
+temporal la cumple de forma aproximada: el tramo de calibración son los últimos días del train y
+el test es el futuro inmediato, que no es lo mismo que dos muestras intercambiables. La
+alternativa era seguir cubriendo 98,7 % con una banda inútil.
+
+**Y una limitación más de fondo, que no es de esta decisión sino del método.** La garantía es
+**marginal, no condicional**: el 88 % global puede esconder subgrupos peores. El desglose por
+horizonte del notebook `05` muestra pasos intermedios en 0,85. Corregirlo exige conformal
+condicional o por grupo, y está en el Roadmap.
+
+**Un bug que apareció en la primera corrida y quedó con test.** `1 - cfg.FORECAST.coverage` da
+`0.09999999999999998`, así que `alpha / 2` sale `0.04999999999999999` y el LightGBM cuantílico
+rechaza el nivel porque entrenó en 0,05 exacto. El nivel es una cantidad **nominal** que viene de
+la configuración, no el resultado de un cálculo, así que se canoniza con `round`.
+
+---
+
 ## Roadmap
 
 Fuera del alcance de la entrega, en orden de valor:

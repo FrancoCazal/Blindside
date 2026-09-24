@@ -110,19 +110,58 @@ def write_report(table: pd.DataFrame, *, out_path: Path, model_name: str, n_seri
         f"{CADRE_REFERENCE['wape_corrected']:.4f} | "
         f"{observed['wape_clean_days']:.4f} | {latent['wape_clean_days']:.4f} |",
         "",
-        "El sesgo **sin corregir** reproduce de cerca el valor publicado, lo que respalda",
-        "que la medicion esta bien planteada. La correccion propia es mas conservadora que",
-        "la de CADRE, y eso es una consecuencia declarada de los dos limites del",
-        "recuperador: tope de inflacion en x3 y nada de correccion cuando queda menos del",
-        "15 % de la masa de demanda diaria disponible. Se prefiere un sesgo residual",
-        "conocido a una varianza inventada a partir de una sola venta en un dia casi",
-        "entero en quiebre. Ver docs/decisiones.md D11.",
+        _lectura_contra_cadre(observed, latent),
+        "",
+        "La correccion propia es mas conservadora que la de CADRE, y eso es una",
+        "consecuencia declarada de los dos limites del recuperador: tope de inflacion en",
+        "x3 y nada de correccion cuando queda menos del 15 % de la masa de demanda diaria",
+        "disponible. Se prefiere un sesgo residual conocido a una varianza inventada a",
+        "partir de una sola venta en un dia casi entero en quiebre. Ver docs/decisiones.md",
+        "D11.",
         "",
     ]
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text("\n".join(lines), encoding="utf-8")
     log.info("reporte escrito en %s", out_path)
     return out_path
+
+
+def _lectura_contra_cadre(observed: dict, latent: dict) -> str:
+    """Compara el sesgo propio contra el publicado, y **lo dice como salga**.
+
+    Esta funcion existe porque antes la frase era fija: afirmaba que el sesgo sin
+    corregir «reproduce de cerca el valor publicado». Al regenerar el reporte
+    despues del arreglo de `days_since_start`, el sesgo paso a -18,19 % contra el
+    -8,1 % de CADRE, y la frase quedo contradiciendo la tabla que tenia al lado.
+    Un reporte generado que afirma algo que sus propios numeros niegan es peor que
+    uno que no afirma nada, asi que la lectura se deriva de la medicion.
+    """
+    propio = 100 * observed["recensored_bias"]
+    publicado = 100 * CADRE_REFERENCE["bias_censored"]
+    razon = abs(propio / publicado) if publicado else float("inf")
+    reduccion = 100 * (latent["recensored_bias"] - observed["recensored_bias"])
+    reduccion_cadre = 100 * (
+        CADRE_REFERENCE["bias_corrected"] - CADRE_REFERENCE["bias_censored"]
+    )
+
+    if razon <= 1.5:
+        veredicto = (
+            f"El sesgo **sin corregir** ({propio:+.2f} %) queda del orden del valor "
+            f"publicado ({publicado:+.1f} %), lo que respalda que la medicion esta bien "
+            "planteada."
+        )
+    else:
+        veredicto = (
+            f"El sesgo **sin corregir** de este panel ({propio:+.2f} %) es {razon:.1f} "
+            f"veces el publicado por CADRE ({publicado:+.1f} %), asi que las dos cifras "
+            "**no** son directamente comparables y conviene no presentarlas como si lo "
+            "fueran. La diferencia mas probable es el submuestreo: 3066 series elegidas "
+            "por tienda completa no son las 50.000 del dataset, y la tasa de quiebre de "
+            "este subconjunto define cuanto sesgo hay para corregir. Lo que si es "
+            "comparable es la **reduccion**: "
+            f"{reduccion:+.2f} puntos aca contra {reduccion_cadre:+.1f} de CADRE."
+        )
+    return veredicto
 
 
 def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:

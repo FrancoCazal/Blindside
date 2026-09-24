@@ -570,6 +570,64 @@ def test_cors_origins_can_be_overridden_by_env(monkeypatch) -> None:
     assert main.cors_origins() == ["https://blindside.example", "http://otro:3000"]
 
 
+# --- Cobertura por horizonte, que no puede promediar modelos --------------
+
+
+def test_la_cobertura_no_promedia_dos_modelos(panel_on_disk, recovered_panel, monkeypatch) -> None:
+    """Regresion: con dos modelos con intervalo en el backtest, la cobertura se mezclaba.
+
+    El registro del backtest corre CQR y el conformal de residuos, que cubren 88 % y
+    98,7 %. Agrupando solo por horizonte, la interfaz mostraba ~93 %, que no es la
+    cobertura de ninguno de los dos. Un promedio de dos modelos distintos no es una
+    metrica, es un artefacto de agregacion.
+    """
+    from api import main
+
+    from blindside.evaluate import contracts as C
+
+    reports = panel_on_disk.parent / "reports_cobertura"
+    reports.mkdir()
+    monkeypatch.setattr(cfg, "REPORTS", reports)
+
+    # Dos modelos: uno que cubre siempre y otro que no cubre nunca. Si se promedian,
+    # la cobertura da 0,5, que es justo lo que no tiene que pasar.
+    n = 60
+    base = {
+        S.SERIES_ID: ["0_1"] * n,
+        S.DATE: pd.date_range("2024-06-01", periods=n),
+        C.ORIGIN: [0] * n,
+        C.ORIGIN_DATE: [pd.Timestamp("2024-05-31")] * n,
+        C.HORIZON_STEP: [1 + i % 7 for i in range(n)],
+        C.Y_TRUE: [5.0] * n,
+        C.Y_OBSERVED: [5.0] * n,
+        C.Y_PRED: [5.0] * n,
+        C.NAIVE_SCALE: [1.0] * n,
+        S.IS_CENSORED: [False] * n,
+        S.AVAILABLE_WEIGHT: [1.0] * n,
+    }
+    cubre = pd.DataFrame(
+        {**base, C.MODEL: ["cubre_siempre"] * n, C.PRED_LO: [0.0] * n, C.PRED_HI: [10.0] * n}
+    )
+    falla = pd.DataFrame(
+        {**base, C.MODEL: ["no_cubre"] * n, C.PRED_LO: [9.0] * n, C.PRED_HI: [9.5] * n}
+    )
+    pd.concat([cubre, falla], ignore_index=True).to_parquet(
+        reports / "backtest_models.parquet", index=False
+    )
+
+    puntos, nota = main._coverage_by_horizon()
+    assert puntos, "no devolvio cobertura"
+    coberturas = {p.coverage_empirical for p in puntos}
+    assert coberturas <= {0.0, 1.0}, (
+        f"la cobertura salio mezclada entre modelos: {sorted(coberturas)}. "
+        "Tiene que ser la de un solo modelo, no un promedio."
+    )
+    # Y como ninguno de los dos es el artefacto servido, tiene que decir cual eligio.
+    assert nota is not None and (
+        "cubre_siempre" in nota or "no_cubre" in nota
+    ), f"una cobertura de un modelo que no es el servido tiene que declararlo: {nota}"
+
+
 # --- Estado de la senal reciente de una serie ---------------------------
 
 
@@ -620,9 +678,9 @@ def test_la_fraccion_estimada_esta_en_rango_y_es_cero_sin_censura(
         frac = res["estimated_share_last_28"]
         assert 0.0 <= frac <= 1.0, f"fraccion fuera de rango: {frac}"
         if res["n_censored_days"] == 0:
-            assert frac == pytest.approx(0.0), (
-                "una serie sin dias censurados no puede tener demanda estimada"
-            )
+            assert frac == pytest.approx(
+                0.0
+            ), "una serie sin dias censurados no puede tener demanda estimada"
 
 
 def test_los_dias_sin_venta_se_cuentan_desde_el_final(panel_on_disk, recovered_panel) -> None:
@@ -640,6 +698,7 @@ def test_los_dias_sin_venta_se_cuentan_desde_el_final(panel_on_disk, recovered_p
             assert dias == 0, f"vendio el ultimo dia y dice {dias} dias sin venta"
         if dias is not None:
             assert 0 <= dias < serie["summary"]["n_days"]
+
 
 # El desajuste que fijan estos tests era invisible: de 73 features, las tres
 # covariables conocidas de antemano llegaban en NaN porque el estado de origen las
@@ -708,9 +767,7 @@ def test_el_futuro_no_deja_covariables_conocidas_en_nan(panel_on_disk, recovered
         assert not futuro[col].isna().any(), f"{col} llega NaN al modelo"
 
 
-def test_el_plan_por_defecto_sale_de_la_mediana_del_panel(
-    panel_on_disk, recovered_panel
-) -> None:
+def test_el_plan_por_defecto_sale_de_la_mediana_del_panel(panel_on_disk, recovered_panel) -> None:
     """El default esta elegido por medicion y tiene que decir de donde salio.
 
     Asumir precio de lista subestimaba la orden 13,2 % contra las covariables

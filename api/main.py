@@ -214,9 +214,53 @@ def _coverage_by_horizon() -> tuple[list[sc.CoveragePoint], str | None]:
     from blindside.evaluate import metrics as M
 
     nominal = cfg.FORECAST.coverage
-    rows: list[sc.CoveragePoint] = []
     intervals = result.dropna(subset=[C.PRED_LO, C.PRED_HI])
-    for h, g in intervals.groupby(C.HORIZON_STEP, observed=True):
+
+    # **Un solo modelo.** El registro del backtest ahora corre dos envoltorios
+    # conformales, y agrupar solo por horizonte los promediaba: CQR cubre 88 % y el
+    # conformal de residuos 98,7 %, asi que la interfaz mostraba ~93 %, que no es la
+    # cobertura de ninguno de los dos. Un promedio de dos modelos distintos no es una
+    # metrica, es un artefacto de agregacion.
+    #
+    # Se elige el que se parece al artefacto servido. Si no se puede identificar, se
+    # toma el de mejor calibracion y **se dice cual**, porque una cobertura sin modelo
+    # al lado no se puede interpretar.
+    disponibles = sorted(intervals[C.MODEL].astype(str).unique())
+    servido = _model_name(cfg.DEFAULT_BASIS) or ""
+    elegido = next((m for m in disponibles if m == servido), None)
+    if elegido is None:
+        # El nombre del artefacto y el del backtest pueden diferir en el sufijo, asi
+        # que se cae a la coincidencia por prefijo antes de elegir por calibracion.
+        elegido = next((m for m in disponibles if servido and m.startswith(servido[:12])), None)
+    if elegido is None:
+        por_brecha = {
+            m: abs(
+                M.empirical_coverage(
+                    g[C.Y_TRUE].to_numpy(dtype="float64"),
+                    g[C.PRED_LO].to_numpy(dtype="float64"),
+                    g[C.PRED_HI].to_numpy(dtype="float64"),
+                )
+                - nominal
+            )
+            for m, g in intervals.groupby(intervals[C.MODEL].astype(str), observed=True)
+        }
+        elegido = min(por_brecha, key=lambda m: por_brecha[m])
+
+    del_modelo = intervals[intervals[C.MODEL].astype(str) == elegido]
+    # La nota se emite solo cuando hay algo que aclarar: o la corrida trajo mas de un
+    # modelo con intervalo y hubo que elegir, o hay un artefacto cargado y el elegido
+    # no es ese. Con un solo modelo y sin artefacto no hay ambiguedad, y una nota ahi
+    # seria ruido en el estado normal de un clon nuevo.
+    nota = None
+    if elegido != servido and (len(disponibles) > 1 or servido):
+        nota = (
+            f"cobertura del modelo `{elegido}` del ultimo backtest, que no es "
+            f"exactamente el artefacto servido (`{servido or 'sin artefacto'}`). "
+            f"Modelos con intervalo en la corrida: {', '.join(disponibles)}"
+        )
+
+    rows: list[sc.CoveragePoint] = []
+    for h, g in del_modelo.groupby(C.HORIZON_STEP, observed=True):
         rows.append(
             sc.CoveragePoint(
                 h=int(h),
@@ -229,7 +273,7 @@ def _coverage_by_horizon() -> tuple[list[sc.CoveragePoint], str | None]:
                 n=int(len(g)),
             )
         )
-    return rows, None
+    return rows, nota
 
 
 @asynccontextmanager
