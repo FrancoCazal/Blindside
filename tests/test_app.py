@@ -63,21 +63,35 @@ def test_la_portada_declara_cuanto_aisla(app) -> None:
     assert n_piden / n_total < 0.6, f"marca {n_piden / n_total:.0%}: no prioriza nada"
 
 
-def test_hay_un_expander_por_motivo_con_su_remedio(app) -> None:
-    """Una alarma sin accion es ruido, asi que cada motivo explica que hacer."""
+def _grupos_disponibles(app):
+    """Grupos que la app puede calcular con los artefactos presentes.
+
+    `backtest_models.parquet` esta ignorado: existe en la maquina de trabajo pero no
+    en un clon limpio. Sin el, la app dice "sin medir" y **no inventa** el grupo de
+    MASE > 1; los otros tres salen del panel sample commiteado.
+    """
     from blindside.evaluate import triage as T
 
-    assert len(app.expander) == len(T.GRUPOS)
+    metrica = next(m for m in app.metric if m.label == "Modelo no confiable")
+    medido = str(metrica.value) != "sin medir"
+    return [g for g in T.GRUPOS if g.clave != "no_confiable" or medido]
+
+
+def test_hay_un_expander_por_motivo_con_su_remedio(app) -> None:
+    """Una alarma sin accion es ruido, asi que cada motivo explica que hacer."""
+    esperados = _grupos_disponibles(app)
+    etiquetas = [e.label for e in app.expander]
+
+    assert len(etiquetas) == len(esperados)
+    for grupo in esperados:
+        assert any(grupo.etiqueta in etiqueta for etiqueta in etiquetas)
 
 
 def test_se_puede_filtrar_por_motivo(app) -> None:
     """Cada motivo pide una accion distinta, asi que se revisan por separado."""
-    from blindside.evaluate import triage as T
-
     opciones = app.selectbox[0].options
     assert opciones[0].startswith("Todas")
-    for g in T.GRUPOS:
-        assert g.etiqueta in opciones
+    assert opciones[1:] == [g.etiqueta for g in _grupos_disponibles(app)]
 
 
 def test_la_tabla_de_motivos_no_usa_matplotlib(app) -> None:

@@ -48,9 +48,7 @@ class TrialFalso:
         return (lo + hi) // 2
 
 
-def _resultado(
-    *, mejor_mase: float, base_mase: float, base_desvio: float = 0.02
-) -> Resultado:
+def _resultado(*, mejor_mase: float, base_mase: float, base_desvio: float = 0.02) -> Resultado:
     return Resultado(
         mejores_params=dict(DEFAULT_LGBM_PARAMS),
         mejor_objetivo=mejor_mase,
@@ -175,9 +173,7 @@ def test_el_reporte_deriva_la_lectura_de_los_numeros(tmp_path) -> None:
     """
     from blindside.models.tuning import escribir_reporte
 
-    chica = escribir_reporte(
-        _resultado(base_mase=0.8200, mejor_mase=0.8175), tmp_path / "chica.md"
-    )
+    chica = escribir_reporte(_resultado(base_mase=0.8200, mejor_mase=0.8175), tmp_path / "chica.md")
     grande = escribir_reporte(
         _resultado(base_mase=0.8800, mejor_mase=0.8200), tmp_path / "grande.md"
     )

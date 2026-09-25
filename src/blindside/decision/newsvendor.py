@@ -188,6 +188,7 @@ def optimal_order_from_quantiles(
         np.clip(interpolated, 0.0, None), index=quantile_preds.index, name="reorder_qty"
     )
 
+
 def _inverse_cdf_grid(
     quantile_preds: pd.DataFrame, *, quantiles: Sequence[float]
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -320,8 +321,6 @@ def _integrate_excess(u: np.ndarray, y: np.ndarray, q: np.ndarray) -> np.ndarray
         area = np.where(crossing, tri, area)
 
     return area.sum(axis=1)
-
-
 
 
 def compare_policies(outcomes: Sequence[PolicyOutcome], *, reference: str) -> pd.DataFrame:

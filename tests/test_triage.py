@@ -121,9 +121,9 @@ def test_la_fraccion_estimada_pondera_por_masa_y_no_por_dias() -> None:
     s = T.series_signals(panel, ventana_dias=dias)
 
     assert s.loc["1_1", "tasa_quiebre"] > s.loc["1_2", "tasa_quiebre"], "A tiene mas dias"
-    assert s.loc["1_2", "frac_estimada"] > s.loc["1_1", "frac_estimada"], (
-        "pero B tiene mas masa estimada, que es lo que importa para confiar o no"
-    )
+    assert (
+        s.loc["1_2", "frac_estimada"] > s.loc["1_1", "frac_estimada"]
+    ), "pero B tiene mas masa estimada, que es lo que importa para confiar o no"
 
 
 def test_la_racha_vigente_es_la_que_termina_hoy() -> None:
@@ -192,9 +192,7 @@ def test_cada_grupo_se_activa_por_su_propio_motivo() -> None:
     cen[-6:] = True
     quebrada["censurado"] = cen
 
-    panel = _panel(
-        {"1_1": sana, "1_2": mala_modelo, "1_3": escasa, "1_4": quebrada}, dias=dias
-    )
+    panel = _panel({"1_1": sana, "1_2": mala_modelo, "1_3": escasa, "1_4": quebrada}, dias=dias)
     bt = _backtest({"1_1": 0.5, "1_2": 1.5, "1_3": 0.5, "1_4": 0.5}, panel)
     m = T.triage(T.series_signals(panel, bt, ventana_dias=dias))
 

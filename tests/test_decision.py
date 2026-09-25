@@ -801,9 +801,9 @@ def test_cqr_alcanza_su_cobertura_nominal(recovered_panel: pd.DataFrame) -> None
     result = _backtest_with_intervals(recovered_panel, modelo, forecast)
 
     cobertura = M.empirical_coverage(result[C.Y_TRUE], result[C.PRED_LO], result[C.PRED_HI])
-    assert cobertura >= forecast.coverage - 0.10, (
-        f"cobertura empirica {cobertura:.1%} contra un nominal de {forecast.coverage:.0%}"
-    )
+    assert (
+        cobertura >= forecast.coverage - 0.10
+    ), f"cobertura empirica {cobertura:.1%} contra un nominal de {forecast.coverage:.0%}"
     # Y el ancho tiene que ser finito: cubrir por ser enorme no es cubrir.
     ancho = M.mean_interval_width(result[C.PRED_LO], result[C.PRED_HI])
     assert 0 < ancho < 20 * result[C.Y_TRUE].mean()

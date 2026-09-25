@@ -93,9 +93,9 @@ def test_la_atribucion_reconstruye_la_prediccion(futuro, modelo) -> None:
 
     for top_k in (1, 3, 100):
         atr = atribuir(modelo, fila, top_k=top_k)
-        assert atr.prediccion_reconstruida == pytest.approx(esperado, abs=1e-6), (
-            f"la identidad de SHAP no cierra con top_k={top_k}"
-        )
+        assert atr.prediccion_reconstruida == pytest.approx(
+            esperado, abs=1e-6
+        ), f"la identidad de SHAP no cierra con top_k={top_k}"
 
 
 def test_el_recorte_devuelve_los_mas_influyentes(futuro, modelo) -> None:

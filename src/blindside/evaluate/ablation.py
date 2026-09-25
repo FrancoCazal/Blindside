@@ -140,9 +140,7 @@ def _lectura_contra_cadre(observed: dict, latent: dict) -> str:
     publicado = 100 * CADRE_REFERENCE["bias_censored"]
     razon = abs(propio / publicado) if publicado else float("inf")
     reduccion = 100 * (latent["recensored_bias"] - observed["recensored_bias"])
-    reduccion_cadre = 100 * (
-        CADRE_REFERENCE["bias_corrected"] - CADRE_REFERENCE["bias_censored"]
-    )
+    reduccion_cadre = 100 * (CADRE_REFERENCE["bias_corrected"] - CADRE_REFERENCE["bias_censored"])
 
     if razon <= 1.5:
         veredicto = (
