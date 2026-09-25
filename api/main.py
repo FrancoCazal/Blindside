@@ -45,6 +45,9 @@ from blindside import __version__
 from blindside import config as cfg
 from blindside.data import loaders
 from blindside.data import schema as S
+
+# Nombres sueltos y no el modulo: el endpoint se llama `explain` y lo pisaria.
+from blindside.explain import NoExplicableError, atribuir, modelo_explicable
 from blindside.models.base import TARGET_BY_BASIS
 
 if TYPE_CHECKING:
@@ -1137,18 +1140,6 @@ def explain(req: sc.ExplainRequest) -> sc.ExplainResponse:
     model = _require_model(basis)
     refs = _series_refs(panel, [req.series_id])
 
-    # El modelo explicable puede estar debajo del envoltorio conformal.
-    interno = getattr(model, "base", model)
-    if not hasattr(interno, "contributions") or not hasattr(interno, "design_matrix"):
-        raise HTTPException(
-            status_code=status.HTTP_501_NOT_IMPLEMENTED,
-            detail=(
-                f"el modelo cargado para la base '{basis}' ('{_model_name(basis)}') no "
-                "produce contribuciones por feature. Solo los modelos de arbol las "
-                "emiten; cargar un LightGBM."
-            ),
-        )
-
     future = _future_index(panel, [req.series_id], cfg.FORECAST.horizon, req.plan)
     fila = future[future[S.DATE] == pd.Timestamp(req.dt)]
     if fila.empty:
@@ -1161,21 +1152,17 @@ def explain(req: sc.ExplainRequest) -> sc.ExplainResponse:
             ),
         )
 
-    X = interno.design_matrix(fila)
-    aportes, base_value = interno.contributions(X)
-    prediccion = float(model.predict(fila).iloc[0])
+    try:
+        atribucion = atribuir(model, fila, top_k=req.top_k)
+    except NoExplicableError as exc:
+        # 501 y no 400: la peticion es valida, es el modelo cargado el que no puede.
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=f"base '{basis}': {exc}",
+        ) from exc
 
-    serie = aportes.iloc[0]
-    orden = serie.abs().sort_values(ascending=False).head(req.top_k).index
-    valores = X.iloc[0]
-    contribuciones = [
-        sc.ShapContribution(
-            feature=str(f),
-            value=_opt_float(valores.get(f)),
-            contribution=float(serie[f]),
-        )
-        for f in orden
-    ]
+    interno = modelo_explicable(model)
+    prediccion = float(model.predict(fila).iloc[0])
 
     return sc.ExplainResponse(
         series=refs[req.series_id],
@@ -1183,10 +1170,17 @@ def explain(req: sc.ExplainRequest) -> sc.ExplainResponse:
         basis=sc.Basis(basis),
         model_name=_model_name(basis),
         quantile=getattr(interno, "_explainable_quantile", lambda: None)(),
-        base_value=base_value,
+        base_value=atribucion.valor_base,
         prediction=prediccion,
         plan=_plan_echo(req.plan, panel),
-        contributions=contribuciones,
+        contributions=[
+            sc.ShapContribution(
+                feature=a.feature,
+                value=a.valor,
+                contribution=a.contribucion,
+            )
+            for a in atribucion.aportes
+        ],
     )
 
 

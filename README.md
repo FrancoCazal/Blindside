@@ -388,7 +388,7 @@ blindside-app   Up (healthy)   127.0.0.1:8501->8501/tcp
 `/_stcore/health`, y la suite corre dentro del contenedor:
 
 ```bash
-make docker-test    # 213 tests en la imagen del pipeline
+make docker-test    # 228 tests en la imagen del pipeline
 ```
 
 ### Seguridad del despliegue
@@ -454,9 +454,9 @@ blindside-core/
 │   ├── unsupervised/  # clustering, embeddings, anomalias  [pendiente]
 │   ├── decision/      # censoring, conformal, newsvendor, policy
 │   ├── evaluate/      # contracts.py (CONTRATO 3), metrics, backtest, ablation
-│   └── explain/       # SHAP  [pendiente]
+│   └── explain/       # attribution.py: TreeSHAP local y global
 ├── notebooks/         # 6 notebooks ejecutados; importan de src/, no contienen logica
-├── tests/             # 213 tests; test_leakage.py son los 8 items del checklist
+├── tests/             # 228 tests; test_leakage.py son los 8 items del checklist
 ├── app/               # streamlit_app.py, 7 pantallas
 ├── api/               # schemas.py (CONTRATO 4), main.py
 ├── frontend/          # React + Vite + TS; schema.d.ts generado del OpenAPI
