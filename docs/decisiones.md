@@ -773,6 +773,79 @@ mismo resultado**. Sin la comparacion pareada, "no cambio nada" se habria leido 
 
 ---
 
+## D24 · La busqueda de hiperparametros optimiza el backtest, y su resultado no se adopta
+
+**Decision.** La busqueda con Optuna (`src/blindside/models/tuning.py`, `make tune`) usa como
+objetivo el **mismo `run_backtest`** que produce las metricas oficiales, con origenes moviles. Y
+su resultado **no se adopta**, porque la mejora que encontro es menor que la dispersion entre
+origenes.
+
+### Por que no una validacion cruzada
+
+Un `GridSearchCV` con K-Fold aleatorio es la forma mas rapida de conseguir un numero excelente y
+falso. Sobre datos de panel, cada fold aleatorio contiene dias **posteriores** a los de su propio
+train, asi que la busqueda optimiza contra un problema mas facil que el real y elige parametros
+para ese problema. El proyecto tiene ocho asserts antifugas para el camino de entrenamiento; abrir
+la fuga en la seleccion de hiperparametros la dejaria entrar por la puerta de al lado.
+
+El costo de la decision es que **cada trial vale un backtest completo**, y por eso el alcance esta
+reducido: 400 series y 4 origenes contra las 3066 y 8 de la corrida oficial. Eso se declara en el
+reporte en vez de presentarse como si se hubiera buscado sobre todo.
+
+### El objetivo penaliza la dispersion
+
+No es el MASE medio pelado sino `media + 0,5 x desvio entre origenes`. Un conjunto que promedia
+0,82 oscilando entre 0,70 y 0,95 es **peor en produccion** que uno que promedia 0,84 con desvio
+0,02, porque lo que se sufre es el origen malo y no el promedio. Es el mismo criterio con el que
+el README reporta todas las metricas, aplicado a la funcion que se optimiza.
+
+### `objective` no esta en el espacio de busqueda
+
+La eleccion de `regression_l1` sobre `regression_l2` es una decision documentada (D10: con cola
+derecha larga se quiere la mediana, no la media), no un hiperparametro. Si estuviera en el espacio,
+la busqueda podria revertirla por unas milesimas de MASE y **cambiar el significado de la salida**
+sin que nada avise. Hay un test que falla si `objective` o `metric` aparecen en el espacio.
+
+Los rangos estan centrados en los valores actuales y no en los de la libreria, con un test que
+verifica que cada default caiga **dentro** de su rango: un espacio que excluye el punto de partida
+no puede responder la pregunta "se puede mejorar lo que ya hay".
+
+### El resultado, y por que no se adopta
+
+25 trials con TPE sobre 400 series y 4 origenes:
+
+| | MASE | Desvio entre origenes | Objetivo |
+|---|---|---|---|
+| Parametros actuales | 0,8672 | 0,0134 | 0,8739 |
+| Mejor encontrado | 0,8630 | 0,0153 | 0,8707 |
+
+La mejora es de **0,0042 de MASE (+0,49 %)** y la dispersion entre origenes de los parametros
+actuales es de **0,0134** — tres veces mas grande. Adoptar esos valores seria confundir una
+realizacion afortunada del azar sobre los cuatro origenes elegidos con una mejora real.
+
+Notar ademas que el mejor conjunto tiene **mas** dispersion que el actual (0,0153 contra 0,0134),
+que es la forma tipica en que una busqueda sobreajusta a los folds que vio.
+
+**El criterio estaba en el codigo antes de ver el numero.** `Resultado.vale_la_pena` compara la
+mejora contra el desvio de la referencia, y `escribir_reporte` **deriva** la conclusion de los
+numeros en vez de llevar un texto fijo. Es el mismo arreglo que se le hizo al generador de la
+ablacion, donde una frase fija afirmaba que el resultado "reproduce el valor publicado" mientras
+la tabla de arriba mostraba un factor de 2,2. Un reporte que puede contradecir su propia tabla es
+un reporte que en algun momento lo va a hacer.
+
+### Lo que el resultado dice del proyecto
+
+Que los parametros elegidos a mano ya estaban en una zona razonable, y — mas util — que **el
+margen que queda en hiperparametros es chico comparado con el que queda en otras partes**. Para
+contrastar, en este mismo proyecto: corregir el desajuste train/serve de las tres covariables del
+horizonte valia **86 % de MASE** (D19), y separar el cuantil del booster del de la banda conformal
+movia la orden **21 %** (D20). Medio punto de hiperparametros no esta en esa escala.
+
+La referencia siempre se evalua primero, con los parametros actuales. Sin esa fila, cualquier
+busqueda "encuentra una mejora" por construccion, porque se compara contra su peor trial.
+
+---
+
 ## Roadmap
 
 Fuera del alcance de la entrega, en orden de valor:

@@ -1,0 +1,30 @@
+{
+  "mejores_params": {
+    "objective": "regression_l1",
+    "metric": "mae",
+    "learning_rate": 0.03744479677742343,
+    "num_leaves": 54,
+    "min_child_samples": 40,
+    "feature_fraction": 0.6263282355704631,
+    "bagging_fraction": 0.609246376924976,
+    "bagging_freq": 1,
+    "lambda_l2": 0.05303564016913495,
+    "num_threads": 0,
+    "verbosity": -1,
+    "seed": 42
+  },
+  "mejor_mase": 0.8629869022975717,
+  "mejor_desvio": 0.015333993570465443,
+  "base_mase": 0.8671942062748103,
+  "base_desvio": 0.013429152841447098,
+  "mejora_pct": 0.48516283282286077,
+  "vale_la_pena": false,
+  "busqueda": {
+    "n_trials": 25,
+    "n_series": 400,
+    "n_origins": 4,
+    "n_estimators": 300,
+    "peso_dispersion": 0.5,
+    "seed": 42
+  }
+}

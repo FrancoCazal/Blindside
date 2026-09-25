@@ -247,7 +247,12 @@ la fracción de la mejora efectivamente capturada nunca es 100 %.
 ```bash
 make setup && make data && make recover && make models && make ablation
 make classical          # el contraste per-serie; Prophet es opcional y se saltea si falta
+make tune               # busqueda de hiperparametros; su resultado NO esta adoptado
 ```
+
+**Los hiperparametros son los elegidos a mano, y eso esta medido.** `make tune` corre 25 trials de
+Optuna optimizando el mismo backtest de origen movil, y encontro una mejora de 0,49 % de MASE con
+una dispersion entre origenes tres veces mayor. No se adopta: ver D24.
 
 **Una dependencia transitiva sin pin es un pin que falta.** `scipy` no estaba fijado aunque numpy,
 pandas y scikit-learn sí, y eso volvió a `statsforecast` ininstalable de hecho en un entorno nuevo

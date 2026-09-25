@@ -1,4 +1,4 @@
-.PHONY: help setup data recover sample lint format test test-leakage backtest models models-fast train ablation classical notebooks app api clean \
+.PHONY: help setup data recover sample lint format test test-leakage backtest models models-fast train ablation classical tune notebooks app api clean \
         front front-setup front-build front-test api-schema \
         docker-build docker-build-full docker-up docker-down docker-logs docker-ps docker-shell docker-test docker-data
 
@@ -25,6 +25,7 @@ help:
 	@echo "train         - entrena y serializa los DOS artefactos (observado y recuperado)"
 	@echo "ablation      - ablacion de censura: venta observada vs demanda latente"
 	@echo "classical     - contraste SARIMA y Prophet contra el modelo global (~20 min)"
+	@echo "tune          - busqueda de hiperparametros con Optuna sobre origenes moviles"
 	@echo "notebooks     - ejecuta los 6 notebooks en el lugar (~12 min)"
 	@echo "app           - levanta el dashboard Streamlit en localhost"
 	@echo "api           - levanta la API FastAPI en localhost"
@@ -107,6 +108,14 @@ train:
 # submuestra declarada de 400 series porque son **por serie**: SARIMA cuesta ~650 ms
 # y Prophet ~300 ms cada una, asi que las 3066 del reporte oficial serian horas.
 # Prophet se saltea solo si el paquete no esta instalado.
+# Busqueda de hiperparametros. Cada trial corre un backtest de origen movil completo,
+# asi que el alcance esta reducido (400 series, 4 origenes) y el reporte lo declara.
+# El criterio de adopcion esta en el codigo: una mejora menor que la dispersion entre
+# origenes NO se adopta.
+tune:
+	$(PY) -m blindside.models.tuning --trials 25 --n-series 400 --n-origins 4 \
+		--out reports/tuning.md
+
 classical:
 	$(PY) -m blindside.evaluate.backtest --out reports/metrics_classical.md \
 		--models seasonal_naive moving_average croston_sba lgbm_global sarima prophet \

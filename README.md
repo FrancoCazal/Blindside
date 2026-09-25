@@ -273,6 +273,35 @@ lo normal y es la definición estándar.
 naive estacional por 18 %, así que el 25,3 % del modelo no se mide contra un rival elegido para
 perder. Un proyecto que solo compara contra el naive simple se regala 7 puntos.
 
+### La búsqueda de hiperparámetros no cambió nada, y eso también se publica
+
+`make tune` corre Optuna con un objetivo que es el **mismo backtest de origen móvil** que produce
+las métricas oficiales, no una validación cruzada aleatoria: sobre datos de panel un K-Fold al azar
+mete días posteriores en el train de cada fold y optimiza contra un problema más fácil que el real.
+
+25 trials sobre 400 series y 4 orígenes. Reporte en `reports/tuning.md`:
+
+| | MASE | Desvío entre orígenes |
+|---|---|---|
+| Parámetros actuales | 0,8672 | 0,0134 |
+| Mejor encontrado | 0,8630 | 0,0153 |
+
+La mejora es de **0,49 %** y la dispersión entre orígenes es tres veces más grande, así que **no se
+adopta**: sería confundir una realización afortunada del azar sobre los cuatro orígenes elegidos
+con una mejora real. El mejor conjunto además tiene *más* dispersión que el actual, que es cómo se
+ve una búsqueda sobreajustando a los folds que vio.
+
+El criterio de adopción está en el código (`Resultado.vale_la_pena`) y no se decidió después de
+ver el número, y el reporte **deriva** su conclusión de los números en vez de llevar un texto fijo.
+`objective` no está en el espacio de búsqueda: elegir L1 sobre L2 es una decisión documentada y no
+un hiperparámetro, y dejarla ahí permitiría que la búsqueda cambie el significado de la salida por
+unas milésimas. Detalle en `docs/decisiones.md` D24.
+
+Lo útil del resultado es la escala que fija: **el margen que queda en hiperparámetros es chico**
+comparado con el de otras partes del pipeline. En este mismo proyecto, corregir el desajuste
+train/serve de las covariables del horizonte valía 86 % de MASE, y separar el cuantil del booster
+del de la banda conformal movía la orden 21 %.
+
 ### Recuperación de demanda censurada
 
 | Grupo | Demanda observada | Demanda latente | Uplift |
@@ -425,7 +454,7 @@ blindside-app   Up (healthy)   127.0.0.1:8501->8501/tcp
 `/_stcore/health`, y la suite corre dentro del contenedor:
 
 ```bash
-make docker-test    # 252 tests en la imagen del pipeline
+make docker-test    # 265 tests en la imagen del pipeline
 ```
 
 ### Seguridad del despliegue
@@ -487,13 +516,13 @@ blindside-core/
 │   ├── data/          # schema.py (CONTRATO 1), freshretail.py, loaders.py
 │   ├── features/      # calendar.py, lags.py, build.py (anclado en el origen)
 │   ├── validation/    # splits.py (origen movil), leakage.py (los 8 asserts)
-│   ├── models/        # base.py (CONTRATO 2), baselines, tabular, gbdt, linear, classical
+│   ├── models/        # base.py (CONTRATO 2), baselines, tabular, gbdt, linear, classical, tuning
 │   ├── unsupervised/  # clustering (K-Means/DBSCAN), embeddings (PCA), anomalias (iForest)
 │   ├── decision/      # censoring, conformal, newsvendor, policy
 │   ├── evaluate/      # contracts.py (CONTRATO 3), metrics, backtest, ablation
 │   └── explain/       # attribution.py: TreeSHAP local y global
 ├── notebooks/         # 6 notebooks ejecutados; importan de src/, no contienen logica
-├── tests/             # 252 tests; test_leakage.py son los 8 items del checklist
+├── tests/             # 265 tests; test_leakage.py son los 8 items del checklist
 ├── app/               # streamlit_app.py, 7 pantallas
 ├── api/               # schemas.py (CONTRATO 4), main.py
 ├── frontend/          # React + Vite + TS; schema.d.ts generado del OpenAPI
@@ -659,7 +688,7 @@ eso — con el resultado negativo de su feature medido y reportado, que es la pa
 escribir y la que más vale.
 
 Pendiente del alcance del plan: GRU/LSTM y transformer temporal (M5), drift (M9), reconciliación
-MinT (8.3), Optuna, y el generador sintético del caso Focal Point (frente K).
+MinT (8.3), y el generador sintético del caso Focal Point (frente K).
 
 **La limitación que queda del lado del intervalo**, ahora que CQR está medido: cubre 88,0 %
 cuando promete 90 %, o sea dos puntos **por debajo**. La garantía del split-conformal supone
