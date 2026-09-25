@@ -59,3 +59,12 @@ reports/*.parquet
 .idea/
 Thumbs.db
 Desktop.ini
+
+# Scratch: scripts y logs de medicion de una sola vez. El prefijo `_` los marca
+# como descartables, y tenerlos aca evita que entren a un commit por un `git add -A`
+# (ya paso una vez con _r.txt y _ver.py).
+_*.py
+_*.log
+_*.err
+_*.txt
+_*.ps1
