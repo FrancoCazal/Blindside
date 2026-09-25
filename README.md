@@ -52,7 +52,11 @@ make front   # frontend React en localhost:5173 (necesita la API arriba)
 > autenticación antes.** Para la Fase 2 multi-tenant es bloqueante: hace falta autenticación por
 > tenant y aislamiento de datos.
 
-> Pendiente: screenshot del dashboard + enlace al despliegue.
+![Pantalla de reposición de Blindside](docs/assets/reposicion.png)
+
+> **Pendiente de entrega:** grabar el video con `docs/demo_guion.md`. No hay despliegue público:
+> la API no tiene autenticación y exponerla fuera de `127.0.0.1` sería inseguro; para la defensa
+> se ejecuta localmente con Docker Compose.
 
 ## Frontend
 
@@ -701,7 +705,9 @@ La otra limitación, más de fondo: la cobertura garantizada es **marginal, no c
 que los pasos intermedios bajan a 0,85. Desagregar es lo que la hace visible; corregirla exigiría
 conformal condicional o por grupo, y eso está en el Roadmap.
 
-Fuera del alcance de la entrega, en `docs/decisiones.md` sección Roadmap.
+Fuera del alcance de la entrega, en `docs/decisiones.md` sección Roadmap. La priorización de las
+últimas horas, el análisis de actualización continua y la imposibilidad de ampliar los días de
+FreshRetailNet están en [`docs/auditoria_final.md`](docs/auditoria_final.md).
 
 ## Licencia
 
