@@ -957,8 +957,16 @@ Tag `v0.3-decision`.
 - **¿Por qué el ROI no está en guaraníes?** → porque el dataset primario está normalizado por
   un coeficiente no divulgado; los guaraníes salen del caso Focal Point, con supuestos
   declarados
-- ¿Qué hacés con productos nuevos? → cluster de perfil como prior, y arranque en frío por
-  embeddings en el roadmap
+- ¿Qué hacés con productos nuevos? → **la respuesta cambió al medirla, y la versión honesta es
+  mejor.** El clustering de perfiles está implementado y `assign` le da a una serie sin historia
+  el grupo modal, así que el mecanismo existe. Pero **la feature no entra al modelo servido**:
+  medida en pareado sobre tres orígenes, mueve el MASE +0,28 % con oscilaciones de ±11 puntos, o
+  sea que es ruido. Y el motivo de fondo es que **este panel no permite medir el arranque en
+  frío**: las 3066 series tienen exactamente 97 días y ninguna empieza a vender después del día
+  16, así que la condición que la feature ataca no ocurre nunca. Una feature cuyo beneficio no se
+  puede medir no entra al artefacto que se sirve. Ver D23. Si preguntan qué haría con datos que
+  sí tengan arranque en frío: ahí la feature se puede evaluar, y el roadmap tiene embeddings de
+  catálogo para el caso sin ninguna venta
 - ¿Cómo elegiste el cuantil de reposición? → fracción crítica del newsvendor, con `Co` de
   pérdida total por vencimiento y no de capital inmovilizado
 - ¿Qué supuestos tiene el ROI? → los cuatro de la sección 11, anclados en números publicados,
