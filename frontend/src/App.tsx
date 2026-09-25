@@ -21,6 +21,7 @@ export default function App() {
     irA,
     basis,
     setBasis,
+    anunciar,
     health,
     healthCargando,
     healthError,
@@ -36,7 +37,11 @@ export default function App() {
   // El toggle de censura tiene atajo global porque es el control que se acciona
   // en vivo durante la demo, y buscar el botón con el mouse en un proyector
   // rompe el ritmo de la explicación.
-  useAtajo("b", () => setBasis(basis === "observed" ? "recovered" : "observed"));
+  useAtajo("b", () => {
+    const siguiente = basis === "observed" ? "recovered" : "observed";
+    setBasis(siguiente);
+    anunciar(siguiente === "recovered" ? "Demanda recuperada" : "Venta observada");
+  });
 
   // Sin serie elegida se toma la primera del panel, para que la pantalla de
   // serie individual nunca aparezca vacía.

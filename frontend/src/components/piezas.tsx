@@ -69,8 +69,10 @@ export function IconoLupa() {
  *
  * No es un checkbox. Son dos estados con nombre propio, así que es un grupo de
  * dos botones con `aria-pressed`, ← → mueven entre ellos y el atajo global es B.
- * Al cambiar, la región `aria-live` anuncia **el cambio de valor**, no el nombre
- * del modo: «Demanda recuperada. La cantidad sugerida pasa de 1,12 a 1,35».
+ * Al cambiar, la región `aria-live` anuncia siempre el nombre del modo. Cuando
+ * la pantalla conoce ambas cantidades puede pasar `cantidadAntes` y
+ * `cantidadDespues` para anunciar también el cambio; la landing anuncia su total
+ * real cuando termina la consulta a `/reorder`.
  */
 export function ToggleCensura({
   cantidadAntes,

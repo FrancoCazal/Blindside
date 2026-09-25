@@ -377,6 +377,9 @@ describe("pantalla de reposición", () => {
     const nuevas = await screen.findAllByText("1,35");
     expect(nuevas.length).toBeGreaterThan(0);
     expect(await screen.findByText(/Censura corregida/)).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toMatch(
+      /Demanda recuperada\. Total a pedir en esta página:/,
+    );
   });
   it("el atajo global b alterna la base sin tocar el mouse", async () => {
     montar();
@@ -390,6 +393,7 @@ describe("pantalla de reposición", () => {
 
     const recuperada = await screen.findByRole("button", { name: "Demanda recuperada" });
     expect(recuperada.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("status").textContent).toMatch(/Demanda recuperada/);
   });
 });
 

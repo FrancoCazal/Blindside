@@ -39,7 +39,7 @@ la fracción crítica `q* = Cu / (Cu + Co)`. El modelo se entrena con pérdida c
 ## Demo
 
 ```bash
-make app     # dashboard Streamlit, 7 pantallas
+make app     # dashboard Streamlit, 8 pantallas
 make api     # FastAPI en localhost:8000, /docs para el OpenAPI
 make front   # frontend React en localhost:5173 (necesita la API arriba)
 ```
@@ -680,7 +680,7 @@ ancladas en el origen, validación de origen móvil con asserts antifugas, métr
 backtesting, baselines, LightGBM (puntual y cuantílico), XGBoost, regresión regularizada,
 **SARIMA y Prophet como contraste per-serie (M6)**, CQR con cobertura verificada, newsvendor con
 esperanzas derivadas de la distribución predictiva, simulador de política, **clustering de perfiles
-y detección de anomalías (M4)**, API, dashboard Streamlit, frontend React de 8 pantallas, y
+y detección de anomalías (M4)**, API, dashboard Streamlit, frontend React de 7 pantallas, y
 **TreeSHAP local y global** en `explain/`.
 
 Con eso queda cubierto el **mínimo defendible que el plan declara: M2 + M3 + M6**, y M4 arriba de

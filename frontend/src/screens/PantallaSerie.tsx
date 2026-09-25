@@ -14,7 +14,6 @@ import { RATIOS, cuantilCritico, deltaPct } from "../domain";
 import { conteo, cuantil, magnitud, porcentaje, porcentajeSimple } from "../format";
 import { useAsincrono, useConteo, useEstado } from "../state";
 import { Esqueleto } from "../components/estados";
-import { SelloSim } from "../components/piezas";
 
 export function PantallaSerie({ serie }: { serie: string }) {
   const { basis, ratio, anunciar } = useEstado();
@@ -186,9 +185,9 @@ export function PantallaSerie({ serie }: { serie: string }) {
       </div>
 
       <p className="nota" style={{ maxWidth: "92ch", marginTop: 14 }}>
-        La comparación contra la política se calcula en el cliente con la media móvil de 21 días de
-        la base activa <SelloSim titulo="El backend no sirve la política actual; se calcula acá sobre la historia real" />.
-        El pronóstico, la banda conformal y la cantidad sugerida vienen de la API.
+        La política de comparación y su ventana vienen de <code>/reorder</code>: es la media móvil
+        de 21 días de la misma base activa. El pronóstico, la banda conformal y la cantidad
+        sugerida también vienen de la API; esta pantalla no recalcula ninguna decisión.
       </p>
     </div>
   );

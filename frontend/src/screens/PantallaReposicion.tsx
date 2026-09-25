@@ -6,7 +6,7 @@
  * resumen de exactitud.
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   api,
@@ -181,7 +181,17 @@ function Reposicion({
   backtest: BacktestResponse | null;
   onElegirSerie: (id: string) => void;
 }) {
-  const { basis, ratio, setRatio, tienda, clase, orden: columna, direccion, offset } = useEstado();
+  const {
+    basis,
+    ratio,
+    setRatio,
+    tienda,
+    clase,
+    orden: columna,
+    direccion,
+    offset,
+    anunciar,
+  } = useEstado();
   const recoverCensoring = basis === "recovered";
   const [abierta, setAbierta] = useState(0);
 
@@ -295,6 +305,22 @@ function Reposicion({
     });
     return { filas, total: pagina.total, orden, motivo };
   }, [basis, ratio, tienda, clase, columna, direccion, offset]);
+
+  // El toggle global primero anuncia el nombre de la base. Cuando termina la
+  // consulta se anuncia también la cifra que cambió, que es lo que importa en
+  // esta landing. El `ref` evita repetirlo al re-renderizar la misma respuesta.
+  // No se anuncia mientras carga: useAsincrono conserva la respuesta anterior
+  // durante cambios de orden/página, y anunciarla con la base nueva mentiría.
+  const ultimoAnuncio = useRef<string | null>(null);
+  const totalAnunciable = datos.datos?.filas.reduce((a, f) => a + f.sugerido, 0) ?? null;
+  useEffect(() => {
+    if (datos.cargando || totalAnunciable == null) return;
+    const clave = `${basis}-${ratio}-${tienda ?? "todas"}-${clase ?? "todas"}-${offset}-${totalAnunciable}`;
+    if (ultimoAnuncio.current === clave) return;
+    ultimoAnuncio.current = clave;
+    const nombre = basis === "recovered" ? "Demanda recuperada" : "Venta observada";
+    anunciar(`${nombre}. Total a pedir en esta página: ${magnitud(totalAnunciable)}`);
+  }, [anunciar, basis, clase, datos.cargando, offset, ratio, tienda, totalAnunciable]);
 
   if (datos.cargando && !datos.datos) return <Esqueleto filas={FILAS} />;
   if (datos.error) throw datos.error;

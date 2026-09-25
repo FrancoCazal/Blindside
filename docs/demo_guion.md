@@ -9,10 +9,17 @@ Grabar en **1440×900 o 1920×1080**, tema claro, sin audio (se narra en vivo). 
 ## Antes de grabar
 
 ```bash
-make docker-up                      # api en :8000, app en :8501
-docker compose ps                   # los dos en (healthy) ANTES de empezar
-make front                          # http://127.0.0.1:5173
+make docker-up                      # api en :8000, Streamlit en :8501
+make front-setup                    # una vez; evita descubrir que falta node_modules al grabar
+make front                          # React en http://127.0.0.1:5173
+docker compose ps                   # api y Streamlit en (healthy) ANTES de empezar
 ```
+
+**El video principal usa React.** Es la superficie operativa: abre en «Reposición» y responde
+cuánto pedir hoy. Streamlit es la red de seguridad independiente y abre en «Qué mirar primero»,
+el triage del catálogo; no conviene saltar entre las dos en un video de 2 minutos. Si React no
+levanta, grabar la variante de respaldo en `:8501`: mostrar 15 segundos del triage y después
+«Reposición», «Serie individual» y «Validación y antifugas».
 
 Esperar a que `/health` responda: la API carga el panel al arrancar y los primeros segundos
 devuelve error. Abrir las tres pestañas y **dejarlas cargadas** antes del primer frame — el video
