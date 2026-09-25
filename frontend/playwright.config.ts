@@ -24,7 +24,10 @@ export default defineConfig({
     deviceScaleFactor: 2,
   },
   webServer: {
-    command: "npm run preview",
+    // `preview` no construye: si `dist/` existe, sirve lo que haya. Eso hizo que
+    // el audit diera 12/12 contra un build viejo que todavía mostraba un sello
+    // `sim` borrado del source. Construir acá vuelve la evidencia autocontenida.
+    command: "npm run build && npm run preview",
     url: "http://127.0.0.1:4173",
     reuseExistingServer: false,
     timeout: 60_000,

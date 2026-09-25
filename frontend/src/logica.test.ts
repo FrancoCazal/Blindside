@@ -16,6 +16,7 @@ import {
   deltaPct,
   esperanzaFaltante,
   esperanzaSobrante,
+  etiquetaFeature,
   impactoDeLinea,
 } from "./domain";
 import { conteoDeTotal, magnitud, porcentaje, serieCorta } from "./format";
@@ -45,6 +46,20 @@ describe("formato de cifras", () => {
 
   it("arma el código corto de serie con ceros a la izquierda", () => {
     expect(serieCorta(4, 871)).toBe("T04 · P0871");
+  });
+});
+
+describe("etiquetas de explicabilidad", () => {
+  it("traduce las variables que dominan la explicación real", () => {
+    expect(etiquetaFeature("latent_roll_mean_7")).toBe("Media de demanda · 7 días");
+    expect(etiquetaFeature("latent_roll_median_14")).toBe("Mediana de demanda · 14 días");
+    expect(etiquetaFeature("holiday_flag")).toBe("Feriado");
+    expect(etiquetaFeature("discount")).toBe("Factor de descuento");
+  });
+
+  it("traduce rezagos y humaniza una feature nueva sin dejar snake_case", () => {
+    expect(etiquetaFeature("latent_lag_28")).toBe("Demanda hace 28 días");
+    expect(etiquetaFeature("feature_nueva")).toBe("Feature nueva");
   });
 });
 

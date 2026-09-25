@@ -6,7 +6,7 @@
  * resumen de exactitud.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   api,
@@ -71,6 +71,36 @@ interface Fila {
   diasQuiebre28: number;
   rachaMax: number;
   pronostico: ForecastResponse["forecasts"][number]["points"];
+}
+
+/** Orden local de la página ya materializada; no requiere volver a consultar la API. */
+function ordenarFilas(filas: Fila[], columna: Columna, direccion: "asc" | "desc"): Fila[] {
+  const signo = direccion === "desc" ? -1 : 1;
+  const clave = (f: Fila): number | string => {
+    switch (columna) {
+      case "serie":
+        return f.serie.series_id;
+      case "politica":
+        return f.politica;
+      case "sugerido":
+        return f.sugerido;
+      case "delta":
+        return f.delta;
+      case "senal":
+        return f.senal.fraccionEstimada;
+      default:
+        return f.impacto;
+    }
+  };
+
+  return [...filas].sort((a, b) => {
+    const ka = clave(a);
+    const kb = clave(b);
+    if (typeof ka === "string" || typeof kb === "string") {
+      return signo * String(ka).localeCompare(String(kb), "es");
+    }
+    return signo * (ka - kb);
+  });
 }
 
 export function PantallaReposicion({
@@ -275,36 +305,10 @@ function Reposicion({
       };
     });
 
-    // El orden se aplica sobre la página, no sobre las 3.066 series: `/series`
-    // no ordena por impacto porque el impacto no existe hasta pedir `/reorder`.
-    // Es una limitación real y está dicha al pie de la tabla.
-    const signo = direccion === "desc" ? -1 : 1;
-    const clave = (f: Fila): number | string => {
-      switch (columna) {
-        case "serie":
-          return f.serie.series_id;
-        case "politica":
-          return f.politica;
-        case "sugerido":
-          return f.sugerido;
-        case "delta":
-          return f.delta;
-        case "senal":
-          return f.senal.fraccionEstimada;
-        default:
-          return f.impacto;
-      }
-    };
-    filas.sort((a, b) => {
-      const ka = clave(a);
-      const kb = clave(b);
-      if (typeof ka === "string" || typeof kb === "string") {
-        return signo * String(ka).localeCompare(String(kb), "es");
-      }
-      return signo * (ka - kb);
-    });
+    // Se devuelve en orden del servidor. El orden visible se deriva con `useMemo`
+    // para que un clic de encabezado no repita estas cuatro consultas.
     return { filas, total: pagina.total, orden, motivo };
-  }, [basis, ratio, tienda, clase, columna, direccion, offset]);
+  }, [basis, ratio, tienda, clase, offset]);
 
   // El toggle global primero anuncia el nombre de la base. Cuando termina la
   // consulta se anuncia también la cifra que cambió, que es lo que importa en
@@ -322,11 +326,16 @@ function Reposicion({
     anunciar(`${nombre}. Total a pedir en esta página: ${magnitud(totalAnunciable)}`);
   }, [anunciar, basis, clase, datos.cargando, offset, ratio, tienda, totalAnunciable]);
 
+  const filas = useMemo(
+    () => ordenarFilas(datos.datos?.filas ?? [], columna, direccion),
+    [columna, datos.datos?.filas, direccion],
+  );
+
   if (datos.cargando && !datos.datos) return <Esqueleto filas={FILAS} />;
   if (datos.error) throw datos.error;
   if (!datos.datos) return null;
 
-  const { filas, total, orden, motivo } = datos.datos;
+  const { total, orden, motivo } = datos.datos;
   const qEstrella = orden?.critical_fraction ?? cuantilCritico(1, ratio);
   const totalSugerido = filas.reduce((a, f) => a + f.sugerido, 0);
   const totalPolitica = filas.reduce((a, f) => a + f.politica, 0);

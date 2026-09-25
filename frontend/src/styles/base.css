@@ -902,6 +902,15 @@ button {
   caret-color: var(--recuperado);
 }
 
+.selector-resultados {
+  /* La API devuelve hasta 40 opciones: sin límite el diálogo mide más de 1.400 px
+     y las últimas quedan fuera del viewport. El foco activo se desplaza con
+     scrollIntoView, así que teclado y mouse recorren la misma lista. */
+  max-height: min(60vh, 540px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .resultado {
   display: grid;
   grid-template-columns: 58px 96px 1fr;

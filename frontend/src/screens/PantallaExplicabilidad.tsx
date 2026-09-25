@@ -12,6 +12,7 @@
  */
 
 import { api, type ExplainResponse } from "../api/client";
+import { etiquetaFeature } from "../domain";
 import { cuantil, magnitud } from "../format";
 import { useAsincrono, useEstado } from "../state";
 import { Esqueleto } from "../components/estados";
@@ -75,8 +76,13 @@ function Cascada({ datos }: { datos: ExplainResponse }) {
                     fontSize: 12,
                   }}
                 >
-                  <span className="tinta" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {c.feature}
+                  <span
+                    className="tinta"
+                    title={`Feature técnica: ${c.feature}`}
+                    aria-label={`${etiquetaFeature(c.feature)}; feature técnica ${c.feature}`}
+                    style={{ overflow: "hidden", textOverflow: "ellipsis" }}
+                  >
+                    {etiquetaFeature(c.feature)}
                   </span>
                   <div style={{ position: "relative", height: 10 }}>
                     {/* Eje del cero en el medio: la barra crece hacia el lado de
@@ -111,11 +117,11 @@ function Cascada({ datos }: { datos: ExplainResponse }) {
               );
             })}
             <p className="nota" style={{ marginTop: 12, maxWidth: "80ch" }}>
-              Valor de cada feature en esta predicción:{" "}
+              Valor de las variables en esta predicción:{" "}
               {contribuciones
                 .filter((c) => c.value != null)
                 .slice(0, 4)
-                .map((c) => `${c.feature} = ${magnitud(c.value as number)}`)
+                .map((c) => `${etiquetaFeature(c.feature)} = ${magnitud(c.value as number)}`)
                 .join(" · ")}
               .
             </p>

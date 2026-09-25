@@ -62,6 +62,10 @@ async function preparar(page: Page, pantalla: Pantalla, tema: "light" | "dark") 
   await page.emulateMedia({ colorScheme: tema });
   await page.goto(`/${pantalla.ruta}`);
   await expect(page.getByText(pantalla.ancla).first()).toBeVisible({ timeout: 90_000 });
+  // La pantalla puede terminar antes que el `/backtest` global. Si se captura ahí,
+  // la franja dice "cargando" y el KPI dice "falta correr", aunque el reporte sí
+  // exista. No es una variante visual: es una carrera del arnés.
+  await expect(page.getByText(/MASE · cargando…/)).toHaveCount(0, { timeout: 90_000 });
   // El tema se guarda en localStorage y gana sobre la preferencia del sistema, así
   // que se fuerza el atributo para que la captura sea del tema pedido.
   await page.evaluate((t) => {
@@ -157,10 +161,28 @@ test("el selector y el foco visible", async ({ page }) => {
   await page.goto("/?screen=reorder&basis=observed");
   await expect(page.getByText(/Qué pedir hoy/)).toBeVisible({ timeout: 90_000 });
 
+  const disparador = page.getByRole("button", { name: /^Serie/ }).first();
+  await disparador.focus();
   await page.keyboard.press("Control+k");
-  await expect(page.getByRole("dialog", { name: "Buscar serie" })).toBeVisible();
+  const dialogo = page.getByRole("dialog", { name: "Buscar serie" });
+  await expect(dialogo).toBeVisible();
+  const campo = page.getByRole("combobox", { name: "Buscar serie" });
+  const primera = dialogo.getByRole("option").first();
+  await expect(primera).toBeVisible({ timeout: 60_000 });
+  await expect(campo).toHaveAttribute("aria-activedescendant", /serie-opcion-/);
+  const activaAntes = await campo.getAttribute("aria-activedescendant");
+  await page.keyboard.press("ArrowDown");
+  await expect(campo).not.toHaveAttribute("aria-activedescendant", activaAntes ?? "");
+
+  // Tab queda contenido entre el campo y Cerrar; Escape devuelve el foco al
+  // disparador. Axe no detecta focus traps ni retorno de foco ausentes.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Cerrar" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(campo).toBeFocused();
   await page.screenshot({ path: `${SHOTS}/4b-selector-1440-claro.png` });
   await page.keyboard.press("Escape");
+  await expect(disparador).toBeFocused();
 
   // El contorno de foco no se suprime nunca: se verifica que el navegador dibuje
   // algo al llegar por teclado, no que exista la regla CSS.

@@ -19,7 +19,7 @@ El audit encontró y corrigió cuatro defectos baratos de demo:
 4. El README seguía pidiendo una captura. La captura real de Playwright está publicada en
    `docs/assets/reposicion.png`. El despliegue público no se promete porque la API no tiene auth.
 
-Verificación del lote: TypeScript limpio, 39 tests de Vitest, oxlint con 0 errores, ruff limpio y
+Verificación del lote: TypeScript limpio, 41 tests de Vitest, oxlint con 0 errores, ruff limpio y
 12 tests de Playwright en claro/oscuro y cuatro anchos.
 
 ---

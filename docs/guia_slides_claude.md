@@ -467,7 +467,7 @@ Mensaje:
 - API FastAPI.
 - Frontend React de 7 pantallas.
 - Streamlit de 8 pantallas.
-- **290 tests Python, 39 tests frontend y 12 tests Playwright.**
+- **290 tests Python, 41 tests frontend y 12 tests Playwright.**
 
 ## Limitaciones
 

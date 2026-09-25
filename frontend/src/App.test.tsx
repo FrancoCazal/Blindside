@@ -325,9 +325,11 @@ describe("pantalla de reposición", () => {
     expect(new URLSearchParams(window.location.search).get("offset")).toBe("25");
   });
 
-  it("ordenar por una columna lo refleja en aria-sort y en la URL", async () => {
+  it("ordenar por una columna lo refleja en aria-sort y en la URL sin refetch", async () => {
     montar();
     const tabla = await screen.findByRole("table");
+    const fetchMock = vi.mocked(fetch);
+    const llamadasAntes = fetchMock.mock.calls.length;
 
     // Por defecto ordena por impacto, descendente, y no ensucia la URL.
     const th = (nombre: string) =>
@@ -350,6 +352,10 @@ describe("pantalla de reposición", () => {
     });
     expect(th("Sugerido").getAttribute("aria-sort")).toBe("ascending");
     expect(new URLSearchParams(window.location.search).get("dir")).toBe("asc");
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fetchMock.mock.calls.length).toBe(llamadasAntes);
   });
 
   it("los botones de ratio muestran el cuantil que producen", async () => {

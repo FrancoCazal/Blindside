@@ -201,6 +201,54 @@ export function clasificarSenal(resumen: {
 }
 
 /**
+ * Nombre de negocio para una feature de SHAP.
+ *
+ * La API devuelve el nombre técnico porque es parte del contrato del modelo y
+ * permite auditarlo. La interfaz muestra una traducción estable y conserva el
+ * técnico en `title`/`aria-label`: «Por qué este número» no puede exigir saber
+ * que `latent_roll_mean_7` significa una media de siete días.
+ */
+export function etiquetaFeature(feature: string): string {
+  const exactas: Record<string, string> = {
+    discount: "Factor de descuento",
+    holiday_flag: "Feriado",
+    activity_flag: "Actividad comercial",
+    product_id: "Producto",
+    store_id: "Tienda",
+    city_id: "Ciudad",
+    management_group_id: "Grupo de gestión",
+    first_category_id: "Categoría principal",
+    second_category_id: "Subcategoría",
+    third_category_id: "Categoría detallada",
+    horizon_step: "Día del horizonte",
+    h: "Día del horizonte",
+    dow_sin: "Día de semana · ciclo seno",
+    dow_cos: "Día de semana · ciclo coseno",
+    dom_sin: "Día del mes · ciclo seno",
+    dom_cos: "Día del mes · ciclo coseno",
+  };
+  if (exactas[feature]) return exactas[feature];
+
+  const movil = feature.match(/^(?:latent|observed|sale)_roll_(mean|median|std|min|max)_(\d+)$/);
+  if (movil) {
+    const operacion: Record<string, string> = {
+      mean: "Media de demanda",
+      median: "Mediana de demanda",
+      std: "Variabilidad de demanda",
+      min: "Mínimo de demanda",
+      max: "Máximo de demanda",
+    };
+    return `${operacion[movil[1]]} · ${movil[2]} días`;
+  }
+
+  const rezago = feature.match(/^(?:latent|observed|sale)_lag_(\d+)$/);
+  if (rezago) return `Demanda hace ${rezago[1]} días`;
+
+  const texto = feature.replaceAll("_", " ");
+  return texto.charAt(0).toLocaleUpperCase("es") + texto.slice(1);
+}
+
+/**
  * Arma un CSV a partir de filas ya calculadas.
  *
  * Existe acá y no en la pantalla porque es lógica pura y tiene test. El separador

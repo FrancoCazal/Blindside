@@ -39,6 +39,7 @@ for (const caso of CASOS) {
       await page.emulateMedia({ colorScheme: tema });
       await page.goto(`/${caso.ruta}`);
       await expect(page.getByText(caso.ancla).first()).toBeVisible({ timeout: 90_000 });
+      await expect(page.getByText(/MASE · cargando…/)).toHaveCount(0, { timeout: 90_000 });
       await page.evaluate((t) => {
         document.documentElement.dataset.theme = t === "dark" ? "dark" : "light";
       }, tema);
