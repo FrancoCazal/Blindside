@@ -37,6 +37,31 @@ st.set_page_config(
 
 
 # --------------------------------------------------------------------------
+# Tema accesible
+# --------------------------------------------------------------------------
+# Streamlit 1.39 fija `st.caption` en #a3a8b8 e ignora `theme.textColor`: axe
+# mide 1,99:1 sobre la superficie y exige 4,5:1. La versión está fijada, así que
+# el data-testid es más seguro que seleccionar las clases Emotion generadas.
+# Es CSS estático, sin datos ni JavaScript; no se ocultan las dos violaciones
+# ARIA que quedan en el cromo del framework.
+st.markdown(
+    """
+    <style>
+    [data-testid="stCaptionContainer"],
+    [data-testid="stCaptionContainer"] p,
+    [data-testid="stCaptionContainer"] span {
+      color: #55524c !important;
+    }
+    [data-testid="stCaptionContainer"] a,
+    [data-testid="stCaptionContainer"] code {
+      color: #6f2f18 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# --------------------------------------------------------------------------
 # Carga con cache
 # --------------------------------------------------------------------------
 @st.cache_data(show_spinner="Cargando panel...")

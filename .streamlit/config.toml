@@ -1,0 +1,15 @@
+[theme]
+# Misma dirección que el frontend React: papel cálido, superficie neutra y un
+# único acento bermellón. Se usa la configuración pública de Streamlit, no CSS
+# contra clases generadas (cambian entre versiones y rompen sin aviso).
+base = "light"
+primaryColor = "#C43D17"
+backgroundColor = "#FBFAF7"
+secondaryBackgroundColor = "#EFEBE5"
+textColor = "#1F1E1A"
+font = "sans serif"
+
+[client]
+# La app es una superficie local de defensa, no un entorno de desarrollo de
+# Streamlit. El toolbar mínimo reduce cromo sin esconder controles con CSS.
+toolbarMode = "minimal"

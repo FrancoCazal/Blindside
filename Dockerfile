@@ -144,6 +144,7 @@ COPY --chown=blindside:blindside pyproject.toml README.md ./
 COPY --chown=blindside:blindside src ./src
 COPY --chown=blindside:blindside api ./api
 COPY --chown=blindside:blindside app ./app
+COPY --chown=blindside:blindside .streamlit ./.streamlit
 
 RUN pip install --no-deps -e .
 
