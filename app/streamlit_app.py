@@ -64,9 +64,185 @@ def load_markdown(name: str) -> str | None:
     return path.read_text(encoding="utf-8") if path.exists() else None
 
 
+@st.cache_data(show_spinner="Calculando triage...")
+def load_triage(_layer: str) -> tuple[pd.DataFrame | None, pd.DataFrame | None]:
+    """Señales por serie y resumen por grupo. Cacheado porque recorre el panel entero.
+
+    El `_layer` no se usa adentro: esta en la firma para que el cache se invalide si se
+    cambia de capa de datos. Sin eso, pasar de `sample` a `processed` mostraria el
+    triage de la capa anterior.
+    """
+    from blindside.evaluate import triage as T
+
+    panel, _ = load_demand()
+    if panel is None:
+        return None, None
+    señales = T.series_signals(panel, load_backtest())
+    marcado = T.triage(señales)
+    return marcado, T.resumen_por_grupo(marcado)
+
+
 # --------------------------------------------------------------------------
 # Pantallas
 # --------------------------------------------------------------------------
+def screen_triage(panel: pd.DataFrame, layer: str) -> None:
+    """Portada: de las 3.066 series, cuales mirar primero y por que motivo.
+
+    **No es un ranking ni un top 10, y la razon esta medida.** El costo esta repartido
+    -- el top 10 % de series concentra 26,5 % del costo de newsvendor, contra el 70-80 %
+    que tendria un Pareto fuerte -- asi que un corte en la posicion 10 seria arbitrario.
+    Y los ejes de criticidad son ortogonales: el solapamiento entre el top 50 por
+    volumen y el top 50 por error normalizado es de 0 series. Un score compuesto los
+    promediaria y perderia lo unico accionable, que es **por que** entro cada serie.
+    """
+    from blindside.evaluate import triage as T
+
+    st.header("Qué mirar primero")
+    if layer == "sample":
+        st.warning(
+            "Estás viendo la **muestra commiteada** de `data/sample/`, no el "
+            "subconjunto completo. Correr `make data && make recover`.",
+            icon="⚠️",
+        )
+
+    marcado, resumen = load_triage(layer)
+    if marcado is None or resumen is None or resumen.empty:
+        st.info("Sin datos para el triage.")
+        return
+
+    total = len(marcado)
+    con_motivo = int((marcado["n_motivos"] > 0).sum())
+    n_no_confiable = (
+        int((marcado["mase_serie"] > 1).sum()) if "mase_serie" in marcado.columns else None
+    )
+
+    # Sin `delta`: la flecha de Streamlit significa "cambió respecto de antes", y acá no
+    # hay comparación temporal. Una flecha verde al lado de "26 % del catálogo pide
+    # atención" sugiere una mejora que nadie midió.
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Series en cartera", f"{total:,}")
+    c2.metric("Piden atención", f"{con_motivo:,}")
+    c3.metric("Con más de un motivo", f"{int((marcado['n_motivos'] >= 2).sum()):,}")
+    c4.metric(
+        "Modelo no confiable",
+        f"{n_no_confiable:,}" if n_no_confiable is not None else "sin medir",
+    )
+    c1.caption("tienda × producto")
+    c2.caption(f"**{con_motivo / total:.1%}** del catálogo")
+    c3.caption("más de un eje a la vez")
+    c4.caption(
+        "peor que el naive estacional" if n_no_confiable is not None else "falta `make models`"
+    )
+
+    st.caption(
+        f"El triage aísla el **{con_motivo / total:.1%}** del catálogo. Que la mayoría no "
+        "tenga motivo es el resultado buscado: una alerta que marca un tercio del "
+        "catálogo no prioriza nada. Los umbrales están medidos, no elegidos — ver "
+        "`docs/decisiones.md` D25."
+    )
+
+    st.subheader("Los motivos, y cuánto pesa cada uno")
+    # ProgressColumn y no `Styler.background_gradient`: el gradiente de pandas exige
+    # matplotlib, que **no esta en la imagen de servicio** (queda afuera a proposito
+    # porque pesa y no hace falta para responder /forecast). Verificado dentro del
+    # contenedor: importarlo tumbaria la pagina en el demo y no en local.
+    tabla_grupos = resumen[
+        ["grupo", "series", "share_series", "share_volumen", "solo_este_motivo"]
+    ].copy()
+    # A porcentaje: `NumberColumn` con formato `%%` no escala, solo agrega el signo.
+    tabla_grupos["share_series"] *= 100
+    tabla_grupos["share_volumen"] *= 100
+    st.dataframe(
+        tabla_grupos,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "grupo": st.column_config.TextColumn("Motivo"),
+            "series": st.column_config.NumberColumn("Series", format="%d"),
+            "share_series": st.column_config.NumberColumn("% del catálogo", format="%.1f %%"),
+            "share_volumen": st.column_config.ProgressColumn(
+                "% del volumen", format="%.1f %%", min_value=0.0, max_value=100.0
+            ),
+            "solo_este_motivo": st.column_config.NumberColumn(
+                "Sólo por este motivo",
+                format="%d",
+                help="Series que ese grupo es el único en detectar.",
+            ),
+        },
+    )
+    st.caption(
+        "**Series y volumen no son lo mismo**, y las dos hacen falta: un motivo puede "
+        "tocar pocas series y mucha plata. La última columna dice cuántas entran **sólo** "
+        "por ese motivo, o sea las que ese grupo es el único en detectar."
+    )
+
+    st.subheader("Qué significa cada motivo")
+    for g in T.GRUPOS:
+        if g.clave not in marcado.columns:
+            continue
+        n = int(marcado[g.clave].sum())
+        with st.expander(f"**{g.etiqueta}** · {n:,} series", expanded=False):
+            st.markdown(f"**Qué significa.** {g.que_significa}")
+            st.markdown(f"**Qué hacer.** {g.que_hacer}")
+
+    st.subheader("Las series a revisar")
+    motivos = {g.etiqueta: g.clave for g in T.GRUPOS if g.clave in marcado.columns}
+    elegido = st.selectbox(
+        "Filtrar por motivo",
+        ["Todas las que piden atención", *motivos],
+        help="Cada motivo pide una acción distinta, así que se revisan por separado.",
+    )
+
+    vista = (
+        marcado[marcado["n_motivos"] > 0]
+        if elegido == "Todas las que piden atención"
+        else marcado[marcado[motivos[elegido]]]
+    )
+    if vista.empty:
+        st.success("Ninguna serie cae en este grupo.")
+        return
+
+    cols = [
+        c
+        for c in ("demanda_media", "mase_serie", "frac_estimada", "racha_vigente")
+        if c in vista.columns
+    ]
+    tabla = vista.sort_values(["n_motivos", "demanda_media"], ascending=False).head(25)[
+        [*cols, "n_motivos", T.MOTIVO_COL]
+    ]
+    config = {
+        "series_id": st.column_config.TextColumn("Serie"),
+        "demanda_media": st.column_config.NumberColumn("Demanda media", format="%.3f"),
+        "mase_serie": st.column_config.NumberColumn(
+            "MASE de la serie",
+            format="%.3f",
+            help="Por encima de 1 el modelo le pierde al naive estacional.",
+        ),
+        "frac_estimada": st.column_config.ProgressColumn(
+            "Señal estimada", format="%.0f %%", min_value=0.0, max_value=100.0
+        ),
+        "racha_vigente": st.column_config.NumberColumn("Días quebrado", format="%d"),
+        "n_motivos": st.column_config.NumberColumn("Motivos", format="%d"),
+        T.MOTIVO_COL: st.column_config.TextColumn("Por qué", width="large"),
+    }
+    mostrar = tabla.reset_index()
+    if "frac_estimada" in mostrar.columns:
+        mostrar["frac_estimada"] *= 100
+    st.dataframe(mostrar, use_container_width=True, hide_index=True, column_config=config)
+    st.caption(
+        f"{len(vista):,} series en este filtro; se muestran las 25 con más motivos. "
+        "Ordenadas por cantidad de motivos y después por volumen, **no por un score**: "
+        "sumar ejes ortogonales daría un número sin significado."
+    )
+
+    st.download_button(
+        "Descargar el filtro completo (CSV)",
+        vista.reset_index().to_csv(index=False).encode("utf-8"),
+        file_name=f"triage_{elegido.lower().replace(' ', '_')}.csv",
+        mime="text/csv",
+    )
+
+
 def screen_overview(panel: pd.DataFrame, layer: str) -> None:
     st.header("Vista general")
 
@@ -202,7 +378,7 @@ def screen_series(panel: pd.DataFrame) -> None:
 
 
 def screen_censoring() -> None:
-    st.header("Ablacion de censura")
+    st.header("Ablación de censura")
     body = load_markdown("censoring_ablation.md")
     if body is None:
         st.info("Sin ablacion todavia. Correr `make ablation`.")
@@ -247,7 +423,7 @@ def screen_models() -> None:
 
 
 def screen_decision(panel: pd.DataFrame) -> None:
-    st.header("Reposicion")
+    st.header("Reposición")
 
     st.markdown(
         "La cantidad a reponer sale de la economia, no del pronostico puntual. Con "
@@ -300,7 +476,7 @@ def screen_decision(panel: pd.DataFrame) -> None:
 
 
 def screen_leakage() -> None:
-    st.header("Validacion y antifugas")
+    st.header("Validación y antifugas")
     st.markdown(
         """
 El checklist antifugas de la metodologia esta implementado como **tests que fallan
@@ -353,8 +529,8 @@ def screen_report() -> None:
 def main() -> None:
     st.sidebar.title("📦 blindside-core")
     st.sidebar.caption(
-        "Pronostico de demanda de perecederos con recuperacion de demanda censurada "
-        "y capa de decision de reposicion."
+        "Pronóstico de demanda de perecederos con recuperación de demanda censurada "
+        "y capa de decisión de reposición."
     )
 
     panel, layer = load_demand()
@@ -368,19 +544,20 @@ def main() -> None:
         st.stop()
 
     screens = {
+        "Qué mirar primero": lambda: screen_triage(panel, layer),
         "Vista general": lambda: screen_overview(panel, layer),
         "Serie individual": lambda: screen_series(panel),
-        "Ablacion de censura": screen_censoring,
+        "Ablación de censura": screen_censoring,
         "Comparativa de modelos": screen_models,
-        "Reposicion": lambda: screen_decision(panel),
-        "Validacion y antifugas": screen_leakage,
+        "Reposición": lambda: screen_decision(panel),
+        "Validación y antifugas": screen_leakage,
         "Reporte completo": screen_report,
     }
     choice = st.sidebar.radio("Pantalla", list(screens))
     st.sidebar.divider()
     st.sidebar.caption(
         f"Capa de datos: `{layer}` · horizonte {cfg.FORECAST.horizon} d · "
-        f"{cfg.FORECAST.n_origins} origenes"
+        f"{cfg.FORECAST.n_origins} orígenes"
     )
     st.sidebar.caption(
         "Datos: [FreshRetailNet-50K](https://huggingface.co/datasets/"

@@ -846,6 +846,108 @@ busqueda "encuentra una mejora" por construccion, porque se compara contra su pe
 
 ---
 
+## D25 · El triage de cartera da grupos con motivo, no un ranking ni un score
+
+**Decision.** La portada del dashboard responde «de las 3.066 series, cuales miro primero», y lo
+hace con **cuatro grupos por motivo** en vez de un top N o un indice de criticidad. Las dos
+alternativas se descartaron por medicion, no por gusto.
+
+### Por que no un «top 10 productos criticos»
+
+Porque el costo esta **repartido**. Medido sobre el panel con el costo de newsvendor realizado por
+serie:
+
+| Corte | Share del costo |
+|---|---|
+| Top 1 % de series (30) | 4,8 % |
+| Top 5 % (153) | 16,6 % |
+| Top 10 % (306) | 26,5 % |
+| Top 20 % (613) | 41,4 % |
+| Top 50 % (1.533) | 70,2 % |
+
+Un Pareto fuerte pondria 70-80 % en el top 20 %; acá el top 20 % junta 41 %, o sea apenas el doble
+de lo proporcional. Con esa forma, **un corte en la posicion 10 es arbitrario**: la serie 11 se
+parece a la 10 y la 50 no es cualitativamente distinta. Un «top 10» daria la impresion de que hay
+un puñado de culpables cuando no los hay.
+
+### Por que no un score compuesto de criticidad
+
+Porque **los ejes son ortogonales**, y promediarlos destruye la unica informacion accionable.
+Medido por correlacion de Spearman y por solapamiento de los top 50:
+
+| Par de ejes | Spearman | Top 50 en comun |
+|---|---|---|
+| Volumen vs error normalizado (MASE) | +0,36 | **0 de 50** |
+| Volumen vs fraccion estimada | −0,06 | **0 de 50** |
+| Volumen vs racha vigente | +0,08 | 0 de 50 |
+| Fraccion estimada vs tasa de quiebre | +0,70 | 20 de 50 |
+
+Cero series en comun entre el top 50 por volumen y el top 50 por error significa que son
+**preguntas distintas sobre el catalogo**. Un indice que los promedie produce un numero que no
+contesta ninguna, y pierde lo que sirve: el remedio para «el modelo no le acierta a esta serie» no
+es el mismo que para «viene quebrada tres dias». Por eso la salida es un grupo con **motivo** y
+cada motivo trae **que hacer**.
+
+### Un eje que se descarto por redundante
+
+El **MAE por serie** parecia el candidato natural para «donde el modelo falla», y **no sirve**:
+correlaciona **0,861** con el nivel de demanda, con 23 de 50 series compartidas en el top 50. Es
+obvio en retrospectiva — el MAE esta en unidades de demanda, asi que rankear por MAE es rankear por
+volumen con otro nombre.
+
+Dividido por el denominador de MASE de cada serie, la correlacion con el nivel baja a **0,364** y el
+solapamiento del top 50 cae a **0**. La leccion general: **una metrica de error sin normalizar no es
+un eje propio**, es la variable de escala disfrazada.
+
+Lo mismo le pasa al costo de newsvendor realizado: correlaciona 0,985 con el MAE y 0,856 con el
+nivel, asi que un «top por plata perdida» seria otra vez un top por volumen. Es la razon de que el
+grupo de volumen se llame «Alto volumen» y no «Mayor impacto economico»: es lo que realmente mide.
+
+### Los cuatro grupos y sus cortes
+
+| Grupo | Corte | Series | % catalogo | % volumen |
+|---|---|---|---|---|
+| Alto volumen | nivel ≥ p90 | 307 | 10,0 % | 32,5 % |
+| Modelo no confiable | MASE de la serie > 1 | 404 | 13,2 % | 20,8 % |
+| Senal escasa | fraccion estimada > 0,30 | 201 | 6,6 % | 7,4 % |
+| Quebrado ahora | racha vigente ≥ 5 dias | 108 | 3,5 % | 3,7 % |
+
+Los cuatro juntos aislan el **26,0 %** del catalogo (798 series), y solo 186 caen en dos o mas
+grupos. Que el 74 % no tenga motivo es el resultado buscado: el antecedente es la primera alerta de
+la interfaz, que usaba `censored_days_last_28 >= 14` cuando la mediana del panel es 12 de 28, y
+marcaba el **35,6 %** del catalogo. Una alerta que marca un tercio del catalogo es un color de
+fondo. Hay un test que falla si cualquier grupo pasa la mitad.
+
+**Dos cortes son naturales y dos son cuantiles, y conviene distinguirlos.** `MASE > 1` no es
+arbitrario: es el punto exacto donde el modelo deja de justificar su existencia para esa serie,
+porque le pierde al naive estacional. La `racha vigente ≥ 5` tampoco, porque la variable es discreta
+y con 3 dias marcaria el 21,9 % por empates. En cambio el volumen no tiene corte natural, asi que se
+usa el p90 y **se declara que es un cuantil**.
+
+### El hallazgo que esto destapo
+
+**404 series (13,2 %) tienen MASE > 1**, o sea que el modelo servido les pierde al naive estacional.
+Y **no son las chicas**: su nivel medio de demanda es **2,120** contra 1,344 del panel, asi que son
+mas grandes que el promedio, y concentran **20,8 %** del volumen.
+
+El MASE global de 0,8217 es cierto y esconde eso. No es una contradiccion — es la diferencia entre
+un promedio y su distribucion — pero es informacion que la interfaz operativa no mostraba y que
+cambia como se usa el numero: en esas 404 series conviene mirar la media movil antes de aceptar la
+cantidad sugerida.
+
+### Un bug que solo aparecia en Docker
+
+La primera version de la tabla usaba `Styler.background_gradient` de pandas, que exige
+**matplotlib**. Matplotlib **no esta en la imagen `serve`**, que deja afuera a proposito todo lo que
+no hace falta para responder `/forecast`. En local funcionaba y en el contenedor habria tumbado la
+pagina — o sea durante el demo y no durante el desarrollo.
+
+Ahora la tabla usa `st.column_config.ProgressColumn`, que es nativo de Streamlit, y hay tests de
+render con `AppTest` que corren la app de verdad. Un `import` no atrapa esto: la pagina compila y
+falla al dibujar.
+
+---
+
 ## Roadmap
 
 Fuera del alcance de la entrega, en orden de valor:
