@@ -10,6 +10,9 @@ numpy==2.0.2
 pandas==2.2.3
 pyarrow==17.0.0
 matplotlib==3.9.2
+# Las slides anotan la captura del frontend con PIL; fijarla evita depender de la
+# version transitiva que resuelva matplotlib en un entorno nuevo.
+pillow==10.4.0
 seaborn==0.13.2
 # scipy entra como dependencia transitiva de scikit-learn y statsmodels, y por eso
 # habia quedado sin fijar. Era un agujero real de reproducibilidad: `make setup`

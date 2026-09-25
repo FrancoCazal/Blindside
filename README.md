@@ -54,6 +54,10 @@ make front   # frontend React en localhost:5173 (necesita la API arriba)
 
 ![Pantalla de reposición de Blindside](docs/assets/reposicion.png)
 
+**Defensa:** [presentación en PDF](docs/slides/blindside_defensa.pdf) ·
+[fuente Marp](docs/slides/blindside_defensa.md) ·
+[guion de la demo](docs/demo_guion.md).
+
 > **Pendiente de entrega:** grabar el video con `docs/demo_guion.md`. No hay despliegue público:
 > la API no tiene autenticación y exponerla fuera de `127.0.0.1` sería inseguro; para la defensa
 > se ejecuta localmente con Docker Compose.
@@ -478,7 +482,7 @@ numba vía umap-learn) no publican wheels para 3.13 ni 3.14, y desfijarlos para 
 rompería la reproducibilidad que ese archivo está protegiendo.
 
 ```bash
-git clone https://github.com/FrancoCazal/blindside-core.git
+git clone https://github.com/FrancoCazal/Blindside.git
 cd blindside-core
 
 python3.11 -m venv .venv
