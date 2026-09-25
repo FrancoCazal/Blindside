@@ -215,6 +215,54 @@ residuo **absoluto**, así que el cuantil sale siempre positivo y la mecánica s
 El score de CQR es `max(q_lo − y, y − q_hi)`, que es negativo cuando el punto cayó dentro del
 intervalo, así que la corrección puede **apretar**. Detalle y medición en `docs/decisiones.md` D21.
 
+### El contraste contra los clásicos per-serie
+
+El modelo que el proyecto defiende es **global**: un solo LightGBM que ve las 3066 series a la
+vez. La objeción obvia es que el pronóstico de series temporales tiene una tradición de modelos
+**por serie**, y que un global podría estar ganando solo porque se comparó contra baselines
+simples. SARIMA y Prophet son la respuesta.
+
+Medido sobre una submuestra declarada de **400 series** con los mismos 8 orígenes —son por serie
+y cuestan ~650 ms y ~300 ms cada una, así que las 3066 serían horas. Reporte en
+`reports/metrics_classical.md`, generado por `make classical`:
+
+| Modelo | MASE | Desvío | Peor origen | Δ vs naive estacional |
+|---|---|---|---|---|
+| **LightGBM global** | **0,8386** | 0,0549 | 0,9029 | **+24,2 %** |
+| Croston SBA | 0,9032 | 0,0707 | 0,9873 | +18,3 % |
+| SARIMA `(1,0,1)(1,0,0)[7]` | 0,9136 | 0,0599 | 0,9832 | +17,4 % |
+| Media móvil 21 d | 0,9139 | 0,0652 | 0,9927 | +17,4 % |
+| Prophet | 0,9698 | 0,0704 | 1,0502 | +12,3 % |
+| Naive estacional | 1,1058 | 0,0674 | 1,1761 | — |
+
+> La fila de Prophet exige la instalación opcional; sin ella `make classical` corre igual y el
+> reporte sale con los otros cinco. SARIMA **no** es opcional: sale de `statsforecast`, que ya
+> está fijado en `requirements.txt`.
+
+El global le gana a SARIMA por 8,2 % y a Prophet por 13,5 %. Pero el dato que más dice es otro:
+**SARIMA queda empatado con la media móvil de 21 días** — 0,9136 contra 0,9139 — y pierde contra
+Croston. Todo el aparato ARIMA no compra nada sobre un promedio simple en este panel, y eso es
+consistente con series cortas, intermitentes y con una estacionalidad semanal que un rolling ya
+captura.
+
+Prophet queda último de los modelos con ajuste y su peor origen pasa de 1,05, o sea peor que la
+escala del naive estacional. Con 97 días no hay ciclo anual que estimar, así que queda reducido a
+tendencia más estacionalidad semanal; el contraste es legítimo y conviene decir que no está en su
+terreno.
+
+**El orden de SARIMA está declarado, no buscado, y eso no lo perjudica.** `AutoARIMA` cuesta 2,3 s
+por serie contra 85 ms de la orden fija —27 veces más—, lo que haría la comparación imposible
+dentro del presupuesto. Para descartar que fijarlo fuera un handicap se midieron las dos sobre 60
+series: la orden fija da MASE **0,9566** y la búsqueda **0,9657**, o sea que la versión barata es
+*mejor*. Se puede reproducir con `--models sarima_auto`.
+
+**Prophet es opcional y el arnés lo saltea si no está.** Está comentado en `requirements.txt`
+porque arrastra un backend de Stan; el import es perezoso y `ProphetForecaster.disponible()`
+permite correr el contraste sin él. Si se instala, hacen falta las dos líneas:
+`pip install prophet==1.1.6 cmdstanpy==1.2.4` — con la cmdstanpy que pip resuelve por defecto el
+bundle de Stan queda sin makefile y Prophet falla con un `AttributeError` que no dice nada sobre
+la causa.
+
 ### Dos aclaraciones sobre cómo leer la tabla
 
 **El naive estacional da MASE 1,10 y no 1,00.** El denominador de MASE es su error *en muestra*
@@ -340,7 +388,7 @@ blindside-app   Up (healthy)   127.0.0.1:8501->8501/tcp
 `/_stcore/health`, y la suite corre dentro del contenedor:
 
 ```bash
-make docker-test    # 195 tests en la imagen del pipeline
+make docker-test    # 213 tests en la imagen del pipeline
 ```
 
 ### Seguridad del despliegue
@@ -402,13 +450,13 @@ blindside-core/
 │   ├── data/          # schema.py (CONTRATO 1), freshretail.py, loaders.py
 │   ├── features/      # calendar.py, lags.py, build.py (anclado en el origen)
 │   ├── validation/    # splits.py (origen movil), leakage.py (los 8 asserts)
-│   ├── models/        # base.py (CONTRATO 2), baselines, tabular, gbdt, linear
+│   ├── models/        # base.py (CONTRATO 2), baselines, tabular, gbdt, linear, classical
 │   ├── unsupervised/  # clustering, embeddings, anomalias  [pendiente]
 │   ├── decision/      # censoring, conformal, newsvendor, policy
 │   ├── evaluate/      # contracts.py (CONTRATO 3), metrics, backtest, ablation
 │   └── explain/       # SHAP  [pendiente]
 ├── notebooks/         # 6 notebooks ejecutados; importan de src/, no contienen logica
-├── tests/             # 195 tests; test_leakage.py son los 8 items del checklist
+├── tests/             # 213 tests; test_leakage.py son los 8 items del checklist
 ├── app/               # streamlit_app.py, 7 pantallas
 ├── api/               # schemas.py (CONTRATO 4), main.py
 ├── frontend/          # React + Vite + TS; schema.d.ts generado del OpenAPI
@@ -564,13 +612,15 @@ conviene haberlo citado primero.
 Implementado y verificado: contratos, carga y submuestreo, recuperación de censura, features
 ancladas en el origen, validación de origen móvil con asserts antifugas, métricas, arnés de
 backtesting, baselines, LightGBM (puntual y cuantílico), XGBoost, regresión regularizada,
-conformal por partición, newsvendor con esperanzas derivadas de la distribución predictiva,
-simulador de política, API, dashboard Streamlit, frontend React de 8 pantallas, TreeSHAP por
-predicción y PCA del catálogo de productos.
+**SARIMA y Prophet como contraste per-serie (M6)**, CQR con cobertura verificada, newsvendor con
+esperanzas derivadas de la distribución predictiva, simulador de política, API, dashboard
+Streamlit, frontend React de 8 pantallas, TreeSHAP por predicción y PCA del catálogo.
 
-Pendiente del alcance del plan: SARIMA y Prophet (M6), GRU/LSTM y transformer temporal (M5),
-clustering y detección de anomalías (M4), drift (M9), reconciliación MinT (8.3), Optuna, y el
-generador sintético del caso Focal Point (frente K).
+Con eso queda cubierto el **mínimo defendible que el plan declara: M2 + M3 + M6.**
+
+Pendiente del alcance del plan: GRU/LSTM y transformer temporal (M5), clustering y detección de
+anomalías (M4), drift (M9), reconciliación MinT (8.3), Optuna, y el generador sintético del caso
+Focal Point (frente K).
 
 **La limitación que queda del lado del intervalo**, ahora que CQR está medido: cubre 88,0 %
 cuando promete 90 %, o sea dos puntos **por debajo**. La garantía del split-conformal supone

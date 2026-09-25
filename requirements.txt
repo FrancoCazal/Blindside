@@ -11,6 +11,20 @@ pandas==2.2.3
 pyarrow==17.0.0
 matplotlib==3.9.2
 seaborn==0.13.2
+# scipy entra como dependencia transitiva de scikit-learn y statsmodels, y por eso
+# habia quedado sin fijar. Era un agujero real de reproducibilidad: `make setup`
+# resolvia la ultima version, y scipy 1.15 removio `scipy._lib._util._lazywhere`,
+# que statsmodels 0.14.4 importaba al arrancar. Resultado: `statsforecast` estaba
+# fijado en este archivo y era **ininstalable de hecho** en un entorno nuevo. No se
+# noto durante semanas porque ningun modulo del proyecto lo importaba todavia; salio
+# al escribir los contrastes de M6.
+scipy==1.17.1
+# scipy entra como dependencia transitiva de scikit-learn y statsmodels, y por eso
+# estuvo sin fijar un tiempo. Fue un agujero real de reproducibilidad: `make setup`
+# resolvia la ultima version, y scipy 1.15 removio `_lazywhere`, que statsmodels
+# 0.14.4 importaba. Resultado: statsforecast quedaba **ininstalable de hecho** en un
+# entorno nuevo. No se noto porque ningun modulo del proyecto lo importaba todavia.
+scipy==1.17.1
 
 # --- Acceso al dataset ---------------------------------------------------
 datasets==3.0.1
@@ -22,7 +36,9 @@ lightgbm==4.5.0
 xgboost==2.1.1
 
 # --- Series temporales ---------------------------------------------------
-statsmodels==0.14.4
+# statsmodels 0.14.4 no arranca con scipy >= 1.15 (ver la nota de scipy arriba).
+# 0.14.6 es la ultima de la serie 0.14 y no cambia ninguna API que este proyecto use.
+statsmodels==0.14.6
 statsforecast==1.7.6
 
 # --- Deep learning -------------------------------------------------------
@@ -55,5 +71,20 @@ pytest==8.3.3
 ruff==0.6.9
 
 # --- Opcionales (instalacion pesada; aislados del camino critico) --------
+# SARIMA **no** esta aca: sale de `statsforecast`, que ya esta fijado arriba, asi
+# que el contraste clasico principal de M6 corre sin instalar nada extra.
+#
+# Prophet si es opcional, y queda comentado porque arrastra un backend de Stan. El
+# codigo lo importa de forma perezosa y `ProphetForecaster.disponible()` deja que el
+# arnes lo saltee sin fallar. Para correrlo hacen falta **las dos** lineas, en orden:
+#
+#   pip install prophet==1.1.6 cmdstanpy==1.2.4
+#
+# El pin de cmdstanpy no es decorativo. prophet 1.1.6 resuelve cmdstanpy>=1.0.4, asi
+# que pip instala la 1.3.0, y con esa el bundle de cmdstan que trae el wheel queda sin
+# makefile: el backend no carga y Prophet falla con
+# `AttributeError: 'Prophet' object has no attribute 'stan_backend'`, que no dice nada
+# sobre la causa. Con 1.2.4 funciona.
 # prophet==1.1.6
+# cmdstanpy==1.2.4
 # pmdarima==2.0.4

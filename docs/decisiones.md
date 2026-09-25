@@ -588,6 +588,78 @@ la configuración, no el resultado de un cálculo, así que se canoniza con `rou
 
 ---
 
+## D22 · El contraste clasico va con orden declarada, y Prophet queda opcional
+
+**Decision.** M6 se cierra con **SARIMA de orden fija** `(1,0,1)(1,0,0)[7]` desde
+`statsforecast`, y **Prophet** como dependencia opcional que el arnes saltea si no esta. Los dos
+se miden sobre una submuestra declarada de 400 series con los mismos 8 origenes.
+
+**Por que hacen falta.** El proyecto defiende un modelo **global** y la objecion natural es que
+podria estar ganando solo porque se comparo contra baselines simples. El pronostico de series
+temporales tiene una tradicion de modelos **por serie**; si el global no les gana, no hay nada que
+defender. Es la comparacion que un panel pregunta primero.
+
+**Resultado, sobre 400 series y 8 origenes:**
+
+| Modelo | MASE | Desvio | Peor origen |
+|---|---|---|---|
+| LightGBM global | **0,8386** | 0,0549 | 0,9029 |
+| Croston SBA | 0,9032 | 0,0707 | 0,9873 |
+| SARIMA | 0,9136 | 0,0599 | 0,9832 |
+| Media movil 21 d | 0,9139 | 0,0652 | 0,9927 |
+| Prophet | 0,9698 | 0,0704 | 1,0502 |
+| Naive estacional | 1,1058 | 0,0674 | 1,1761 |
+
+Lo que mas dice no es que el global gane por 8,2 % contra SARIMA, sino que **SARIMA queda empatado
+con la media movil de 21 dias** — 0,9136 contra 0,9139 — y pierde contra Croston. Todo el aparato
+ARIMA no compra nada sobre un promedio simple en este panel. Es consistente con series cortas (97
+dias), intermitentes, y con una estacionalidad semanal que un rolling ya captura.
+
+**Por que el orden es declarado y no buscado.** `AutoARIMA` busca el orden por serie y cuesta
+**2,3 s por serie** medido sobre este panel; la orden fija cuesta **85 ms**. Son 27 veces, o sea
+la diferencia entre 2 horas y 4,6 minutos para 400 series por 8 origenes.
+
+Fijar el orden podria parecer una forma de hacer perder al contraste, asi que se midio: sobre 60
+series, la orden fija da MASE **0,9566** y `AutoARIMA` **0,9657**. La version barata es *mejor*,
+asi que no hay handicap que descontar. La variante queda registrada como `sarima_auto` para que la
+comparacion sea reproducible.
+
+El orden elegido sale de lo que el panel muestra en el notebook `01`: serie diaria con
+estacionalidad semanal clara y sin tendencia marcada en 97 dias, o sea `d = 0` con un AR y un MA
+estacionales.
+
+**Por que Prophet queda opcional.** Su instalacion arrastra un backend de Stan, y el plan lo
+declara aislado del camino critico. El import es perezoso, `ProphetForecaster.disponible()` deja
+que el arnes lo saltee, y el `ImportError` trae las instrucciones. Con 97 dias Prophet queda
+reducido a tendencia a tramos mas estacionalidad semanal — no hay ciclo anual que estimar y los
+feriados ya viajan como covariable en el global —, asi que el contraste es legitimo pero conviene
+decir que no esta en su terreno. Su peor origen pasa de 1,05, o sea peor que la escala del naive
+estacional.
+
+Dos detalles de la implementacion que costaron tiempo y quedan escritos para que no se repitan:
+
+- `growth="flat"` y no `linear`. Con 97 dias, una tendencia lineal ajustada por serie extrapola
+  con mucha confianza a 7 dias, y es la forma tipica en que Prophet falla en series cortas.
+- El pin **`cmdstanpy==1.2.4`** no es decorativo. prophet 1.1.6 resuelve `cmdstanpy>=1.0.4`, asi
+  que pip instala la 1.3.0, y con esa el bundle de cmdstan del wheel queda sin makefile: el
+  backend no carga y Prophet falla con `AttributeError: 'Prophet' object has no attribute
+  'stan_backend'`, que no dice nada sobre la causa real.
+
+**Un agujero de reproducibilidad que esto destapo, y que no tenia nada que ver con M6.** `scipy`
+no estaba fijado, aunque numpy, pandas y scikit-learn si. Entraba como dependencia transitiva, asi
+que `make setup` resolvia la ultima version — y scipy 1.15 removio `scipy._lib._util._lazywhere`,
+que `statsmodels 0.14.4` importa al arrancar.
+
+El efecto: `statsforecast` estaba **fijado en `requirements.txt` y era ininstalable de hecho** en
+un entorno nuevo. No se noto durante semanas porque ningun modulo del proyecto lo importaba
+todavia. Ahora `scipy==1.17.1` esta fijado y `statsmodels` subio a 0.14.6, que es la ultima de su
+serie y no cambia ninguna API que este proyecto use.
+
+La leccion general: en un proyecto que fija versiones, **una dependencia transitiva sin pin es un
+pin que falta**, no una decision de dejarla libre.
+
+---
+
 ## Roadmap
 
 Fuera del alcance de la entrega, en orden de valor:

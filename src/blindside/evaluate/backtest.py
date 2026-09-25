@@ -289,10 +289,18 @@ def write_report(
     by_h = M.metrics_by_horizon(result)
     cens = M.censoring_metrics(result)
 
+    # El target del Makefile se deriva del nombre del archivo en vez de estar fijo.
+    # Con el texto fijo, `reports/metrics_classical.md` decia "generado por
+    # make backtest", que es falso y manda a la persona al comando equivocado.
+    objetivo = {
+        "metrics.md": "make models",
+        "metrics_classical.md": "make classical",
+    }.get(out_path.name, "make backtest")
+
     lines: list[str] = [
         "# Metricas de backtest",
         "",
-        "> Generado por `make backtest`. No editar a mano.",
+        f"> Generado por `{objetivo}`. No editar a mano.",
         "",
         "## Configuracion",
         "",
@@ -520,6 +528,44 @@ def _model_factories() -> dict[str, object]:
             adaptive=True,
         )
 
+    def sarima():
+        """SARIMA por serie con orden declarada. El contraste clasico de M6.
+
+        Es **por serie**, a diferencia de todo lo demas del registro que es global.
+        Esa es justamente la comparacion que importa: si un modelo global no le gana
+        a la tradicion per-serie, no hay nada que defender.
+
+        Cuesta ~650 ms por serie sobre este panel, asi que una corrida de 3066
+        series por 8 origenes serian unas 4,5 horas. Se mide sobre una submuestra
+        declarada; ver el docstring de `models/classical.py`.
+        """
+        from blindside.models.classical import SarimaForecaster
+
+        return SarimaForecaster()
+
+    def sarima_auto():
+        """La misma cosa buscando el orden por serie. Cuesta 2,3 veces mas.
+
+        Existe para verificar que fijar el orden no perjudica al contraste. Medido
+        sobre 60 series: la orden fija da MASE 0,9566 y la busqueda 0,9657, o sea
+        que la version barata es **mejor** y no hay handicap que descontar.
+        """
+        from blindside.models.classical import SarimaForecaster
+
+        return SarimaForecaster(auto=True)
+
+    def prophet():
+        """Prophet por serie. El paquete es opcional y esta comentado en requirements.
+
+        Con 97 dias de panel queda reducido a tendencia a tramos mas estacionalidad
+        semanal: no hay ciclo anual posible y los feriados ya viajan como covariable
+        en el modelo global. Es un contraste legitimo y conviene saber que en esta
+        ventana no esta en su terreno.
+        """
+        from blindside.models.classical import ProphetForecaster
+
+        return ProphetForecaster()
+
     return {
         "lgbm_global": lgbm,
         "lgbm_quantile": lgbm_quantile,
@@ -530,6 +576,9 @@ def _model_factories() -> dict[str, object]:
         "ridge": ridge,
         "lasso": lasso,
         "elasticnet": elasticnet,
+        "sarima": sarima,
+        "sarima_auto": sarima_auto,
+        "prophet": prophet,
     }
 
 

@@ -1,6 +1,6 @@
 # Metricas de backtest
 
-> Generado por `make backtest`. No editar a mano.
+> Generado por `make models`. No editar a mano.
 
 ## Configuracion
 
