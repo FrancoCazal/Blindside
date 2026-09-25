@@ -314,6 +314,43 @@ Dos cosas que hay que leer con cuidado en esa tabla, y las dos están explicadas
   las 50.000 del dataset. Lo que sí se compara es la **reducción**: 11,57 puntos acá contra 6,8
   de CADRE.
 
+### Clustering y anomalías, con un resultado negativo que se reporta
+
+M4 está implementado: K-Means y DBSCAN sobre features de **forma** de la serie, e Isolation Forest
+sobre ventanas de 14 días. Los grupos son interpretables y estables entre orígenes — índice de Rand
+ajustado **0,832** entre dos orígenes separados por una semana —, y se leen sin esfuerzo: dos
+grupos de intermitentes de baja rotación, y uno de alta rotación con más quiebres, que es coherente
+porque lo que rota es lo que se agota.
+
+**La feature de cluster no entra al modelo servido, y la razón está medida.** Comparación pareada
+sobre 600 series y tres orígenes, el mismo LightGBM con y sin la columna:
+
+| Origen | Sin cluster | Con cluster | Delta |
+|---|---|---|---|
+| 2024-06-11 | 1,5461 | 1,3952 | −9,76 % |
+| 2024-06-18 | 1,1271 | 1,1215 | −0,49 % |
+| 2024-06-25 | 1,1123 | 1,2356 | +11,08 % |
+| **Media** | 1,2618 | 1,2508 | **+0,28 %** |
+
+El efecto medio es de tres décimas de punto y la oscilación entre orígenes es de ±11. La dispersión
+aplasta al efecto, así que la lectura honesta es que no hay señal medible. **Con un solo fold habría
+escrito lo contrario**: el primer origen que miré fue el del 25 de junio, donde la feature empeora
+11 %, y el anterior dice lo opuesto con casi la misma magnitud.
+
+**Y el arranque en frío, que es el propósito declarado de esa feature, no se puede medir en este
+panel.** Las 3066 series tienen exactamente 97 días, ninguna tiene menos de 21, y ninguna empieza a
+vender después del día 16. No hay una sola serie de arranque en frío: FreshRetailNet entrega
+ventanas completas por construcción. Se puede mostrar el mecanismo, no el beneficio — y una feature
+cuyo beneficio no se puede medir no entra al artefacto que se sirve. Detalle en `docs/decisiones.md`
+D23.
+
+**La detección de anomalías apunta a lo que no está anotado.** Los quiebres ya vienen etiquetados
+hora por hora, así que estimarlos sin supervisión sería reemplazar una etiqueta por una inferencia
+peor. Sobre 236.082 ventanas, marcando el 1 % más raro: de las 2.361 marcadas, el **49,9 %** ya
+eran quiebre contra una tasa base del **42,4 %** en el panel. Apenas siete puntos sobre el azar en
+esa dimensión, o sea que el detector **no** es un redescubridor de quiebres; su aporte son las
+**1.182** ventanas raras que ninguna columna marcaba.
+
 ## Datos
 
 **Fuente primaria:** [FreshRetailNet-50K](https://huggingface.co/datasets/Dingdong-Inc/FreshRetailNet-50K)
@@ -388,7 +425,7 @@ blindside-app   Up (healthy)   127.0.0.1:8501->8501/tcp
 `/_stcore/health`, y la suite corre dentro del contenedor:
 
 ```bash
-make docker-test    # 228 tests en la imagen del pipeline
+make docker-test    # 252 tests en la imagen del pipeline
 ```
 
 ### Seguridad del despliegue
@@ -451,12 +488,12 @@ blindside-core/
 │   ├── features/      # calendar.py, lags.py, build.py (anclado en el origen)
 │   ├── validation/    # splits.py (origen movil), leakage.py (los 8 asserts)
 │   ├── models/        # base.py (CONTRATO 2), baselines, tabular, gbdt, linear, classical
-│   ├── unsupervised/  # clustering, embeddings, anomalias  [pendiente]
+│   ├── unsupervised/  # clustering (K-Means/DBSCAN), embeddings (PCA), anomalias (iForest)
 │   ├── decision/      # censoring, conformal, newsvendor, policy
 │   ├── evaluate/      # contracts.py (CONTRATO 3), metrics, backtest, ablation
 │   └── explain/       # attribution.py: TreeSHAP local y global
 ├── notebooks/         # 6 notebooks ejecutados; importan de src/, no contienen logica
-├── tests/             # 228 tests; test_leakage.py son los 8 items del checklist
+├── tests/             # 252 tests; test_leakage.py son los 8 items del checklist
 ├── app/               # streamlit_app.py, 7 pantallas
 ├── api/               # schemas.py (CONTRATO 4), main.py
 ├── frontend/          # React + Vite + TS; schema.d.ts generado del OpenAPI
@@ -613,14 +650,16 @@ Implementado y verificado: contratos, carga y submuestreo, recuperación de cens
 ancladas en el origen, validación de origen móvil con asserts antifugas, métricas, arnés de
 backtesting, baselines, LightGBM (puntual y cuantílico), XGBoost, regresión regularizada,
 **SARIMA y Prophet como contraste per-serie (M6)**, CQR con cobertura verificada, newsvendor con
-esperanzas derivadas de la distribución predictiva, simulador de política, API, dashboard
-Streamlit, frontend React de 8 pantallas, TreeSHAP por predicción y PCA del catálogo.
+esperanzas derivadas de la distribución predictiva, simulador de política, **clustering de perfiles
+y detección de anomalías (M4)**, API, dashboard Streamlit, frontend React de 8 pantallas, y
+**TreeSHAP local y global** en `explain/`.
 
-Con eso queda cubierto el **mínimo defendible que el plan declara: M2 + M3 + M6.**
+Con eso queda cubierto el **mínimo defendible que el plan declara: M2 + M3 + M6**, y M4 arriba de
+eso — con el resultado negativo de su feature medido y reportado, que es la parte que más cuesta
+escribir y la que más vale.
 
-Pendiente del alcance del plan: GRU/LSTM y transformer temporal (M5), clustering y detección de
-anomalías (M4), drift (M9), reconciliación MinT (8.3), Optuna, y el generador sintético del caso
-Focal Point (frente K).
+Pendiente del alcance del plan: GRU/LSTM y transformer temporal (M5), drift (M9), reconciliación
+MinT (8.3), Optuna, y el generador sintético del caso Focal Point (frente K).
 
 **La limitación que queda del lado del intervalo**, ahora que CQR está medido: cubre 88,0 %
 cuando promete 90 %, o sea dos puntos **por debajo**. La garantía del split-conformal supone

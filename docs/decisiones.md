@@ -660,6 +660,119 @@ pin que falta**, no una decision de dejarla libre.
 
 ---
 
+## D23 · El cluster de perfiles no entra al modelo servido, y la razon esta medida
+
+**Decision.** M4 queda implementado — `DemandProfileClusters` (K-Means), `dbscan_profiles`
+y `WindowAnomalyDetector` (Isolation Forest) en `src/blindside/unsupervised/` — pero la feature
+de cluster **no se agrega al pipeline por defecto**. Se puede activar con `add_feature`, y la
+decision de no activarla sale de dos mediciones.
+
+### Medicion 1 · el efecto sobre el modelo es indistinguible del ruido
+
+Comparacion pareada sobre 600 series, tres origenes, el mismo LightGBM con y sin la columna:
+
+| Origen | Sin cluster | Con cluster | Delta |
+|---|---|---|---|
+| 2024-06-11 | 1,5461 | 1,3952 | **−9,76 %** |
+| 2024-06-18 | 1,1271 | 1,1215 | −0,49 % |
+| 2024-06-25 | 1,1123 | 1,2356 | **+11,08 %** |
+| **Media** | 1,2618 | 1,2508 | **+0,28 %** |
+
+El efecto medio es **tres decimas de punto** y la oscilacion entre origenes es de **±11 puntos**.
+La dispersion aplasta al efecto, asi que lo honesto es decir que la feature no aporta senal
+medible, no que ayuda ni que perjudica.
+
+**Con un solo fold habria escrito lo contrario.** El primer origen que mire fue el 25 de junio,
+donde la feature empeora 11 %, y la conclusion escrita habria sido "el cluster perjudica al
+modelo". El origen anterior dice lo opuesto con casi la misma magnitud. Es el argumento de la
+metodologia del proyecto — nunca una metrica sin su dispersion entre origenes — aplicandose a una
+decision de diseno y no solo a un reporte.
+
+**Por que es plausible que no aporte.** El modelo ya recibe `store_id` y `product_id` como
+categoricas, que **identifican la serie exactamente**, mas 70 features de rezagos y estadisticos
+moviles. El cluster es un resumen grueso y con perdida de informacion que el modelo ya tiene de
+forma mas precisa. Lo unico que agrega es una particion de baja cardinalidad que al arbol le
+resulta comoda para partir y que generaliza peor.
+
+### Medicion 2 · el arranque en frio no se puede medir en este panel
+
+Es la razon de fondo, y es una limitacion del dataset y no del metodo. El proposito declarado del
+clustering en M4 es mejorar el **arranque en frio**. Medido sobre las 3066 series:
+
+- Dias por serie: minimo **97**, mediana 97, maximo 97. Todas completas.
+- Series con menos de 21 dias de historia: **0**.
+- Series que empiezan a vender despues del dia 30: **0** (el maximo es el dia 16).
+
+**No hay una sola serie de arranque en frio.** FreshRetailNet entrega ventanas completas por
+construccion, asi que la condicion que la feature ataca no ocurre nunca en los datos disponibles.
+Se puede mostrar el mecanismo — `assign` le da el grupo modal a una serie nueva — pero **no se
+puede medir el beneficio**, y una feature cuyo beneficio no se puede medir no entra al artefacto
+que se sirve.
+
+### Lo que si quedo medido, y es informativo
+
+**La silueta es baja: 0,21 con `k = 6`**, que es el mejor de los candidatos (3 → 0,198; 4 → 0,210;
+5 → 0,204; 6 → **0,212**; 8 → 0,211; 10 → 0,195). Un 0,21 dice que los grupos existen pero estan
+pegados: el espacio de formas de demanda es mas un **continuo** que un conjunto de nichos. DBSCAN
+lo confirma desde el otro lado: con los parametros por defecto deja el **19,6 %** de las series
+(600 de 3066) en la clase de ruido y encuentra solo 2 grupos densos.
+
+Eso no invalida los grupos, que **si** son interpretables:
+
+| Cluster | Series | Demanda media | Tasa de ceros | Tasa de quiebre |
+|---|---|---|---|---|
+| 5 | 655 | 1,907 | 0,012 | 0,594 |
+| 4 | 158 | 1,530 | 0,030 | 0,454 |
+| 1 | 697 | 1,253 | 0,000 | 0,417 |
+| 2 | 1382 | 0,865 | 0,032 | 0,380 |
+| 0 | 152 | 0,778 | 0,209 | 0,421 |
+| 3 | 22 | 0,647 | 0,251 | 0,385 |
+
+Se lee sin esfuerzo: los grupos 0 y 3 son los intermitentes de baja rotacion, y el 5 es el de alta
+rotacion con mas quiebres — coherente, porque lo que rota es lo que se agota.
+
+**La particion es estable entre origenes**, que es el requisito minimo para que sirva de feature:
+el indice de Rand ajustado entre el ajuste del 18 y el del 25 de junio es **0,832** sobre las 3066
+series comunes. Si hubiera salido cerca de 0, la feature habria cambiado de significado cada
+semana.
+
+### La deteccion de anomalias apunta a lo que NO esta anotado
+
+El plan la pide "para marcar cargas erroneas **y quiebres**". La mitad de eso ya esta resuelta:
+el dataset **anota el quiebre hora por hora**, asi que estimarlo con un modelo no supervisado
+seria reemplazar una etiqueta por una inferencia peor. Lo que no viene etiquetado es el resto, y
+ahi apunta el detector.
+
+Sobre 236.082 ventanas de 14 dias, marcando el 1 % mas raro:
+
+| | Valor |
+|---|---|
+| Ventanas marcadas | 2.361 |
+| De esas, ya eran quiebre | **49,9 %** |
+| Tasa de quiebre del panel | 42,4 % |
+| Hallazgos que **no** eran quiebre | **1.182** |
+
+El 49,9 % contra una tasa base del 42,4 % es la cifra que importa: el detector **no** es un
+redescubridor de quiebres, porque apenas se corre siete puntos del azar en esa dimension. Su
+aporte son las 1.182 ventanas raras que ninguna columna marcaba, que es exactamente el material
+que contamina un entrenamiento en silencio.
+
+### Un bug que la medicion destapo, y que sin medir no se habria visto
+
+La primera version de `add_feature` devolvia la columna como `category` de pandas. Las dos ramas
+dieron MAE **0,6098 identico a cuatro decimales**, y eso es lo que delato el problema:
+`features.build.feature_columns` filtra la matriz a dtypes **numericos**, asi que la columna
+categorica se descartaba en silencio y el modelo entrenaba sin ella.
+
+La convencion correcta del proyecto es la que ya usan `store_id` y `product_id`: viajan como
+enteros y se declaran en `categorical_features`, y es LightGBM el que las trata sin orden. Hay un
+test de regresion que verifica que `CLUSTER_COL` sobreviva a `feature_columns`.
+
+Vale la pena registrar la forma del error: **una feature que no llega no da una excepcion, da el
+mismo resultado**. Sin la comparacion pareada, "no cambio nada" se habria leido como "no aporta".
+
+---
+
 ## Roadmap
 
 Fuera del alcance de la entrega, en orden de valor:
