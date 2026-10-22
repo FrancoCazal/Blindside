@@ -1,0 +1,3 @@
+# Executed notebooks import from src/blindside and hold no logic; their size is
+# outputs, so they are reports, not code, for the language stats.
+notebooks/** linguist-documentation
