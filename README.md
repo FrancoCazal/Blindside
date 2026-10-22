@@ -1,523 +1,522 @@
 # Blindside
 
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Status](https://img.shields.io/badge/status-en%20desarrollo-yellow)
+![Status](https://img.shields.io/badge/status-completed-brightgreen)
 
-Pronóstico de demanda de productos perecederos por tienda y producto, con **recuperación de
-demanda censurada por quiebres de stock** y una **capa de decisión** que convierte el
-pronóstico en una cantidad concreta a reponer.
+Demand forecasting for perishable products by store and product, with **recovery of demand
+censored by stockouts** and a **decision layer** that turns the forecast into a concrete
+reorder quantity.
 
-> Los quiebres de stock te toman del lado ciego: la venta cae a cero y tu ERP no registra que
-> hubo demanda. **Blindside recupera esa demanda antes de pronosticar.**
+> Stockouts hit you on the blind side: sales drop to zero and your ERP never records that there
+> was demand. **Blindside recovers that demand before forecasting.**
 
-Proyecto final integrador · Diplomado en Machine Learning y Deep Learning Aplicado ·
-FIUNA 2026.
+Capstone project · Applied Machine Learning & Deep Learning Diploma · FIUNA 2026.
+
+*Read this in [Spanish / Español](README.es.md).* The supporting documents under `docs/` are in
+Spanish.
 
 ---
 
-## El problema
+## The problem
 
-En el retail de perecederos la reposición se decide con reglas manuales basadas en el promedio
-de las últimas semanas. Eso genera al mismo tiempo **quiebres** de productos que rotan y
-**vencimiento** de lotes que no se vendieron: los dos errores conviven porque nadie estima la
-incertidumbre, y el sobre-stock funciona como un seguro caro y ciego.
+In perishable retail, replenishment is decided with manual rules based on the average of the last
+few weeks. That produces **stockouts** of fast movers and **spoilage** of lots that did not sell,
+both at once: the two errors coexist because nobody estimates the uncertainty, and overstock works
+as expensive, blind insurance.
 
-Hay un problema anterior que la mayoría de los pipelines ignora: cuando hubo quiebre de stock,
-la venta registrada es cero pero la demanda real no lo era. Entrenar sobre la venta observada
-produce el **efecto spiral-down** — se pide de menos, hay más quiebres, se observa menos
-demanda, se pide de menos todavía. Este proyecto corrige eso primero y después pronostica.
+There is an earlier problem that most pipelines ignore: when there was a stockout, recorded sales
+are zero but real demand was not. Training on observed sales produces the **spiral-down effect**:
+you order too little, stockouts increase, you observe less demand, and you order even less. This
+project fixes that first and forecasts second.
 
-## Qué entrega
+## What it delivers
 
-No termina en una predicción. Termina en una **cantidad a pedir**, derivada de la economía del
-negocio: con `Cu` el costo de quedarse corto y `Co` el de quedarse largo — que en perecederos
-es pérdida total al vencimiento, no capital inmovilizado — el cuantil óptimo de reposición es
-la fracción crítica `q* = Cu / (Cu + Co)`. El modelo se entrena con pérdida cuantílica en ese
-`q*`, así que su salida **es** la orden.
+It does not stop at a prediction. It ends in an **order quantity**, derived from the economics of
+the business: with `Cu` the cost of falling short and `Co` the cost of ordering too much (which for
+perishables is a total loss at expiry, not tied-up capital), the optimal replenishment quantile is
+the critical fractile `q* = Cu / (Cu + Co)`. The model is trained with quantile loss at that `q*`,
+so its output **is** the order.
 
 ## Demo
 
 ```bash
-make app     # dashboard Streamlit, 8 pantallas
-make api     # FastAPI en localhost:8000, /docs para el OpenAPI
-make front   # frontend React en localhost:5173 (necesita la API arriba)
+make app     # Streamlit dashboard, 8 screens
+make api     # FastAPI on localhost:8000, /docs for the OpenAPI
+make front   # React frontend on localhost:5173 (needs the API running)
 ```
 
-> **La API no tiene autenticación.** Es deliberado para el alcance del prototipo — bindea en
-> `127.0.0.1` y corre detrás de Docker Compose — pero conviene decirlo en vez de dejarlo
-> implícito: cualquiera que alcance el puerto puede consultar todos los pronósticos y todas las
-> cantidades de reposición, que es información comercial sensible. Tampoco hay límite de tasa, y
-> un `/forecast` de 500 series es una consulta costosa. **No exponer a una red pública sin agregar
-> autenticación antes.** Para la Fase 2 multi-tenant es bloqueante: hace falta autenticación por
-> tenant y aislamiento de datos.
+> **The API has no authentication.** That is deliberate for the prototype's scope (it binds to
+> `127.0.0.1` and runs behind Docker Compose), but it is better said than left implicit: anyone who
+> can reach the port can query every forecast and every reorder quantity, which is commercially
+> sensitive information. There is no rate limiting either, and a `/forecast` over 500 series is an
+> expensive query. **Do not expose it to a public network without adding authentication first.**
+> For the multi-tenant Phase 2 this is a blocker: it needs per-tenant authentication and data
+> isolation.
 
-![Pantalla de reposición de Blindside](docs/assets/reposicion.png)
+![Blindside replenishment screen](docs/assets/reposicion.png)
 
-**Defensa:** [presentación en PDF](docs/slides/blindside_defensa.pdf) ·
-[fuente Marp](docs/slides/blindside_defensa.md) ·
-[guion de la demo](docs/demo_guion.md).
+**Defense:** [slides as PDF](docs/slides/blindside_defensa.pdf) ·
+[Marp source](docs/slides/blindside_defensa.md) ·
+[demo script](docs/demo_guion.md), all in Spanish.
 
-> **Pendiente de entrega:** grabar el video con `docs/demo_guion.md`. No hay despliegue público:
-> la API no tiene autenticación y exponerla fuera de `127.0.0.1` sería inseguro; para la defensa
-> se ejecuta localmente con Docker Compose.
+> There is no public deployment: the API has no authentication and exposing it beyond `127.0.0.1`
+> would be unsafe. For the defense it runs locally with Docker Compose.
 
 ## Frontend
 
-React + Vite + TypeScript en `frontend/`, siete pantallas en tres grupos. La dirección visual sale
-de `docs/design_handoff_dfcore/`; la arquitectura de pantallas y la regla de dónde vive cada dato,
-de [`docs/rediseno_frontend.md`](docs/rediseno_frontend.md); los datos, de la API.
+React + Vite + TypeScript in `frontend/`, seven screens in three groups. The visual direction comes
+from `docs/design_handoff_dfcore/`; the screen architecture and the rule for where each piece of
+data lives, from [`docs/rediseno_frontend.md`](docs/rediseno_frontend.md); the data, from the API.
 
-| Grupo | Pantalla | Responde |
+| Group | Screen | Answers |
 |---|---|---|
-| Operación | **Panel** | Qué pasa hoy y por dónde empiezo. Es la entrada |
-| Operación | **Alertas** | Qué series mirar y por qué motivo |
-| Operación | **Reposición** | Cuánto pedir de cada serie, ordenado por ahorro sobre **todo el catálogo** |
-| Operación | **Serie** | Por qué creerle a esa cantidad: gráfico, próximos 7 días, la explicación por variable y la censura de la serie |
-| Análisis | **Modelos** | Qué tan bueno es el modelo y dónde falla, con el intervalo CQR contra el conformal de residuos |
-| Análisis | **Datos** | Cómo es el panel y cuánta demanda esconden los quiebres, con el mapa del catálogo |
-| Sistema | **Pipeline** | Qué datos y qué modelo se sirven, y cómo se actualizan |
+| Operations | **Dashboard** | What is happening today and where to start. It is the entry point |
+| Operations | **Alerts** | Which series to look at and for what reason |
+| Operations | **Replenishment** | How much to order for each series, sorted by savings across **the whole catalog** |
+| Operations | **Series** | Why to trust that quantity: chart, next 7 days, the per-feature explanation and the series' censoring |
+| Analysis | **Models** | How good the model is and where it fails, with the CQR interval against residual conformal |
+| Analysis | **Data** | What the panel looks like and how much demand the stockouts hide, with the catalog map |
+| System | **Pipeline** | Which data and which model are being served, and how they get updated |
 
-Cada dato tiene una pantalla dueña y las demás enlazan: el MASE vive en Modelos, la frescura en
-Pipeline, la censura del panel en Datos. Los controles viven donde actúan: el toggle de censura y
-el ratio de costo aparecen en Reposición y en Serie, y los filtros de tienda y clase en Reposición
-y en Alertas. El detalle técnico de cada pantalla está plegado en «Cómo se calcula».
+Each piece of data has an owner screen and the others link to it: MASE lives in Models, freshness
+in Pipeline, panel censoring in Data. Controls live where they act: the censoring toggle and the
+cost ratio appear in Replenishment and Series, and the store and class filters in Replenishment
+and Alerts. Each screen's technical detail is folded under "How it's calculated".
 
-La interfaz abre en **inglés**; el español y el tema (sistema, claro u oscuro) se eligen en
-**Settings**, arriba a la derecha, y quedan guardados en el navegador. `?lang=es` en el enlace abre
-directo en español. Los textos viven en `frontend/src/i18n/`, tipados: una clave que falta en un
-idioma no compila.
+The interface opens in **English**; Spanish and the theme (system, light or dark) are chosen in
+**Settings**, top right, and saved in the browser. `?lang=es` in the link opens straight into
+Spanish. The strings live in `frontend/src/i18n/`, typed: a key missing in one language does not
+compile.
 
-Las alertas son **por motivo y no por puntaje**: quebrado ahora, riesgo de merma, modelo no
-confiable, alto volumen y señal escasa. Marcan 977 de 3.066 series, y cada una trae qué significa,
-qué hacer, su umbral y la cifra que la disparó en cada serie.
+Alerts are **by reason, not by score**: stocked out now, waste risk, unreliable model, high volume
+and thin signal. They flag 977 of 3,066 series, and each one comes with what it means, what to do,
+its threshold and the figure that triggered it on each series.
 
-**El riesgo de merma no es «por vencer».** FreshRetailNet-50K no trae vida útil, lote ni stock
-disponible, así que una alerta de vencimiento tendría que inventar esos números. Lo que sí se mide
-es el **sobrante esperado de la política actual** sobre la demanda esperada a 7 días, integrado
-bajo la distribución predictiva del modelo. En perecedero ese sobrante es lo que se vence en
-góndola. La alerta exige que llegue al 50 % y que la cantidad sugerida lo reduzca: marca 204
-series (6,7 %).
+**Waste risk is not "about to expire".** FreshRetailNet-50K has no shelf life, lot or on-hand
+stock, so an expiry alert would have to make those numbers up. What is measured is the **expected
+leftover of the current policy** over expected 7-day demand, integrated under the model's
+predictive distribution. For perishables, that leftover is what expires on the shelf. The alert
+requires it to reach 50% and the suggested quantity to reduce it: it flags 204 series (6.7%).
 
 ```bash
 make front-setup    # npm install
-make front          # dev server en http://127.0.0.1:5173
-make front-test     # vitest: logica pura + render con fetch simulado
-make api-schema     # regenera los tipos TS desde el OpenAPI
+make front          # dev server at http://127.0.0.1:5173
+make front-test     # vitest: pure logic + rendering with mocked fetch
+make api-schema     # regenerates the TS types from the OpenAPI
 ```
 
-**Los tipos no se escriben a mano**: `frontend/src/api/schema.d.ts` se genera del OpenAPI que
-produce FastAPI, así que un rename en `api/schemas.py` rompe la compilación del front en vez de
-romper la demo.
+**Types are not written by hand**: `frontend/src/api/schema.d.ts` is generated from the OpenAPI that
+FastAPI produces, so a rename in `api/schemas.py` breaks the frontend build instead of breaking the
+demo.
 
-**El front llama a la API por HTTP, no por un proxy de Vite.** Un proxy volvería las llamadas
-same-origin y esconderían un CORS mal configurado hasta el despliegue. Por eso la API publica un
-allowlist explícito de orígenes (`BLINDSIDE_CORS_ORIGINS`, por defecto los puertos 5173 y 4173 de
-Vite) y no un comodín: sin autenticación, `allow_origins=["*"]` significaría que cualquier página
-abierta en el navegador del usuario puede leer los pronósticos de todas las tiendas.
+**The frontend calls the API over HTTP, not through a Vite proxy.** A proxy would make the calls
+same-origin and hide a misconfigured CORS until deployment. That is why the API publishes an
+explicit allowlist of origins (`BLINDSIDE_CORS_ORIGINS`, by default Vite's ports 5173 and 4173)
+and not a wildcard: without authentication, `allow_origins=["*"]` would mean that any page open in
+the user's browser could read every store's forecasts.
 
-El control central es el **toggle de censura**, y cambia la decisión y no solo el dibujo: hay
-**dos artefactos**, uno entrenado sobre venta observada y otro sobre demanda latente, con la misma
-arquitectura y los mismos hiperparámetros para que la comparación sea pareada. Medido sobre 25
-series con `q* = 0,625`:
+The central control is the **censoring toggle**, and it changes the decision, not just the chart:
+there are **two artifacts**, one trained on observed sales and one on latent demand, with the same
+architecture and the same hyperparameters so that the comparison is paired. Measured on 25 series
+with `q* = 0.625`:
 
-| Base | Pronóstico | Cantidad a pedir | Política actual | Δ de costo esperado |
+| Basis | Forecast | Order quantity | Current policy | Δ expected cost |
 |---|---|---|---|---|
-| Venta observada | 190,229 | 210,958 | 231,960 | −14,09 % |
-| Demanda recuperada | 238,413 | **268,478** | 278,596 | −8,64 % |
+| Observed sales | 190.229 | 210.958 | 231.960 | −14.09% |
+| Recovered demand | 238.413 | **268.478** | 278.596 | −8.64% |
 
-Corregir la censura sube el pronóstico **+25,3 %** y la orden **+27,3 %**. Con un solo artefacto el
-toggle habría movido el gráfico y no la cantidad, que es la mitad del argumento del proyecto.
+Correcting the censoring raises the forecast **+25.3%** and the order **+27.3%**. With a single
+artifact the toggle would have moved the chart and not the quantity, which is half of the
+project's argument.
 
-Las cuatro columnas salen de la API y ninguna se escribe a mano: el pronóstico es la suma de
-`/forecast`, y la orden, la política y el delta vienen de `/reorder` — `qty`, `policy_qty` y
-`total_cost_delta_pct`. La política es el promedio móvil de 21 días **de la misma base**, porque
-compararla contra venta observada mientras el modelo pronostica demanda latente le regalaría al
-modelo justo la diferencia que la tabla mide aparte.
+All four columns come from the API and none is written by hand: the forecast is the sum of
+`/forecast`, and the order, the policy and the delta come from `/reorder` (`qty`, `policy_qty` and
+`total_cost_delta_pct`). The policy is the 21-day moving average **of the same basis**, because
+comparing it against observed sales while the model forecasts latent demand would hand the model
+exactly the difference that the table measures separately.
 
-**El delta de costo no necesita saber qué demanda hubo.** Las dos cantidades — la del modelo y la
-de la política — se evalúan bajo la **misma** distribución predictiva, así que lo que cambia es la
-decisión y no el supuesto. El faltante y el sobrante esperados salen de integrar
-`E[(D−q)⁺]` sobre la inversa de la CDF que describen los cuantiles; son esperanzas implicadas por
-el modelo, no resultados medidos, y el faltante es una **cota inferior** porque la grilla termina
-en el cuantil 0,95 y el 5 % de masa de arriba no está descrito. La respuesta devuelve ese
-`tail_mass` para que la interfaz lo pueda decir.
+**The cost delta does not need to know what demand actually happened.** Both quantities, the
+model's and the policy's, are evaluated under the **same** predictive distribution, so what changes
+is the decision and not the assumption. Expected shortage and leftover come from integrating
+`E[(D−q)⁺]` over the inverse CDF that the quantiles describe; they are expectations implied by the
+model, not measured outcomes, and the shortage is a **lower bound** because the grid ends at the
+0.95 quantile and the top 5% of the mass is not described. The response returns that `tail_mass`
+so the interface can say so.
 
-Ninguna cifra de la interfaz se calcula en el cliente. Lo que antes vivía en
-`frontend/src/domain.ts` — la política de media móvil, el impacto por fila con la banda tomada como
-uniforme, el orden de la tabla — lo sirve hoy la API; ese archivo quedó con lógica de presentación
-y su test.
+No figure in the interface is computed on the client. What used to live in
+`frontend/src/domain.ts` (the moving-average policy, the per-row impact with the band taken as
+uniform, the table ordering) is now served by the API; that file was left with presentation logic
+and its test.
 
-### El plan comercial del horizonte se declara
+### The commercial plan for the horizon is declared
 
-El modelo usa tres covariables del día objetivo que no son fuga porque se conocen antes:
-descuento, feriado y actividad comercial. En el backtest salen del panel, que ya tiene esos días.
-En producción el horizonte está **después** del último día del panel, así que no hay de dónde
-leerlas: o las aporta quien consulta, que es el que conoce su plan comercial, o hay que asumirlas.
+The model uses three covariates of the target day that are not leakage because they are known in
+advance: discount, holiday and commercial activity. In the backtest they come from the panel, which
+already has those days. In production the horizon is **after** the last day of the panel, so there
+is nowhere to read them from: either the caller provides them, since they know their commercial
+plan, or they have to be assumed.
 
-Los tres endpoints aceptan un `plan` opcional, y cuando no viene el servidor asume la mediana de
-los últimos 21 días del panel y **lo declara en la respuesta**:
+All three endpoints accept an optional `plan`, and when it is missing the server assumes the median
+of the last 21 days of the panel and **declares it in the response**:
 
 ```json
 "plan": {"plan": {"discount": 0.967, "holiday_flag": 0, "activity_flag": 0},
          "source": "panel_median", "window_days": 21}
 ```
 
-Ese default está elegido por medición y no por gusto; las cinco variantes evaluadas están en
-`docs/decisiones.md` D19. Antes de esto las tres covariables llegaban en **NaN**, y el costo
-medido de eso era grande: ver la sección de antifugas.
+That default was chosen by measurement, not by taste; the five variants evaluated are in
+`docs/decisiones.md` D19. Before this, the three covariates arrived as **NaN**, and the measured
+cost of that was large: see the leakage section.
 
 ## Notebooks
 
-Seis, ejecutados y con salidas commiteadas, en `notebooks/`. Se leen en orden y cada uno cierra
-con qué consecuencia tiene lo que muestra sobre el resto del proyecto.
+Six, executed and with their outputs committed, in `notebooks/`. They are read in order and each
+one closes with what its findings mean for the rest of the project.
 
-| Notebook | Qué responde |
+| Notebook | What it answers |
 |---|---|
-| `01_eda` | Qué hay en el panel, cómo se distribuye la demanda, cuánta censura hay, y la **verificación** de que la ventana comercial de 16 franjas reproduce el ≈20 % de la ficha |
-| `02_features_validacion` | Los ocho asserts antifugas corriendo, **cada uno con su fuga inyectada** para probar que la detecta |
-| `03_modelos_backtest` | El backtest de origen móvil, MASE con dispersión entre orígenes, y por qué el naive estacional da 1,10 y no 1,00 |
-| `04_no_supervisado` | PCA del catálogo, con la varianza explicada al lado. Y los dos huecos de M4 declarados |
-| `05_decision_conformal` | El óptimo del costo esperado cayendo en `q*`, y CQR contra el conformal de residuos |
-| `06_roi` | El ahorro en porcentaje, contra cuatro políticas, sin traducir a moneda |
+| `01_eda` | What is in the panel, how demand is distributed, how much censoring there is, and the **verification** that the 16-slot commercial window reproduces the ≈20% stated in the dataset card |
+| `02_features_validacion` | The eight leakage asserts running, **each one with its leak injected** to prove it catches it |
+| `03_modelos_backtest` | The rolling-origin backtest, MASE with dispersion across origins, and why seasonal naive scores 1.10 and not 1.00 |
+| `04_no_supervisado` | PCA of the catalog, with the explained variance alongside. And the two declared M4 gaps |
+| `05_decision_conformal` | The expected-cost optimum landing at `q*`, and CQR against residual conformal |
+| `06_roi` | Savings as a percentage, against four policies, without converting to currency |
 
 ```bash
-make notebooks        # ejecuta los seis en orden, en el lugar
+make notebooks        # runs all six in order, in place
 ```
 
-**La regla del directorio: los notebooks importan de `src/blindside` y no contienen lógica.** Si
-un cálculo vive en una celda, no tiene test y no llega a producción; cuando hace falta, va al
-paquete y el notebook lo llama. Es la razón por la que las celdas son cortas.
+**The directory rule: notebooks import from `src/blindside` and contain no logic.** If a
+calculation lives in a cell, it has no test and never reaches production; when one is needed, it
+goes into the package and the notebook calls it. That is why the cells are short.
 
-Corren sobre una **submuestra declarada de 400 series** con la semilla del proyecto, salvo `01` y
-`04` que usan el panel completo. Los números oficiales salen de `make models` sobre las 3.066
-series con 8 orígenes; los notebooks muestran el mecanismo y dicen cuál es su alcance. Cuando el
-reporte oficial existe en `reports/`, `03` lo carga y compara las dos corridas.
+They run on a **declared subsample of 400 series** with the project seed, except `01` and `04`,
+which use the full panel. The official numbers come from `make models` over the 3,066 series with
+8 origins; the notebooks show the mechanism and state their scope. When the official report exists
+in `reports/`, `03` loads it and compares the two runs.
 
-Dos cosas que aparecieron **al escribirlos**, y que quedaron dentro:
+Two things that came up **while writing them**, and that stayed in:
 
-- El test de alineación del target pasa con LightGBM y falla por poco con Ridge. No es un
-  desalineamiento —el pipeline es el mismo— sino que correr el target hacia atrás acerca la tarea
-  a una autorregresión pura, que para un modelo lineal es *más fácil*. La lección es que la
-  sensibilidad de ese test depende del modelo con el que se corre.
-- En la comparación de políticas, el stock de seguridad fijo **le gana al modelo** por 6 puntos.
-  Usa el cuantil real de cada serie, o sea conocimiento de oráculo, así que no es implementable ni
-  es una cota superior — pero acota cuánto del ahorro se puede atribuir al pronóstico diario en
-  vez de a haber elegido bien el cuantil.
+- The target alignment test passes with LightGBM and narrowly fails with Ridge. It is not a
+  misalignment (the pipeline is the same); shifting the target backwards brings the task closer to
+  pure autoregression, which for a linear model is *easier*. The lesson is that the sensitivity of
+  that test depends on the model it runs with.
+- In the policy comparison, fixed safety stock **beats the model** by 6 points. It uses each
+  series' true quantile, which is oracle knowledge, so it is neither implementable nor an upper
+  bound; but it bounds how much of the savings can be attributed to the daily forecast rather than
+  to having picked the right quantile.
 
-## Resultados
+## Results
 
-Medidos sobre **3066 series** tienda-producto (38 tiendas, 97 días), backtesting de origen
-móvil con **8 orígenes**, horizonte de **7 días**, target de demanda latente recuperada.
-1.545.264 predicciones evaluadas. Reporte completo en `reports/metrics.md`, generado por
-`make models`.
+Measured on **3,066** store-product series (38 stores, 97 days), rolling-origin backtesting with
+**8 origins**, a **7-day** horizon, and recovered latent demand as the target. 1,545,264
+predictions evaluated. Full report in `reports/metrics.md`, generated by `make models`.
 
-| Modelo | MASE | Desvío entre orígenes | Peor origen | Δ vs naive estacional |
+| Model | MASE | Std. across origins | Worst origin | Δ vs seasonal naive |
 |---|---|---|---|---|
-| **CQR sobre LightGBM cuantílico** · el artefacto servido | **0,8217** | 0,0454 | 0,8790 | **+25,3 %** |
-| Conformal de residuos sobre el mismo base | 0,8217 | 0,0454 | 0,8790 | +25,3 % |
-| LightGBM global (puntual) | 0,8222 | 0,0457 | 0,8791 | +25,3 % |
-| Croston SBA | 0,8952 | 0,0683 | 0,9631 | +18,6 % |
-| Ridge | 0,9018 | 0,0626 | 1,0088 | +18,0 % |
-| Media móvil 21 d | 0,9048 | 0,0654 | 0,9779 | +17,8 % |
-| Media móvil estacional | 0,9460 | 0,0655 | 1,0189 | +14,0 % |
-| Naive estacional | 1,1002 | 0,0636 | 1,1579 | — |
-| Naive | 1,1606 | 0,1099 | 1,3105 | −5,5 % |
+| **CQR on quantile LightGBM** · the served artifact | **0.8217** | 0.0454 | 0.8790 | **+25.3%** |
+| Residual conformal on the same base | 0.8217 | 0.0454 | 0.8790 | +25.3% |
+| Global LightGBM (point) | 0.8222 | 0.0457 | 0.8791 | +25.3% |
+| Croston SBA | 0.8952 | 0.0683 | 0.9631 | +18.6% |
+| Ridge | 0.9018 | 0.0626 | 1.0088 | +18.0% |
+| 21-day moving average | 0.9048 | 0.0654 | 0.9779 | +17.8% |
+| Seasonal moving average | 0.9460 | 0.0655 | 1.0189 | +14.0% |
+| Seasonal naive | 1.1002 | 0.0636 | 1.1579 | — |
+| Naive | 1.1606 | 0.1099 | 1.3105 | −5.5% |
 
-El objetivo SMART era **reducir MASE al menos 20 %** frente al naive estacional. Se cumple con
-25,3 %, y el **peor** de los ocho orígenes sigue por debajo de 0,88 — o sea que no depende de
-promediar un origen bueno con uno malo.
+The SMART goal was to **reduce MASE by at least 20%** against seasonal naive. It is met with 25.3%,
+and the **worst** of the eight origins stays below 0.88, so the result does not rely on averaging a
+good origin with a bad one.
 
-Las dos primeras filas dan el mismo MASE hasta el cuarto decimal, y eso es correcto: son el
-mismo modelo base con dos envoltorios conformales distintos, y **ninguno de los dos toca la
-predicción central**. Lo que cambia entre ellas es el intervalo, y ahí la diferencia es grande.
+The first two rows have the same MASE to the fourth decimal, and that is correct: they are the same
+base model with two different conformal wrappers, and **neither touches the point prediction**.
+What changes between them is the interval, and there the difference is large.
 
-Todas las métricas van **con su dispersión entre orígenes**, nunca como número único: un
-promedio bueno puede esconder un origen catastrófico, y el origen catastrófico es el que pasa en
-producción.
+Every metric comes **with its dispersion across origins**, never as a single number: a good average
+can hide a catastrophic origin, and the catastrophic origin is the one that happens in production.
 
-### Cobertura del intervalo, que es la segunda métrica de éxito
+### Interval coverage, the second success metric
 
-| Modelo | Nominal | Empírica | Brecha | Ancho medio | Desvío del ancho |
+| Model | Nominal | Empirical | Gap | Mean width | Width std. |
 |---|---|---|---|---|---|
-| **CQR** | 90 % | **88,0 %** | **−2,0 pts** | **1,805** | 0,153 |
-| Conformal de residuos, adaptativo | 90 % | 98,7 % | +8,7 pts | 3,834 | 0,526 |
+| **CQR** | 90% | **88.0%** | **−2.0 pts** | **1.805** | 0.153 |
+| Residual conformal, adaptive | 90% | 98.7% | +8.7 pts | 3.834 | 0.526 |
 
-El conformal de residuos absolutos cubre casi nueve puntos **por encima** de lo que promete, y
-eso no es prudencia: lo paga con un intervalo del doble de ancho. El caso degenerado de esa
-lógica es `[0, ∞)`, que cubre el 100 % y no informa nada.
+Absolute-residual conformal covers almost nine points **above** what it promises, and that is not
+prudence: it pays for it with an interval twice as wide. The degenerate case of that logic is
+`[0, ∞)`, which covers 100% and says nothing.
 
-CQR queda dos puntos por debajo del nominal con un intervalo **53 % más angosto**. Dos puntos de
-sub-cobertura son una desviación real y conviene decirla: la garantía del split-conformal supone
-intercambiabilidad, y en una serie temporal con partición temporal eso se cumple de forma
-aproximada. La alternativa era seguir cubriendo 98,7 % con una banda inútil.
+CQR lands two points below nominal with an interval **53% narrower**. Two points of under-coverage
+is a real deviation and worth stating: the split-conformal guarantee assumes exchangeability, and in
+a time series with a temporal split that only holds approximately. The alternative was to keep
+covering 98.7% with a useless band.
 
-**Por qué el otro no se podía arreglar ajustando un parámetro.** Su score de conformidad es un
-residuo **absoluto**, así que el cuantil sale siempre positivo y la mecánica solo sabe ensanchar.
-El score de CQR es `max(q_lo − y, y − q_hi)`, que es negativo cuando el punto cayó dentro del
-intervalo, así que la corrección puede **apretar**. Detalle y medición en `docs/decisiones.md` D21.
+**Why the other one could not be fixed by tuning a parameter.** Its conformity score is an
+**absolute** residual, so the quantile always comes out positive and the mechanism only knows how
+to widen. CQR's score is `max(q_lo − y, y − q_hi)`, which is negative when the point fell inside the
+interval, so the correction can **tighten**. Details and measurement in `docs/decisiones.md` D21.
 
-### El contraste contra los clásicos per-serie
+### The contrast against per-series classical models
 
-El modelo que el proyecto defiende es **global**: un solo LightGBM que ve las 3066 series a la
-vez. La objeción obvia es que el pronóstico de series temporales tiene una tradición de modelos
-**por serie**, y que un global podría estar ganando solo porque se comparó contra baselines
-simples. SARIMA y Prophet son la respuesta.
+The model the project defends is **global**: a single LightGBM that sees all 3,066 series at once.
+The obvious objection is that time-series forecasting has a tradition of **per-series** models, and
+that a global model could be winning only because it was compared against simple baselines. SARIMA
+and Prophet are the answer.
 
-Medido sobre una submuestra declarada de **400 series** con los mismos 8 orígenes —son por serie
-y cuestan ~650 ms y ~300 ms cada una, así que las 3066 serían horas. Reporte en
-`reports/metrics_classical.md`, generado por `make classical`:
+Measured on a declared subsample of **400 series** with the same 8 origins, because they are
+per-series and cost ~650 ms and ~300 ms each, so all 3,066 would take hours. Report in
+`reports/metrics_classical.md`, generated by `make classical`:
 
-| Modelo | MASE | Desvío | Peor origen | Δ vs naive estacional |
+| Model | MASE | Std. | Worst origin | Δ vs seasonal naive |
 |---|---|---|---|---|
-| **LightGBM global** | **0,8386** | 0,0549 | 0,9029 | **+24,2 %** |
-| Croston SBA | 0,9032 | 0,0707 | 0,9873 | +18,3 % |
-| SARIMA `(1,0,1)(1,0,0)[7]` | 0,9136 | 0,0599 | 0,9832 | +17,4 % |
-| Media móvil 21 d | 0,9139 | 0,0652 | 0,9927 | +17,4 % |
-| Prophet | 0,9698 | 0,0704 | 1,0502 | +12,3 % |
-| Naive estacional | 1,1058 | 0,0674 | 1,1761 | — |
+| **Global LightGBM** | **0.8386** | 0.0549 | 0.9029 | **+24.2%** |
+| Croston SBA | 0.9032 | 0.0707 | 0.9873 | +18.3% |
+| SARIMA `(1,0,1)(1,0,0)[7]` | 0.9136 | 0.0599 | 0.9832 | +17.4% |
+| 21-day moving average | 0.9139 | 0.0652 | 0.9927 | +17.4% |
+| Prophet | 0.9698 | 0.0704 | 1.0502 | +12.3% |
+| Seasonal naive | 1.1058 | 0.0674 | 1.1761 | — |
 
-> La fila de Prophet exige la instalación opcional; sin ella `make classical` corre igual y el
-> reporte sale con los otros cinco. SARIMA **no** es opcional: sale de `statsforecast`, que ya
-> está fijado en `requirements.txt`.
+> The Prophet row requires the optional install; without it `make classical` still runs and the
+> report comes out with the other five. SARIMA is **not** optional: it comes from `statsforecast`,
+> which is already pinned in `requirements.txt`.
 
-El global le gana a SARIMA por 8,2 % y a Prophet por 13,5 %. Pero el dato que más dice es otro:
-**SARIMA queda empatado con la media móvil de 21 días** — 0,9136 contra 0,9139 — y pierde contra
-Croston. Todo el aparato ARIMA no compra nada sobre un promedio simple en este panel, y eso es
-consistente con series cortas, intermitentes y con una estacionalidad semanal que un rolling ya
-captura.
+The global model beats SARIMA by 8.2% and Prophet by 13.5%. But the most telling figure is a
+different one: **SARIMA ties with the 21-day moving average** (0.9136 against 0.9139) and loses to
+Croston. The whole ARIMA machinery buys nothing over a simple average on this panel, which is
+consistent with short, intermittent series whose weekly seasonality a rolling window already
+captures.
 
-Prophet queda último de los modelos con ajuste y su peor origen pasa de 1,05, o sea peor que la
-escala del naive estacional. Con 97 días no hay ciclo anual que estimar, así que queda reducido a
-tendencia más estacionalidad semanal; el contraste es legítimo y conviene decir que no está en su
-terreno.
+Prophet comes last among the fitted models and its worst origin goes above 1.05, which is worse
+than the seasonal naive scale. With 97 days there is no annual cycle to estimate, so it is reduced
+to trend plus weekly seasonality; the contrast is legitimate, and it is worth saying that this is
+not its home turf.
 
-**El orden de SARIMA está declarado, no buscado, y eso no lo perjudica.** `AutoARIMA` cuesta 2,3 s
-por serie contra 85 ms de la orden fija —27 veces más—, lo que haría la comparación imposible
-dentro del presupuesto. Para descartar que fijarlo fuera un handicap se midieron las dos sobre 60
-series: la orden fija da MASE **0,9566** y la búsqueda **0,9657**, o sea que la versión barata es
-*mejor*. Se puede reproducir con `--models sarima_auto`.
+**SARIMA's order is declared, not searched, and that does not handicap it.** `AutoARIMA` costs
+2.3 s per series against 85 ms for the fixed order (27 times more), which would make the comparison
+impossible within the budget. To rule out that fixing it was a handicap, both were measured on 60
+series: the fixed order gives MASE **0.9566** and the search **0.9657**, so the cheap version is
+*better*. It can be reproduced with `--models sarima_auto`.
 
-**Prophet es opcional y el arnés lo saltea si no está.** Está comentado en `requirements.txt`
-porque arrastra un backend de Stan; el import es perezoso y `ProphetForecaster.disponible()`
-permite correr el contraste sin él. Si se instala, hacen falta las dos líneas:
-`pip install prophet==1.1.6 cmdstanpy==1.2.4` — con la cmdstanpy que pip resuelve por defecto el
-bundle de Stan queda sin makefile y Prophet falla con un `AttributeError` que no dice nada sobre
-la causa.
+**Prophet is optional and the harness skips it if it is missing.** It is commented out in
+`requirements.txt` because it drags in a Stan backend; the import is lazy and
+`ProphetForecaster.disponible()` lets the contrast run without it. If you install it, you need both
+lines: `pip install prophet==1.1.6 cmdstanpy==1.2.4`. With the cmdstanpy that pip resolves by
+default, the Stan bundle ends up without a makefile and Prophet fails with an `AttributeError` that
+says nothing about the cause.
 
-### Dos aclaraciones sobre cómo leer la tabla
+### Two notes on how to read the table
 
-**El naive estacional da MASE 1,10 y no 1,00.** El denominador de MASE es su error *en muestra*
-sobre el train de cada fold, y el numerador es *fuera de muestra*. Que el segundo sea mayor es
-lo normal y es la definición estándar.
+**Seasonal naive scores MASE 1.10, not 1.00.** The MASE denominator is its *in-sample* error on
+each fold's training set, and the numerator is *out-of-sample*. The second one being larger is
+normal, and it is the standard definition.
 
-**Los baselines de media móvil son duros.** Croston y la media móvil de 21 días le ganan al
-naive estacional por 18 %, así que el 25,3 % del modelo no se mide contra un rival elegido para
-perder. Un proyecto que solo compara contra el naive simple se regala 7 puntos.
+**The moving-average baselines are tough.** Croston and the 21-day moving average beat seasonal
+naive by 18%, so the model's 25.3% is not measured against a rival picked to lose. A project that
+only compares against the simple naive hands itself 7 points.
 
-### La búsqueda de hiperparámetros no cambió nada, y eso también se publica
+### The hyperparameter search changed nothing, and that gets published too
 
-`make tune` corre Optuna con un objetivo que es el **mismo backtest de origen móvil** que produce
-las métricas oficiales, no una validación cruzada aleatoria: sobre datos de panel un K-Fold al azar
-mete días posteriores en el train de cada fold y optimiza contra un problema más fácil que el real.
+`make tune` runs Optuna with an objective that is the **same rolling-origin backtest** that produces
+the official metrics, not random cross-validation: on panel data a random K-Fold puts later days
+into each fold's training set and optimizes against an easier problem than the real one.
 
-25 trials sobre 400 series y 4 orígenes. Reporte en `reports/tuning.md`:
+25 trials on 400 series and 4 origins. Report in `reports/tuning.md`:
 
-| | MASE | Desvío entre orígenes |
+| | MASE | Std. across origins |
 |---|---|---|
-| Parámetros actuales | 0,8672 | 0,0134 |
-| Mejor encontrado | 0,8630 | 0,0153 |
+| Current parameters | 0.8672 | 0.0134 |
+| Best found | 0.8630 | 0.0153 |
 
-La mejora es de **0,49 %** y la dispersión entre orígenes es tres veces más grande, así que **no se
-adopta**: sería confundir una realización afortunada del azar sobre los cuatro orígenes elegidos
-con una mejora real. El mejor conjunto además tiene *más* dispersión que el actual, que es cómo se
-ve una búsqueda sobreajustando a los folds que vio.
+The improvement is **0.49%** and the dispersion across origins is three times larger, so it is **not
+adopted**: that would mistake a lucky draw over the four chosen origins for a real improvement. The
+best set also has *more* dispersion than the current one, which is what a search overfitting to the
+folds it saw looks like.
 
-El criterio de adopción está en el código (`Resultado.vale_la_pena`) y no se decidió después de
-ver el número, y el reporte **deriva** su conclusión de los números en vez de llevar un texto fijo.
-`objective` no está en el espacio de búsqueda: elegir L1 sobre L2 es una decisión documentada y no
-un hiperparámetro, y dejarla ahí permitiría que la búsqueda cambie el significado de la salida por
-unas milésimas. Detalle en `docs/decisiones.md` D24.
+The adoption criterion is in the code (`Resultado.vale_la_pena`) and was not decided after seeing
+the number, and the report **derives** its conclusion from the numbers instead of carrying fixed
+text. `objective` is not in the search space: choosing L1 over L2 is a documented decision, not a
+hyperparameter, and leaving it there would let the search change the meaning of the output for a
+few thousandths. Details in `docs/decisiones.md` D24.
 
-Lo útil del resultado es la escala que fija: **el margen que queda en hiperparámetros es chico**
-comparado con el de otras partes del pipeline. En este mismo proyecto, corregir el desajuste
-train/serve de las covariables del horizonte valía 86 % de MASE, y separar el cuantil del booster
-del de la banda conformal movía la orden 21 %.
+What is useful about the result is the scale it sets: **the margin left in hyperparameters is
+small** compared to other parts of the pipeline. In this same project, fixing the train/serve
+mismatch of the horizon covariates was worth 86% of MASE, and separating the booster's quantile from
+the conformal band's moved the order by 21%.
 
-### Recuperación de demanda censurada
+### Censored demand recovery
 
-| Grupo | Demanda observada | Demanda latente | Uplift |
+| Group | Observed demand | Latent demand | Uplift |
 |---|---|---|---|
-| Todos los días | 1,0087 | 1,2218 | +21,1 % |
-| Días **sin** quiebre | 0,9793 | 0,9793 | **0,00 %** |
-| Días con quiebre | 1,0463 | 1,5318 | +46,4 % |
+| All days | 1.0087 | 1.2218 | +21.1% |
+| Days **without** a stockout | 0.9793 | 0.9793 | **0.00%** |
+| Days with a stockout | 1.0463 | 1.5318 | +46.4% |
 
-El uplift de exactamente 0 % en los días limpios es por diseño, no casualidad: esos días son la
-verdad de terreno con la que se mide el sesgo, así que corregirlos destruiría la medición.
+The exactly 0% uplift on clean days is by design, not by chance: those days are the ground truth
+the bias is measured against, so correcting them would destroy the measurement.
 
-**Comprobación de que la ventana comercial asumida es la correcta:** 43,9 % de días con quiebre
-× 7,0 horas de quiebre promedio / 16 franjas comerciales = **19,2 % de horas comerciales en
-quiebre**, que reproduce el «≈20 %» que declara la ficha del dataset. El código además falla si
-las horas derivadas de la máscara horaria no coinciden con la columna `stock_hour6_22_cnt`, así
-que el supuesto se verifica en cada corrida.
+**Check that the assumed commercial window is the right one:** 43.9% of days with a stockout ×
+7.0 average stockout hours / 16 commercial slots = **19.2% of commercial hours in stockout**, which
+reproduces the "≈20%" stated in the dataset card. The code also fails if the hours derived from
+the hourly mask do not match the `stock_hour6_22_cnt` column, so the assumption is verified on
+every run.
 
-Ver `reports/censoring_ablation.md` para la comparación pareada del mismo modelo entrenado sobre
-venta observada contra demanda latente, y `docs/decisiones.md` D10 para por qué tiene que ser
-pareada. El resultado, medido sobre 99.721 días limpios:
+See `reports/censoring_ablation.md` for the paired comparison of the same model trained on observed
+sales against latent demand, and `docs/decisiones.md` D10 for why it has to be paired. The result,
+measured on 99,721 clean days:
 
-| Entrenado sobre | Sesgo re-censurado | MASE días limpios |
+| Trained on | Re-censored bias | MASE on clean days |
 |---|---|---|
-| Venta observada | **−18,19 %** | 0,8117 |
-| Demanda latente | **−6,61 %** | 0,8958 |
+| Observed sales | **−18.19%** | 0.8117 |
+| Latent demand | **−6.61%** | 0.8958 |
 
-**11,57 puntos porcentuales de reducción de sesgo**, y es el número que el proyecto defiende
-porque las dos ramas son el mismo modelo con el mismo denominador de MASE.
+**11.57 percentage points of bias reduction**, and that is the number the project defends, because
+both branches are the same model with the same MASE denominator.
 
-Dos cosas que hay que leer con cuidado en esa tabla, y las dos están explicadas en el reporte:
+Two things to read carefully in that table, both explained in the report:
 
-- **El MASE empeora en la rama corregida** (0,8958 contra 0,8117). No es una contradicción: las
-  dos se evalúan contra la venta observada de los días limpios, y un modelo que aprendió a
-  predecir demanda **latente** sobrepredice ahí por construcción. Es el precio de corregir el
-  sesgo, y el sesgo es lo que importa para decidir cuánto pedir.
-- **El sesgo sin corregir de este panel es 2,2 veces el que publica CADRE** (−18,19 % contra
-  −8,1 %), así que las dos cifras no son directamente comparables y el reporte ya no finge que lo
-  sean. La causa más probable es el submuestreo: 3066 series elegidas por tienda completa no son
-  las 50.000 del dataset. Lo que sí se compara es la **reducción**: 11,57 puntos acá contra 6,8
-  de CADRE.
+- **MASE gets worse in the corrected branch** (0.8958 against 0.8117). It is not a contradiction:
+  both are evaluated against observed sales on clean days, and a model that learned to predict
+  **latent** demand overpredicts there by construction. It is the price of correcting the bias, and
+  the bias is what matters for deciding how much to order.
+- **The uncorrected bias on this panel is 2.2 times the one CADRE publishes** (−18.19% against
+  −8.1%), so the two figures are not directly comparable and the report no longer pretends they
+  are. The most likely cause is the subsampling: 3,066 series chosen by whole store are not the
+  dataset's 50,000. What does compare is the **reduction**: 11.57 points here against CADRE's 6.8.
 
-### Clustering y anomalías, con un resultado negativo que se reporta
+### Clustering and anomalies, with a negative result that gets reported
 
-M4 está implementado: K-Means y DBSCAN sobre features de **forma** de la serie, e Isolation Forest
-sobre ventanas de 14 días. Los grupos son interpretables y estables entre orígenes — índice de Rand
-ajustado **0,832** entre dos orígenes separados por una semana —, y se leen sin esfuerzo: dos
-grupos de intermitentes de baja rotación, y uno de alta rotación con más quiebres, que es coherente
-porque lo que rota es lo que se agota.
+M4 is implemented: K-Means and DBSCAN on series **shape** features, and Isolation Forest on 14-day
+windows. The clusters are interpretable and stable across origins (adjusted Rand index **0.832**
+between two origins one week apart), and they read effortlessly: two groups of low-turnover
+intermittent series, and one of high turnover with more stockouts, which is consistent because
+what sells is what runs out.
 
-**La feature de cluster no entra al modelo servido, y la razón está medida.** Comparación pareada
-sobre 600 series y tres orígenes, el mismo LightGBM con y sin la columna:
+**The cluster feature does not go into the served model, and the reason is measured.** A paired
+comparison on 600 series and three origins, the same LightGBM with and without the column:
 
-| Origen | Sin cluster | Con cluster | Delta |
+| Origin | Without cluster | With cluster | Delta |
 |---|---|---|---|
-| 2024-06-11 | 1,5461 | 1,3952 | −9,76 % |
-| 2024-06-18 | 1,1271 | 1,1215 | −0,49 % |
-| 2024-06-25 | 1,1123 | 1,2356 | +11,08 % |
-| **Media** | 1,2618 | 1,2508 | **+0,28 %** |
+| 2024-06-11 | 1.5461 | 1.3952 | −9.76% |
+| 2024-06-18 | 1.1271 | 1.1215 | −0.49% |
+| 2024-06-25 | 1.1123 | 1.2356 | +11.08% |
+| **Mean** | 1.2618 | 1.2508 | **+0.28%** |
 
-El efecto medio es de tres décimas de punto y la oscilación entre orígenes es de ±11. La dispersión
-aplasta al efecto, así que la lectura honesta es que no hay señal medible. **Con un solo fold habría
-escrito lo contrario**: el primer origen que miré fue el del 25 de junio, donde la feature empeora
-11 %, y el anterior dice lo opuesto con casi la misma magnitud.
+The mean effect is three tenths of a point and the swing across origins is ±11. The dispersion
+crushes the effect, so the honest reading is that there is no measurable signal. **With a single
+fold I would have written the opposite**: the first origin I looked at was June 25, where the
+feature makes things 11% worse, and the one before says the opposite with almost the same
+magnitude.
 
-**Y el arranque en frío, que es el propósito declarado de esa feature, no se puede medir en este
-panel.** Las 3066 series tienen exactamente 97 días, ninguna tiene menos de 21, y ninguna empieza a
-vender después del día 16. No hay una sola serie de arranque en frío: FreshRetailNet entrega
-ventanas completas por construcción. Se puede mostrar el mecanismo, no el beneficio — y una feature
-cuyo beneficio no se puede medir no entra al artefacto que se sirve. Detalle en `docs/decisiones.md`
-D23.
+**And cold start, the declared purpose of that feature, cannot be measured on this panel.** All
+3,066 series have exactly 97 days, none has fewer than 21, and none starts selling after day 16.
+There is not a single cold-start series: FreshRetailNet delivers complete windows by construction.
+The mechanism can be shown, not the benefit, and a feature whose benefit cannot be measured does
+not go into the served artifact. Details in `docs/decisiones.md` D23.
 
-**La detección de anomalías apunta a lo que no está anotado.** Los quiebres ya vienen etiquetados
-hora por hora, así que estimarlos sin supervisión sería reemplazar una etiqueta por una inferencia
-peor. Sobre 236.082 ventanas, marcando el 1 % más raro: de las 2.361 marcadas, el **49,9 %** ya
-eran quiebre contra una tasa base del **42,4 %** en el panel. Apenas siete puntos sobre el azar en
-esa dimensión, o sea que el detector **no** es un redescubridor de quiebres; su aporte son las
-**1.182** ventanas raras que ninguna columna marcaba.
+**Anomaly detection targets what is not labeled.** Stockouts already come labeled hour by hour, so
+estimating them without supervision would replace a label with a worse inference. On 236,082
+windows, flagging the rarest 1%: of the 2,361 flagged, **49.9%** were already stockouts, against a
+**42.4%** base rate in the panel. Barely seven points above chance on that dimension, so the
+detector is **not** a stockout rediscoverer; its contribution is the **1,182** rare windows that no
+column flagged.
 
-## Datos
+## Data
 
-**Fuente primaria:** [FreshRetailNet-50K](https://huggingface.co/datasets/Dingdong-Inc/FreshRetailNet-50K)
-(Dingdong-Inc, CC BY 4.0) — 50.000 series tienda-producto de 90 días, 898 tiendas, 18 ciudades,
-865 SKU perecederos, con **≈ 20 % de eventos de quiebre anotados hora por hora**. Paper:
+**Primary source:** [FreshRetailNet-50K](https://huggingface.co/datasets/Dingdong-Inc/FreshRetailNet-50K)
+(Dingdong-Inc, CC BY 4.0): 50,000 store-product series of 90 days, 898 stores, 18 cities, 865
+perishable SKUs, with **≈20% stockout events annotated hour by hour**. Paper:
 [arXiv 2505.16319](https://arxiv.org/abs/2505.16319).
 
-El dataset **no se carga completo nunca** (ver `docs/decisiones.md`): se submuestrea durante la
-lectura del parquet con semilla fija y se persiste el subconjunto. `data/sample/` contiene una
-muestra pequeña y commiteada para que el repo se pueda correr sin descargar nada.
+The dataset is **never loaded in full** (see `docs/decisiones.md`): it is subsampled while reading
+the parquet with a fixed seed and the subset is persisted. `data/sample/` holds a small committed
+sample so the repo can run without downloading anything.
 
-> **Nota sobre magnitudes.** En el dataset `sale_amount` y `hours_sale` están multiplicados por
-> un coeficiente no divulgado. Las métricas de exactitud son válidas tal cual; el ROI **no** se
-> expresa en moneda a partir de estos datos. Ver `docs/roi.md`.
+> **Note on magnitudes.** In the dataset, `sale_amount` and `hours_sale` are multiplied by an
+> undisclosed coefficient. Accuracy metrics are valid as they are; ROI is **not** expressed in
+> currency from this data. See `docs/roi.md`.
 
 ## Docker
 
-Dos superficies orquestadas con Compose, y una imagen aparte para el pipeline.
+Two surfaces orchestrated with Compose, and a separate image for the pipeline.
 
 ```bash
-make docker-up      # api en :8000, app en :8501
-make docker-ps      # estado y salud
-make docker-logs    # logs de los dos servicios
+make docker-up      # api on :8000, app on :8501
+make docker-ps      # status and health
+make docker-logs    # logs for both services
 make docker-down
 ```
 
-Los datos y el artefacto se **montan como volúmenes**, no se copian a la imagen: `data/` pesa
-cientos de MB y `artifacts/` cambia en cada entrenamiento, así que meterlos en una capa haría que
-reentrenar exigiera un rebuild. Para preparar todo sin depender del entorno local:
+Data and the artifact are **mounted as volumes**, not copied into the image: `data/` weighs hundreds
+of MB and `artifacts/` changes on every training run, so baking them into a layer would make
+retraining require a rebuild. To prepare everything without depending on the local environment:
 
 ```bash
-make docker-data                                            # descarga + recupera censura
-docker compose --profile pipeline run --rm pipeline train    # serializa el artefacto
+make docker-data                                            # download + recover censoring
+docker compose --profile pipeline run --rm pipeline train    # serialize the artifact
 make docker-up
 ```
 
-### Dos imágenes, y por qué
+### Two images, and why
 
-| Target | Tamaño | Para qué | Incluye |
+| Target | Size | Purpose | Includes |
 |---|---|---|---|
-| `serve` | **1,17 GB** | API + dashboard | numpy, pandas, pyarrow, sklearn, lightgbm, fastapi, streamlit |
-| `full` | **3,57 GB** | Pipeline, entrenamiento, tests | todo `requirements.txt` |
+| `serve` | **1.17 GB** | API + dashboard | numpy, pandas, pyarrow, sklearn, lightgbm, fastapi, streamlit |
+| `full` | **3.57 GB** | Pipeline, training, tests | all of `requirements.txt` |
 
-La imagen de servicio deja afuera torch, jupyter, shap, optuna, umap-learn y xgboost. Nada de eso
-se ejecuta para responder `/forecast` ni para levantar el dashboard: el artefacto servido es un
-LightGBM y la app lee parquet.
+The serving image leaves out torch, jupyter, shap, optuna, umap-learn and xgboost. None of that runs
+to answer `/forecast` or to start the dashboard: the served artifact is a LightGBM and the app reads
+parquet.
 
-**La imagen es de CPU por diseño, y el build lo verifica.** En Linux el `torch==2.4.1` de PyPI es la
-build CUDA y arrastra los paquetes `nvidia-*`, del orden de 2,5 GB de wheels que este proyecto no
-usa. El Dockerfile instala `torch==2.4.1+cpu` desde el índice CPU de PyTorch; la variante `+cpu`
-satisface el pin, así que no hay divergencia de versiones. Aparte, **xgboost 2.1.1 declara
-`nvidia-nccl-cu12` como dependencia dura en Linux** (454 MB medidos) para comunicación multi-GPU
-que acá no se usa: se desinstala, y está verificado que xgboost sigue entrenando con
-`tree_method="hist"`. Entre las dos cosas la imagen del pipeline baja de ~6 GB a 3,57 GB.
+**The image is CPU-only by design, and the build checks it.** On Linux, PyPI's `torch==2.4.1` is the
+CUDA build and drags in the `nvidia-*` packages, around 2.5 GB of wheels this project does not use.
+The Dockerfile installs `torch==2.4.1+cpu` from PyTorch's CPU index; the `+cpu` variant satisfies
+the pin, so there is no version drift. Separately, **xgboost 2.1.1 declares `nvidia-nccl-cu12` as a
+hard dependency on Linux** (454 MB measured) for multi-GPU communication that is not used here: it
+gets uninstalled, and it is verified that xgboost still trains with `tree_method="hist"`. Between
+the two, the pipeline image drops from ~6 GB to 3.57 GB.
 
-Hay un paso de build que **falla** si aparece cualquier paquete `nvidia-*` o `triton`, para que una
-dependencia futura no agregue gigabytes en silencio.
+There is a build step that **fails** if any `nvidia-*` or `triton` package shows up, so that a
+future dependency cannot silently add gigabytes.
 
-El target `serve` tampoco tiene su propio archivo de dependencias: instala una lista corta de
-paquetes de primer nivel con `--constraint requirements.txt`, así que las versiones salen del
-**mismo archivo** que el entorno completo. Un `requirements-serve.txt` separado habría sido más
-obvio de leer y habría abierto la puerta a que los pines se desincronicen en silencio.
+The `serve` target does not have its own dependency file either: it installs a short list of
+top-level packages with `--constraint requirements.txt`, so the versions come from the **same
+file** as the full environment. A separate `requirements-serve.txt` would have been more obvious to
+read and would have opened the door to the pins silently drifting apart.
 
-### Verificado
+### Verified
 
 ```
 blindside-api   Up (healthy)   127.0.0.1:8000->8000/tcp
 blindside-app   Up (healthy)   127.0.0.1:8501->8501/tcp
 ```
 
-`/health` responde con el modelo cargado, `/series` devuelve el catálogo, Streamlit responde en
-`/_stcore/health`, y la suite corre dentro del contenedor:
+`/health` responds with the model loaded, `/series` returns the catalog, Streamlit responds at
+`/_stcore/health`, and the suite runs inside the container:
 
 ```bash
-make docker-test    # 290 tests en la imagen del pipeline
+make docker-test    # the full suite in the pipeline image
 ```
 
-### Seguridad del despliegue
+### Deployment security
 
-Los puertos se publican atados a `127.0.0.1`, no a `0.0.0.0`. Con `- "8000:8000"` Docker abriría el
-puerto en todas las interfaces de la máquina, y **la API no tiene autenticación**: en una red
-compartida cualquiera podría consultar los pronósticos y las cantidades de reposición. Los
-contenedores corren como usuario sin privilegios (`uid 1000`), y `data/`, `artifacts/` y `reports/`
-se montan **de solo lectura** en los servicios de consulta — solo el perfil `pipeline` escribe.
+Ports are published bound to `127.0.0.1`, not `0.0.0.0`. With `- "8000:8000"` Docker would open the
+port on every interface of the machine, and **the API has no authentication**: on a shared network
+anyone could query the forecasts and the reorder quantities. The containers run as an unprivileged
+user (`uid 1000`), and `data/`, `artifacts/` and `reports/` are mounted **read-only** in the query
+services; only the `pipeline` profile writes.
 
-Cambiar el binding a `0.0.0.0` exige agregar autenticación antes.
+Changing the binding to `0.0.0.0` requires adding authentication first.
 
-## Instalación
+## Installation
 
-Requiere **Python 3.11 o 3.12**. Los pines de `requirements.txt` (numpy 2.0.2, torch 2.4.1,
-numba vía umap-learn) no publican wheels para 3.13 ni 3.14, y desfijarlos para que instale
-rompería la reproducibilidad que ese archivo está protegiendo.
+Requires **Python 3.11 or 3.12**. The pins in `requirements.txt` (numpy 2.0.2, torch 2.4.1, numba
+via umap-learn) do not publish wheels for 3.13 or 3.14, and unpinning them to make it install would
+break the reproducibility that file is protecting.
 
 ```bash
 git clone https://github.com/FrancoCazal/Blindside.git
-cd blindside-core
+cd Blindside
 
 python3.11 -m venv .venv
 # Windows
@@ -525,262 +524,260 @@ python3.11 -m venv .venv
 # Linux / macOS
 source .venv/bin/activate
 
-make setup          # requirements.txt fijos + paquete en modo editable
-make test           # la suite entera; no necesita descargar nada
-make test-leakage   # solo los tests antifugas, los de la defensa
-make app            # dashboard en http://127.0.0.1:8501
+make setup          # pinned requirements.txt + the package in editable mode
+make test           # the whole suite; no download needed
+make test-leakage   # only the leakage tests, the ones from the defense
+make app            # dashboard at http://127.0.0.1:8501
 ```
 
-Eso ya corre: `data/sample/` viene commiteado. Para reproducir los resultados de arriba hay que
-bajar el dataset (115 MB) y regenerar las capas:
+That already runs: `data/sample/` is committed. To reproduce the results above you need to download
+the dataset (115 MB) and regenerate the layers:
 
 ```bash
-make data       # descarga y submuestrea a data/interim/ con semilla fija
-make recover    # recupera la demanda censurada -> data/processed/
-make models     # backtest de baselines + LightGBM + Ridge -> reports/metrics.md
-make ablation   # ablación de censura -> reports/censoring_ablation.md
+make data       # downloads and subsamples into data/interim/ with a fixed seed
+make recover    # recovers censored demand -> data/processed/
+make models     # backtest of baselines + LightGBM + Ridge -> reports/metrics.md
+make ablation   # censoring ablation -> reports/censoring_ablation.md
 ```
 
-`make data` y `make recover` tardan pocos minutos. `make models` entrena LightGBM y Ridge en
-ocho folds sobre 400.000 filas cada uno, así que son decenas de minutos.
+`make data` and `make recover` take a few minutes. `make models` trains LightGBM and Ridge on eight
+folds of 400,000 rows each, so it takes tens of minutes.
 
-## Estructura del repositorio
+## Repository structure
 
 ```
-blindside-core/
+Blindside/
 ├── data/
-│   ├── raw/          # descarga original (no commiteado)
-│   ├── interim/      # subconjunto submuestreado (no commiteado)
-│   ├── processed/     # demanda latente recuperada + features (no commiteado)
-│   └── sample/       # muestra chica (SI commiteada)
+│   ├── raw/          # original download (not committed)
+│   ├── interim/      # subsampled subset (not committed)
+│   ├── processed/    # recovered latent demand + features (not committed)
+│   └── sample/       # small sample (committed)
 ├── src/blindside/
-│   ├── config.py      # rutas, semilla, economia, parametros de pronostico
-│   ├── data/          # schema.py (CONTRATO 1), freshretail.py, loaders.py
-│   ├── features/      # calendar.py, lags.py, build.py (anclado en el origen)
-│   ├── validation/    # splits.py (origen movil), leakage.py (los 8 asserts)
-│   ├── models/        # base.py (CONTRATO 2), baselines, tabular, gbdt, linear, classical, tuning
-│   ├── unsupervised/  # clustering (K-Means/DBSCAN), embeddings (PCA), anomalias (iForest)
+│   ├── config.py      # paths, seed, economics, forecasting parameters
+│   ├── data/          # schema.py (CONTRACT 1), freshretail.py, loaders.py, update.py (batch ingestion)
+│   ├── features/      # calendar.py, lags.py, build.py (anchored at the origin)
+│   ├── validation/    # splits.py (rolling origin), leakage.py (the 8 asserts)
+│   ├── models/        # base.py (CONTRACT 2), baselines, tabular, gbdt, linear, classical, tuning
+│   ├── unsupervised/  # clustering (K-Means/DBSCAN), embeddings (PCA), anomalies (iForest)
 │   ├── decision/      # censoring, conformal, newsvendor, policy
-│   ├── evaluate/      # contracts.py (CONTRATO 3), metrics, backtest, ablation
-│   └── explain/       # attribution.py: TreeSHAP local y global
-├── notebooks/         # 6 notebooks ejecutados; importan de src/, no contienen logica
-├── tests/             # 290 tests; test_leakage.py son los 8 items del checklist
-├── app/               # streamlit_app.py, 8 pantallas
-├── api/               # schemas.py (CONTRATO 4), main.py
-├── frontend/          # React + Vite + TS; schema.d.ts generado del OpenAPI
-│   ├── src/api/       # cliente tipado contra el contrato
-│   ├── src/charts/    # SVG a mano: viewBox fijo y orden de capas
-│   ├── src/screens/   # reposicion (landing), serie individual, salud
-│   └── src/domain.ts  # UNICO lugar con numeros que no vienen del backend
-├── docs/              # decisiones tecnicas, ROI, plan del proyecto
-├── artifacts/         # modelos serializados (no commiteados)
-└── reports/           # metrics.md, censoring_ablation.md (generados)
+│   ├── evaluate/      # contracts.py (CONTRACT 3), metrics, backtest, ablation
+│   └── explain/       # attribution.py: local and global TreeSHAP
+├── notebooks/         # 6 executed notebooks; they import from src/ and contain no logic
+├── tests/             # 320 tests; test_leakage.py holds the 8 checklist items
+├── app/               # streamlit_app.py, 8 screens
+├── api/               # schemas.py (CONTRACT 4), main.py
+├── frontend/          # React + Vite + TS; schema.d.ts generated from the OpenAPI
+│   ├── src/api/       # typed client against the contract
+│   ├── src/charts/    # hand-written SVG: fixed viewBox and layer order
+│   ├── src/i18n/      # typed en/es strings
+│   ├── src/screens/   # the 7 screens: Dashboard, Alerts, Replenishment, Series, Models, Data, Pipeline
+│   └── src/domain.ts  # presentation logic only; every figure comes from the API
+├── docs/              # technical decisions, ROI, project plan (in Spanish)
+├── artifacts/         # serialized models (not committed)
+└── reports/           # metrics.md, censoring_ablation.md (generated)
 ```
 
-### Los cuatro contratos
+### The four contracts
 
-Están congelados a propósito antes que el resto (sección 13 del plan): sin ellos los frentes
-paralelos producen piezas que no encajan.
+They were deliberately frozen before everything else (section 13 of the plan): without them,
+parallel workstreams produce pieces that do not fit together.
 
-| Contrato | Archivo | Qué fija |
+| Contract | File | What it pins down |
 |---|---|---|
-| Esquema de datos | `src/blindside/data/schema.py` | Columnas, tipos, granularidad, jerarquías |
-| Interfaz de modelo | `src/blindside/models/base.py` | `fit(history)` / `predict(future)`, artefacto |
-| Resultado de backtest | `src/blindside/evaluate/contracts.py` | Forma única que consumen métricas y dashboard |
-| API | `api/schemas.py` | Request y response Pydantic |
+| Data schema | `src/blindside/data/schema.py` | Columns, types, granularity, hierarchies |
+| Model interface | `src/blindside/models/base.py` | `fit(history)` / `predict(future)`, artifact |
+| Backtest result | `src/blindside/evaluate/contracts.py` | Single shape consumed by metrics and dashboard |
+| API | `api/schemas.py` | Pydantic request and response |
 
-El segundo es el que hace estructural el diseño antifugas: un modelo recibe `history` (hasta el
-origen) y un `future` **sin columna de target**. No tiene desde dónde mirar el futuro ni por
-accidente. La fuga deja de ser algo que hay que recordar no hacer y pasa a ser algo que no se
-puede expresar.
+The second one is what makes the leakage-proof design structural: a model receives `history` (up to
+the origin) and a `future` **with no target column**. It has no way to look at the future, not even
+by accident. Leakage stops being something you have to remember not to do and becomes something
+that cannot be expressed.
 
-## Validación y antifugas
+## Validation and leakage
 
-El checklist de la metodología está implementado como **tests que fallan si hay fuga**. Un README
-que dice «evité leakage» no prueba nada.
+The methodology checklist is implemented as **tests that fail if there is leakage**. A README that
+says "I avoided leakage" proves nothing.
 
 ```bash
 make test-leakage
 ```
 
-| Item | Cómo se verifica |
+| Item | How it is verified |
 |---|---|
-| Sin features posteriores a `t` | Toda feature es constante dentro de cada `(serie, origen)` |
-| Lags por grupo y ordenados | El lag de la primera fila de cada serie es nulo |
-| Sin agregados globales | Ninguna feature iguala un promedio del panel completo |
-| Sin target encoding del futuro | Ninguna feature correlaciona ≥ 0,999 con el target |
-| Escalador ajustado en el fold | Su media se parece a la del train, no a la del panel |
-| Test de shuffle | Al permutar el target, el modelo no le gana al mejor constante |
-| Alineación del target | Correr el target un día **empeora** la métrica en las dos direcciones |
-| Test de fold | Train y test disjuntos, y el gap es igual al horizonte |
+| No features after `t` | Every feature is constant within each `(series, origin)` |
+| Lags per group and sorted | The lag of each series' first row is null |
+| No global aggregates | No feature equals a full-panel average |
+| No target encoding from the future | No feature correlates ≥ 0.999 with the target |
+| Scaler fitted within the fold | Its mean resembles the training set's, not the panel's |
+| Shuffle test | With the target permuted, the model does not beat the best constant |
+| Target alignment | Shifting the target by one day **worsens** the metric in both directions |
+| Fold test | Train and test are disjoint, and the gap equals the horizon |
 
-Cada uno lleva su **caso negativo**: se inyecta la fuga a propósito y se verifica que el assert la
-detecte. Un test antifugas que pasa siempre, incluso con fuga presente, es peor que no tenerlo.
+Each one carries its **negative case**: the leak is injected on purpose and the assert is verified
+to catch it. A leakage test that always passes, even with leakage present, is worse than not having
+one.
 
-Dos de estos tests encontraron fugas y bugs reales en este código, no hipotéticos:
+Two of these tests found real leaks and bugs in this code, not hypothetical ones:
 
-- `is_censored` del **día objetivo** entraba a la matriz como feature, porque el `merge` la
-  desambiguaba con el sufijo `_target`. Eso es predecir demanda sabiendo si va a haber quiebre.
-- `days_since_start` se anclaba al mínimo de cada DataFrame, así que valía 0..18 en entrenamiento
-  y 0..6 en inferencia. Ridge daba MASE 3,75 con desvío 5,26; con el ancla fija da 0,91. LightGBM
-  apenas se movía, que es lo que hacía al bug difícil de ver.
+- The **target day's** `is_censored` entered the matrix as a feature, because the `merge`
+  disambiguated it with the `_target` suffix. That is predicting demand while knowing whether there
+  will be a stockout.
+- `days_since_start` was anchored to the minimum of each DataFrame, so it ranged 0..18 in training
+  and 0..6 at inference. Ridge gave MASE 3.75 with a std. of 5.26; with the fixed anchor it gives
+  0.91. LightGBM barely moved, which is what made the bug hard to see.
 
-Detalle del segundo en `docs/decisiones.md` D12.
+Details on the second one in `docs/decisiones.md` D12.
 
-### El desajuste train/serve que ninguna métrica detectaba
+### The train/serve mismatch that no metric detected
 
-Los asserts antifugas cubren el camino de **validación**. Hubo un tercer defecto que vivía solo en
-**inferencia**, y por eso ningún backtest lo veía: de las 73 features que recibe el modelo, las
-tres covariables conocidas de antemano — descuento, feriado y actividad — llegaban en **NaN**.
+The leakage asserts cover the **validation** path. There was a third defect that lived only at
+**inference**, which is why no backtest saw it: of the 73 features the model receives, the three
+covariates known in advance (discount, holiday and activity) arrived as **NaN**.
 
-El mecanismo es limpio de explicar. El estado congelado del origen las descarta a propósito,
-porque son del día objetivo y tienen que venir del índice de futuro. El arnés de backtesting las
-pone, porque el fold cae dentro del panel y esos días ya existen. La API no las ponía, porque su
-horizonte empieza después del último día del panel y no hay de dónde leerlas.
+The mechanism is clean to explain. The frozen origin state drops them on purpose, because they
+belong to the target day and have to come from the future index. The backtesting harness fills
+them in, because the fold falls inside the panel and those days already exist. The API did not
+fill them in, because its horizon starts after the last day of the panel and there is nowhere to
+read them from.
 
-Medido sobre un fold real (train hasta 2024-06-25, test del 26 de junio al 2 de julio, 21.462
-filas):
+Measured on a real fold (training up to 2024-06-25, test from June 26 to July 2, 21,462 rows):
 
-| Covariables del horizonte | MASE | vs. reales | Cantidad a pedir | vs. reales |
+| Horizon covariates | MASE | vs. actual | Order quantity | vs. actual |
 |---|---|---|---|---|
-| Reales, del panel | **0,8790** | — | 35.011 | — |
-| Mediana de 21 días, global · **el default** | 0,9437 | +7,4 % | 32.787 | −6,4 % |
-| Mediana de 21 días, por serie | 0,9513 | +8,2 % | 33.692 | −3,8 % |
-| Precio de lista, sin campaña | 0,9571 | +8,9 % | 30.390 | −13,2 % |
-| Persistir el último día conocido | 0,9573 | +8,9 % | 33.406 | −4,6 % |
-| **Las tres en NaN** · lo que servía la API | **1,6392** | **+86,5 %** | 53.391 | **+52,5 %** |
+| Actual, from the panel | **0.8790** | — | 35,011 | — |
+| 21-day median, global · **the default** | 0.9437 | +7.4% | 32,787 | −6.4% |
+| 21-day median, per series | 0.9513 | +8.2% | 33,692 | −3.8% |
+| List price, no campaign | 0.9571 | +8.9% | 30,390 | −13.2% |
+| Carry forward the last known day | 0.9573 | +8.9% | 33,406 | −4.6% |
+| **All three as NaN** · what the API was serving | **1.6392** | **+86.5%** | 53,391 | **+52.5%** |
 
-La última fila es la que importa: **1,64 es peor que el naive estacional**, que da 1,10. La API
-publicaba pronósticos peores que el baseline que el proyecto dice superar, con órdenes 52 % más
-altas de lo que corresponde, y contestaba 200 sin una sola advertencia — LightGBM trata el NaN
-como una rama más, así que la salida era un número plausible.
+The last row is the one that matters: **1.64 is worse than seasonal naive**, which scores 1.10. The
+API was publishing forecasts worse than the baseline the project claims to beat, with orders 52%
+higher than they should be, and it answered 200 without a single warning: LightGBM treats NaN as
+just another branch, so the output was a plausible number.
 
-Por columna, asumiendo una sola por vez: `discount` +4,2 %, `holiday_flag` +2,6 %,
-`activity_flag` +0,02 %. El descuento pesa el doble que el feriado, y la bandera de actividad
-casi no mueve la aguja.
+Per column, assuming one at a time: `discount` +4.2%, `holiday_flag` +2.6%, `activity_flag` +0.02%.
+Discount weighs twice as much as holiday, and the activity flag barely moves the needle.
 
-Hay ahora un test que falla si cualquiera de las tres vuelve a llegar nula. La elección del
-default está en `docs/decisiones.md` D19.
+There is now a test that fails if any of the three arrives null again. The choice of default is in
+`docs/decisiones.md` D19.
 
-### Un segundo defecto de inferencia, en la capa de decisión
+### A second inference defect, in the decision layer
 
-El artefacto servido es un conformal envolviendo un LightGBM cuantílico. Su `predict_quantile`
-**descartaba los boosters entrenados con pérdida cuantílica** e interpolaba entre los límites del
-intervalo, así que la cantidad a pedir salía de la forma de la banda conformal y no del cuantil
-`q*`. Medido sobre 25 series: la banda daba `q0,625 = 1,93` donde el booster entrenado da 1,52,
-o sea una orden **21,5 % más alta**. Y como la banda está sobre-inflada, el error iba siempre en
-la misma dirección.
+The served artifact is a conformal wrapper around a quantile LightGBM. Its `predict_quantile`
+**discarded the boosters trained with quantile loss** and interpolated between the interval bounds,
+so the order quantity came from the shape of the conformal band and not from the `q*` quantile.
+Measured on 25 series: the band gave `q0.625 = 1.93` where the trained booster gives 1.52, an order
+**21.5% higher**. And since the band is over-inflated, the error always went in the same direction.
 
-Importa porque el README afirma que «el modelo se entrena con pérdida cuantílica en ese `q*`, así
-que su salida **es** la orden». Para el artefacto servido eso no era cierto. Ahora, cuando el
-modelo base sabe dar cuantiles, manda el base; el conformal sigue siendo dueño del intervalo, que
-es para lo que tiene garantía de cobertura. Detalle en `docs/decisiones.md` D20.
+It matters because the README claims that "the model is trained with quantile loss at that `q*`, so
+its output **is** the order". For the served artifact that was not true. Now, when the base model
+can produce quantiles, the base model is in charge; the conformal wrapper still owns the interval,
+which is what it has a coverage guarantee for. Details in `docs/decisiones.md` D20.
 
-## Decisiones técnicas y limitaciones
+## Technical decisions and limitations
 
-Están documentadas en `docs/decisiones.md`, cada una con qué se decidió, por qué, y qué
-alternativa se descartó. Las que conviene conocer antes de leer los resultados:
+They are documented in `docs/decisiones.md`, each with what was decided, why, and which
+alternative was discarded. The ones worth knowing before reading the results:
 
-1. **Horizonte de 7 días, no de 4 semanas.** El dataset trae 90 + 7 días por serie. Con horizonte
-   28 caben como máximo 4 orígenes de backtest y la metodología declara 8, así que las dos cosas
-   son incompatibles. Además, el split `eval` oficial del benchmark son exactamente 7 días, lo que
-   permite compararse contra el baseline publicado. Detalle en D8.
-2. **Submuestreo declarado.** 3066 de las 50.000 series, elegidas por tienda completa con semilla
-   fija para no romper las jerarquías. El manifiesto queda en `data/interim/`.
-3. El newsvendor es **de un solo período**. Para perecederos con vida útil mayor al período de
-   revisión el modelo correcto es de inventario perecedero multi-período con despacho por
-   antigüedad. La aproximación vale cuando la vida útil se parece al período de revisión.
-4. No se modela **lead time** ni estructura multi-echelon: se asume que lo pedido llega para el
-   período siguiente.
-5. No se modelan **restricciones operativas de la orden** (cantidad mínima, múltiplos de caja o
-   pallet, capacidad de cámara). El modelo emite un número continuo.
-6. **La corrección de censura es conservadora a propósito.** Tope de inflación en ×3 y nada de
-   corrección cuando queda menos del 15 % de la masa de demanda diaria disponible. Sin esos
-   límites, un día con 15 de 16 franjas en quiebre y una sola venta chica implicaría una demanda
-   latente dieciséis veces mayor apoyada en un único dato. Se prefiere un sesgo residual conocido
-   a una varianza inventada, y eso hace que la corrección quede por debajo de la publicada por
-   CADRE. Detalle en D11.
+1. **7-day horizon, not 4 weeks.** The dataset has 90 + 7 days per series. With a 28-day horizon at
+   most 4 backtest origins fit and the methodology declares 8, so the two are incompatible. Also,
+   the benchmark's official `eval` split is exactly 7 days, which allows a comparison against the
+   published baseline. Details in D8.
+2. **Declared subsampling.** 3,066 of the 50,000 series, chosen by whole store with a fixed seed so
+   as not to break the hierarchies. The manifest is kept in `data/interim/`.
+3. The newsvendor is **single-period**. For perishables with a shelf life longer than the review
+   period, the correct model is multi-period perishable inventory with age-based dispatch. The
+   approximation holds when the shelf life is close to the review period.
+4. **Lead time** and multi-echelon structure are not modeled: what is ordered is assumed to arrive
+   for the next period.
+5. **Operational order constraints** are not modeled (minimum quantity, case or pallet multiples,
+   cold-room capacity). The model emits a continuous number.
+6. **The censoring correction is deliberately conservative.** Inflation is capped at ×3, with no
+   correction when less than 15% of the daily demand mass remains available. Without those limits,
+   a day with 15 of 16 slots out of stock and a single small sale would imply a latent demand
+   sixteen times larger, resting on a single data point. A known residual bias is preferred to an
+   invented variance, and that keeps the correction below the one published by CADRE. Details in
+   D11.
 
-### Encuadre del diferencial, sin inflar
+### Framing the differentiator, without inflating it
 
-El cruce entre predicción conformal y newsvendor **no es un aporte original**. Que los pronósticos
-cuantílicos calibrados sean equivalentes a la solución óptima del newsvendor es un resultado
-publicado ([MDPI JRFM](https://www.mdpi.com/1911-8074/19/3/173)), y conformalizar el cuantil
-crítico también está hecho ([Cao 2024](https://arxiv.org/abs/2412.13159)). Lo que se reivindica
-es la **aplicación**: la implementación corriendo de punta a punta, que es lo raro, porque la
-mayoría de las implementaciones reales usan stock de seguridad heurístico en vez de un cuantil
-con cobertura verificada.
+Combining conformal prediction with the newsvendor **is not an original contribution**. That
+calibrated quantile forecasts are equivalent to the optimal newsvendor solution is a published
+result ([MDPI JRFM](https://www.mdpi.com/1911-8074/19/3/173)), and conformalizing the critical
+quantile has also been done ([Cao 2024](https://arxiv.org/abs/2412.13159)). What is claimed is the
+**application**: the implementation running end to end, which is the rare part, because most real
+implementations use heuristic safety stock instead of a quantile with verified coverage.
 
-Existe además [un pipeline publicado](https://www.mdpi.com/2411-5134/11/5/89) muy parecido a este
-proyecto sobre este mismo dataset. Se cita a propósito: es plantilla y competencia a la vez, y
-conviene haberlo citado primero.
+There is also [a published pipeline](https://www.mdpi.com/2411-5134/11/5/89) very similar to this
+project, on this same dataset. It is cited on purpose: it is both template and competition, and it
+is better to have cited it first.
 
-## Estado y próximos pasos
+## Status and next steps
 
-Implementado y verificado: contratos, carga y submuestreo, recuperación de censura, features
-ancladas en el origen, validación de origen móvil con asserts antifugas, métricas, arnés de
-backtesting, baselines, LightGBM (puntual y cuantílico), XGBoost, regresión regularizada,
-**SARIMA y Prophet como contraste per-serie (M6)**, CQR con cobertura verificada, newsvendor con
-esperanzas derivadas de la distribución predictiva, simulador de política, **clustering de perfiles
-y detección de anomalías (M4)**, API, dashboard Streamlit, frontend React de 7 pantallas con
-panel, alertas y reposición priorizada sobre todo el catálogo, pipeline de ingesta incremental
-con promoción atómica y rollback, y
-**TreeSHAP local y global** en `explain/`.
+Implemented and verified: contracts, loading and subsampling, censoring recovery, origin-anchored
+features, rolling-origin validation with leakage asserts, metrics, backtesting harness, baselines,
+LightGBM (point and quantile), XGBoost, regularized regression, **SARIMA and Prophet as a
+per-series contrast (M6)**, CQR with verified coverage, newsvendor with expectations derived from
+the predictive distribution, policy simulator, **profile clustering and anomaly detection (M4)**,
+API, Streamlit dashboard, a 7-screen React frontend with dashboard, alerts and prioritized
+replenishment across the whole catalog, an incremental ingestion pipeline with atomic promotion and
+rollback, and **local and global TreeSHAP** in `explain/`.
 
-Con eso queda cubierto el **mínimo defendible que el plan declara: M2 + M3 + M6**, y M4 arriba de
-eso — con el resultado negativo de su feature medido y reportado, que es la parte que más cuesta
-escribir y la que más vale.
+That covers the **minimum defensible scope the plan declares: M2 + M3 + M6**, with M4 on top, its
+feature's negative result measured and reported, which is the hardest part to write and the most
+valuable one.
 
-Pendiente del alcance del plan: GRU/LSTM y transformer temporal (M5), drift (M9), reconciliación
-MinT (8.3), y el generador sintético del caso Focal Point (frente K).
+Pending from the plan's scope: GRU/LSTM and a temporal transformer (M5), drift (M9), MinT
+reconciliation (8.3), and the synthetic generator for the Focal Point case (workstream K).
 
-### Actualización continua: ingesta de lotes
+### Continuous updates: batch ingestion
 
-El sistema ya no es solo batch. `blindside.data.update` suma lotes nuevos al panel sin rehacer la
-carga inicial:
+The system is no longer batch-only. `blindside.data.update` adds new batches to the panel without
+redoing the initial load:
 
 ```bash
-make update-batch                                     # arma un lote real desde el split eval
-make update INPUT=data/incoming/lote.parquet          # valida, upsert, recupera, escribe
-make update INPUT=data/incoming/lote.parquet TRAIN=1  # además reentrena y promueve
-make rollback                                         # vuelve al artefacto anterior
+make update-batch                                     # builds a real batch from the eval split
+make update INPUT=data/incoming/lote.parquet          # validates, upserts, recovers, writes
+make update INPUT=data/incoming/lote.parquet TRAIN=1  # also retrains and promotes
+make rollback                                         # goes back to the previous artifact
 make update-status
 ```
 
-- **Contrato de entrada:** las 19 columnas del dataset original, en parquet o CSV. Se valida con
-  el mismo `build_panel` de la carga inicial.
-- **Upsert por (serie, día):** cada fila es nueva, duplicado exacto (se ignora) o conflicto. Un
-  conflicto **rechaza el lote entero** y no escribe nada, salvo `CONFLICT=replace`.
-- **Escritura atómica:** cada capa se escribe a un temporal y se mueve con `os.replace`. La
-  versión anterior queda como `*.prev.parquet`.
-- **Reentrenamiento seguro:** los artefactos se entrenan como candidatos, pasan una prueba de humo
-  y recién ahí se promueven. El anterior queda como `*.prev.joblib`.
-- **La API recarga sola** cuando cambian los archivos (cada 2 s como máximo,
-  `BLINDSIDE_RELOAD_SECONDS`), y `/health` informa la **frescura**: cuántos días de datos no vio
-  el modelo. Es frescura, no deriva.
+- **Input contract:** the original dataset's 19 columns, in parquet or CSV. It is validated with the
+  same `build_panel` as the initial load.
+- **Upsert by (series, day):** each row is new, an exact duplicate (ignored) or a conflict. A
+  conflict **rejects the whole batch** and writes nothing, unless `CONFLICT=replace`.
+- **Atomic writes:** each layer is written to a temporary file and moved with `os.replace`. The
+  previous version stays as `*.prev.parquet`.
+- **Safe retraining:** artifacts are trained as candidates, pass a smoke test and only then get
+  promoted. The previous one stays as `*.prev.joblib`.
+- **The API reloads on its own** when the files change (every 2 s at most,
+  `BLINDSIDE_RELOAD_SECONDS`), and `/health` reports **freshness**: how many days of data the model
+  has not seen. It is freshness, not drift.
 
-No hay endpoint que dispare nada de esto, a propósito: la API no tiene autenticación, y una ruta
-que escriba datos o cambie el modelo servido sin autenticación es un agujero. Sobre el panel real,
-reingerir el split eval da 21.462 duplicados, 0 filas nuevas y ninguna capa reescrita.
+There is no endpoint that triggers any of this, on purpose: the API has no authentication, and an
+unauthenticated route that writes data or changes the served model is a hole. On the real panel,
+re-ingesting the eval split gives 21,462 duplicates, 0 new rows and no layer rewritten.
 
-**La limitación que queda del lado del intervalo**, ahora que CQR está medido: cubre 88,0 %
-cuando promete 90 %, o sea dos puntos **por debajo**. La garantía del split-conformal supone
-intercambiabilidad y una partición temporal la cumple de forma aproximada, así que la brecha es
-esperable y está declarada. La orden no depende de eso — sale del booster entrenado en `q*` —
-pero la banda que se dibuja en la interfaz sí.
+**The limitation that remains on the interval side**, now that CQR is measured: it covers 88.0% when
+it promises 90%, two points **below**. The split-conformal guarantee assumes exchangeability and a
+temporal split only meets it approximately, so the gap is expected and declared. The order does not
+depend on it (it comes from the booster trained at `q*`), but the band drawn in the interface does.
 
-La otra limitación, más de fondo: la cobertura garantizada es **marginal, no condicional**. El
-88 % global puede esconder subgrupos peores, y el desglose por horizonte del notebook `05` muestra
-que los pasos intermedios bajan a 0,85. Desagregar es lo que la hace visible; corregirla exigiría
-conformal condicional o por grupo, y eso está en el Roadmap.
+The other limitation runs deeper: the guaranteed coverage is **marginal, not conditional**. The
+overall 88% can hide worse subgroups, and the per-horizon breakdown in notebook `05` shows that the
+intermediate steps drop to 0.85. Disaggregating is what makes it visible; fixing it would require
+conditional or group-wise conformal, and that is on the Roadmap.
 
-Fuera del alcance de la entrega, en `docs/decisiones.md` sección Roadmap. La priorización de las
-últimas horas, el análisis de actualización continua y la imposibilidad de ampliar los días de
-FreshRetailNet están en [`docs/auditoria_final.md`](docs/auditoria_final.md).
+Out of scope for the delivery, in `docs/decisiones.md`, Roadmap section. The prioritization of the
+final hours, the continuous-update analysis and why FreshRetailNet's days cannot be extended are in
+[`docs/auditoria_final.md`](docs/auditoria_final.md).
 
-## Licencia
+## License
 
-MIT. Ver `LICENSE`.
+MIT. See `LICENSE`.
 
-El dataset FreshRetailNet-50K es de Dingdong-Inc y se distribuye bajo CC BY 4.0; no se
-redistribuye en este repositorio más allá de la muestra de `data/sample/`.
+The FreshRetailNet-50K dataset belongs to Dingdong-Inc and is distributed under CC BY 4.0; it is not
+redistributed in this repository beyond the sample in `data/sample/`.
