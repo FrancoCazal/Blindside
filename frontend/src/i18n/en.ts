@@ -555,7 +555,7 @@ export const en = {
     kpiError: "Served model error · MASE",
     kpiErrorPie: (desvio: string, nombre: string) => `± ${desvio} across origins · ${nombre}`,
     kpiPeor: "Worst origin",
-    kpiPeorPie: (mejor: string) => `the month that goes wrong; best origin ${mejor}`,
+    kpiPeorPie: (mejor: string) => `the week that goes wrong; best origin ${mejor}`,
     kpiNaive: "Vs. the seasonal naive",
     kpiNaivePie: (objetivo: string, cumplido: boolean) =>
       `less error · target ${objetivo}, ${cumplido ? "met" : "not met"}`,
@@ -594,7 +594,7 @@ export const en = {
     sinMedicion: "Not measured.",
     desglose: "Backtest breakdown",
     origen: "Error origin by origin",
-    origenNota: "If a line breaks upward at some origin, that is the month that goes wrong.",
+    origenNota: "If a line breaks upward at some origin, that is the week that goes wrong.",
     origenAria:
       "MASE by backtest origin for the served model, the 21-day moving average and the seasonal naive",
     origenColumna: "Origin",

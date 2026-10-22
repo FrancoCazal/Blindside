@@ -543,7 +543,7 @@ export const es: Textos = {
     kpiError: "Error del modelo servido · MASE",
     kpiErrorPie: (desvio, nombre) => `± ${desvio} entre orígenes · ${nombre}`,
     kpiPeor: "Peor origen",
-    kpiPeorPie: (mejor) => `el mes que sale mal; mejor origen ${mejor}`,
+    kpiPeorPie: (mejor) => `la semana que sale mal; mejor origen ${mejor}`,
     kpiNaive: "Contra el naive estacional",
     kpiNaivePie: (objetivo, cumplido) =>
       `menos error · objetivo ${objetivo}, ${cumplido ? "cumplido" : "no cumplido"}`,
@@ -582,7 +582,7 @@ export const es: Textos = {
     sinMedicion: "Sin medición.",
     desglose: "Desglose del backtest",
     origen: "Error origen por origen",
-    origenNota: "Si una línea se despega hacia arriba en algún origen, ahí está el mes que sale mal.",
+    origenNota: "Si una línea se despega hacia arriba en algún origen, ahí está la semana que sale mal.",
     origenAria:
       "MASE por origen de backtest del modelo servido, la media móvil de 21 días y el naive estacional",
     origenColumna: "Origen",
