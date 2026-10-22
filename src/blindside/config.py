@@ -20,6 +20,9 @@ DATA_RAW = ROOT / "data" / "raw"
 DATA_INTERIM = ROOT / "data" / "interim"
 DATA_PROCESSED = ROOT / "data" / "processed"
 DATA_SAMPLE = ROOT / "data" / "sample"
+#: Lotes nuevos que esperan ser ingeridos por `blindside.data.update`. No se
+#: commitea: es una bandeja de entrada, no una capa.
+DATA_INCOMING = ROOT / "data" / "incoming"
 ARTIFACTS = ROOT / "artifacts"
 REPORTS = ROOT / "reports"
 FIGURES = REPORTS / "figures"
@@ -30,6 +33,9 @@ PANEL_FILE = "panel.parquet"  # data/interim: submuestreo crudo + secuencias hor
 DEMAND_FILE = "demand.parquet"  # data/processed: demanda latente recuperada
 FEATURES_FILE = "features.parquet"  # data/processed: matriz de features
 MANIFEST_FILE = "subsample_manifest.json"  # data/interim: que se submuestreo y con que semilla
+#: Registro de ingestas, junto a la capa servida. Es lo que lee `/pipeline` para
+#: decir cuando entro el ultimo lote y que hizo con cada fila.
+UPDATE_LOG_FILE = "update_log.json"
 
 # --- Bases de calculo ----------------------------------------------------
 #: Las dos bases sobre las que se puede pronosticar. `recovered` es demanda
@@ -64,6 +70,23 @@ def model_path(basis: Basis = DEFAULT_BASIS) -> Path:
     # ARTIFACTS se lee en cada llamada a proposito: los tests lo reapuntan a un
     # tmp_path con monkeypatch y una ruta capturada al importar los ignoraria.
     return ARTIFACTS / filename
+
+
+def candidate_path(basis: Basis = DEFAULT_BASIS) -> Path:
+    """Artefacto recien entrenado que todavia no se sirve.
+
+    Se entrena aca y no sobre el archivo vigente: un entrenamiento que falla a la
+    mitad, o que produce un modelo que no pasa la prueba de humo, no puede dejar a
+    la API sin modelo ni con uno roto.
+    """
+    current = model_path(basis)
+    return current.with_name(f"{current.stem}.candidate{current.suffix}")
+
+
+def previous_path(basis: Basis = DEFAULT_BASIS) -> Path:
+    """Version anterior del artefacto, conservada para poder volver atras."""
+    current = model_path(basis)
+    return current.with_name(f"{current.stem}.prev{current.suffix}")
 
 
 # --- Semilla -------------------------------------------------------------
@@ -202,6 +225,7 @@ HF_DATASET = "Dingdong-Inc/FreshRetailNet-50K"
 __all__ = [
     "ARTIFACTS",
     "CENSORING",
+    "DATA_INCOMING",
     "DATA_INTERIM",
     "DATA_PROCESSED",
     "DATA_RAW",
@@ -221,11 +245,14 @@ __all__ = [
     "ROOT",
     "SEED",
     "SUBSAMPLE",
+    "UPDATE_LOG_FILE",
     "Basis",
     "CensoringConfig",
     "EconomicsConfig",
     "ForecastConfig",
     "Paths",
     "SubsampleConfig",
+    "candidate_path",
     "model_path",
+    "previous_path",
 ]

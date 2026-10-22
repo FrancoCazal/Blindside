@@ -64,8 +64,40 @@ make front   # frontend React en localhost:5173 (necesita la API arriba)
 
 ## Frontend
 
-React + Vite + TypeScript en `frontend/`, dos pantallas hero y el cromo completo. La dirección
-visual sale de `docs/design_handoff_dfcore/`; los datos, de la API.
+React + Vite + TypeScript en `frontend/`, siete pantallas en tres grupos. La dirección visual sale
+de `docs/design_handoff_dfcore/`; la arquitectura de pantallas y la regla de dónde vive cada dato,
+de [`docs/rediseno_frontend.md`](docs/rediseno_frontend.md); los datos, de la API.
+
+| Grupo | Pantalla | Responde |
+|---|---|---|
+| Operación | **Panel** | Qué pasa hoy y por dónde empiezo. Es la entrada |
+| Operación | **Alertas** | Qué series mirar y por qué motivo |
+| Operación | **Reposición** | Cuánto pedir de cada serie, ordenado por ahorro sobre **todo el catálogo** |
+| Operación | **Serie** | Por qué creerle a esa cantidad: gráfico, próximos 7 días, la explicación por variable y la censura de la serie |
+| Análisis | **Modelos** | Qué tan bueno es el modelo y dónde falla, con el intervalo CQR contra el conformal de residuos |
+| Análisis | **Datos** | Cómo es el panel y cuánta demanda esconden los quiebres, con el mapa del catálogo |
+| Sistema | **Pipeline** | Qué datos y qué modelo se sirven, y cómo se actualizan |
+
+Cada dato tiene una pantalla dueña y las demás enlazan: el MASE vive en Modelos, la frescura en
+Pipeline, la censura del panel en Datos. Los controles viven donde actúan: el toggle de censura y
+el ratio de costo aparecen en Reposición y en Serie, y los filtros de tienda y clase en Reposición
+y en Alertas. El detalle técnico de cada pantalla está plegado en «Cómo se calcula».
+
+La interfaz abre en **inglés**; el español y el tema (sistema, claro u oscuro) se eligen en
+**Settings**, arriba a la derecha, y quedan guardados en el navegador. `?lang=es` en el enlace abre
+directo en español. Los textos viven en `frontend/src/i18n/`, tipados: una clave que falta en un
+idioma no compila.
+
+Las alertas son **por motivo y no por puntaje**: quebrado ahora, riesgo de merma, modelo no
+confiable, alto volumen y señal escasa. Marcan 977 de 3.066 series, y cada una trae qué significa,
+qué hacer, su umbral y la cifra que la disparó en cada serie.
+
+**El riesgo de merma no es «por vencer».** FreshRetailNet-50K no trae vida útil, lote ni stock
+disponible, así que una alerta de vencimiento tendría que inventar esos números. Lo que sí se mide
+es el **sobrante esperado de la política actual** sobre la demanda esperada a 7 días, integrado
+bajo la distribución predictiva del modelo. En perecedero ese sobrante es lo que se vence en
+góndola. La alerta exige que llegue al 50 % y que la cantidad sugerida lo reduzca: marca 204
+series (6,7 %).
 
 ```bash
 make front-setup    # npm install
@@ -111,8 +143,10 @@ el modelo, no resultados medidos, y el faltante es una **cota inferior** porque 
 en el cuantil 0,95 y el 5 % de masa de arriba no está descrito. La respuesta devuelve ese
 `tail_mass` para que la interfaz lo pueda decir.
 
-Todo número que no venga del backend vive en un solo archivo (`frontend/src/domain.ts`), lleva
-sello `sim` en pantalla y dice qué endpoint falta.
+Ninguna cifra de la interfaz se calcula en el cliente. Lo que antes vivía en
+`frontend/src/domain.ts` — la política de media móvil, el impacto por fila con la banda tomada como
+uniforme, el orden de la tabla — lo sirve hoy la API; ese archivo quedó con lógica de presentación
+y su test.
 
 ### El plan comercial del horizonte se declara
 
@@ -688,7 +722,9 @@ ancladas en el origen, validación de origen móvil con asserts antifugas, métr
 backtesting, baselines, LightGBM (puntual y cuantílico), XGBoost, regresión regularizada,
 **SARIMA y Prophet como contraste per-serie (M6)**, CQR con cobertura verificada, newsvendor con
 esperanzas derivadas de la distribución predictiva, simulador de política, **clustering de perfiles
-y detección de anomalías (M4)**, API, dashboard Streamlit, frontend React de 7 pantallas, y
+y detección de anomalías (M4)**, API, dashboard Streamlit, frontend React de 7 pantallas con
+panel, alertas y reposición priorizada sobre todo el catálogo, pipeline de ingesta incremental
+con promoción atómica y rollback, y
 **TreeSHAP local y global** en `explain/`.
 
 Con eso queda cubierto el **mínimo defendible que el plan declara: M2 + M3 + M6**, y M4 arriba de
@@ -697,6 +733,35 @@ escribir y la que más vale.
 
 Pendiente del alcance del plan: GRU/LSTM y transformer temporal (M5), drift (M9), reconciliación
 MinT (8.3), y el generador sintético del caso Focal Point (frente K).
+
+### Actualización continua: ingesta de lotes
+
+El sistema ya no es solo batch. `blindside.data.update` suma lotes nuevos al panel sin rehacer la
+carga inicial:
+
+```bash
+make update-batch                                     # arma un lote real desde el split eval
+make update INPUT=data/incoming/lote.parquet          # valida, upsert, recupera, escribe
+make update INPUT=data/incoming/lote.parquet TRAIN=1  # además reentrena y promueve
+make rollback                                         # vuelve al artefacto anterior
+make update-status
+```
+
+- **Contrato de entrada:** las 19 columnas del dataset original, en parquet o CSV. Se valida con
+  el mismo `build_panel` de la carga inicial.
+- **Upsert por (serie, día):** cada fila es nueva, duplicado exacto (se ignora) o conflicto. Un
+  conflicto **rechaza el lote entero** y no escribe nada, salvo `CONFLICT=replace`.
+- **Escritura atómica:** cada capa se escribe a un temporal y se mueve con `os.replace`. La
+  versión anterior queda como `*.prev.parquet`.
+- **Reentrenamiento seguro:** los artefactos se entrenan como candidatos, pasan una prueba de humo
+  y recién ahí se promueven. El anterior queda como `*.prev.joblib`.
+- **La API recarga sola** cuando cambian los archivos (cada 2 s como máximo,
+  `BLINDSIDE_RELOAD_SECONDS`), y `/health` informa la **frescura**: cuántos días de datos no vio
+  el modelo. Es frescura, no deriva.
+
+No hay endpoint que dispare nada de esto, a propósito: la API no tiene autenticación, y una ruta
+que escriba datos o cambie el modelo servido sin autenticación es un agujero. Sobre el panel real,
+reingerir el split eval da 21.462 duplicados, 0 filas nuevas y ninguna capa reescrita.
 
 **La limitación que queda del lado del intervalo**, ahora que CQR está medido: cubre 88,0 %
 cuando promete 90 %, o sea dos puntos **por debajo**. La garantía del split-conformal supone

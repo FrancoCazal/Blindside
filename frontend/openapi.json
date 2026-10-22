@@ -289,6 +289,139 @@
         }
       }
     },
+    "/reorder/catalog": {
+      "get": {
+        "tags": [
+          "decision"
+        ],
+        "summary": "Reorder Catalog",
+        "description": "Que pedir de **todo** el catalogo, ordenado y paginado en el servidor.\n\nAntes la interfaz pedia `/reorder` para las 25 series de una pagina de\n`/series`, que viene ordenada por id, y ordenaba esas 25. La pagina 1 de \"que\npedir hoy\" eran las series de la tienda 0 en orden alfabetico, y la de mayor\nahorro podia estar en la pagina 80.\n\nEs la orden del **primer dia** del horizonte, la de hoy. Los totales son del\ncatalogo filtrado y todos se leen contra la politica actual de la misma base.",
+        "operationId": "reorder_catalog_reorder_catalog_get",
+        "parameters": [
+          {
+            "name": "recover_censoring",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Recover Censoring"
+            }
+          },
+          {
+            "name": "co",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 10.0,
+              "exclusiveMinimum": 0.0,
+              "default": 0.6,
+              "title": "Co"
+            }
+          },
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Store Id"
+            }
+          },
+          {
+            "name": "rotation_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Rotation Band"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(impacto|delta|sugerido|politica|serie)$",
+              "default": "impacto",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "dir",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(asc|desc)$",
+              "default": "desc",
+              "title": "Dir"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 25,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReorderCatalog"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/reorder": {
       "post": {
         "tags": [
@@ -461,10 +594,515 @@
           }
         }
       }
+    },
+    "/alerts": {
+      "get": {
+        "tags": [
+          "decision"
+        ],
+        "summary": "Alerts",
+        "description": "Que series mirar primero, agrupadas por **motivo**. No es un ranking.\n\nLos ejes de criticidad son ortogonales — el top 50 por volumen y el top 50 por\nerror no comparten una sola serie — asi que un score unico promediaria cosas\nque no se suman y perderia lo accionable, que es **por que** entro cada serie.\nVer `blindside.evaluate.triage`.\n\nEl riesgo de merma **no es \"por vencer\"**: el dataset no trae vida util, lote\nni stock. Es el sobrante esperado de lo que pide la politica actual, que en\nperecedero es lo que termina vencido.",
+        "operationId": "alerts_alerts_get",
+        "parameters": [
+          {
+            "name": "group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "clave de un grupo: devuelve solo las series de ese motivo",
+              "title": "Group"
+            },
+            "description": "clave de un grupo: devuelve solo las series de ese motivo"
+          },
+          {
+            "name": "store_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por tienda",
+              "title": "Store Id"
+            },
+            "description": "filtra por tienda"
+          },
+          {
+            "name": "rotation_band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "filtra por clase de rotacion: baja, media o alta",
+              "title": "Rotation Band"
+            },
+            "description": "filtra por clase de rotacion: baja, media o alta"
+          },
+          {
+            "name": "series_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "una sola serie: devuelve sus motivos, si tiene",
+              "title": "Series Id"
+            },
+            "description": "una sola serie: devuelve sus motivos, si tiene"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 5000,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/dataset/summary": {
+      "get": {
+        "tags": [
+          "datos"
+        ],
+        "summary": "Dataset Summary",
+        "description": "El panel servido en las formas que lo explican: tiempo, semana, hora, tienda,\ncategoria y rotacion. Todo con la venta observada al lado de la recuperada.",
+        "operationId": "dataset_summary_dataset_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetSummary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pipeline": {
+      "get": {
+        "tags": [
+          "infra"
+        ],
+        "summary": "Pipeline",
+        "description": "Estado del pipeline de datos, **solo lectura**.\n\nNada se dispara por HTTP. La API no tiene autenticacion, y un endpoint que\nescriba datos o cambie el modelo servido sin autenticacion es un agujero. La\ningesta corre con `blindside.data.update` y la API la ve sola.",
+        "operationId": "pipeline_pipeline_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineStatus"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AlertGroup": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "meaning": {
+            "type": "string",
+            "title": "Meaning"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "urgent": {
+            "type": "boolean",
+            "title": "Urgent"
+          },
+          "n_series": {
+            "type": "integer",
+            "title": "N Series"
+          },
+          "share_series": {
+            "type": "number",
+            "title": "Share Series"
+          },
+          "share_volume": {
+            "type": "number",
+            "title": "Share Volume"
+          },
+          "only_this": {
+            "type": "integer",
+            "title": "Only This"
+          },
+          "threshold": {
+            "type": "string",
+            "title": "Threshold"
+          },
+          "threshold_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "meaning",
+          "action",
+          "urgent",
+          "n_series",
+          "share_series",
+          "share_volume",
+          "only_this",
+          "threshold"
+        ],
+        "title": "AlertGroup",
+        "description": "Un motivo por el que una serie pide atencion, con su remedio.\n\nLos textos son los de `blindside.evaluate.triage`, que tambien usa el\ndashboard de Streamlit: una sola redaccion para las dos superficies."
+      },
+      "AlertItem": {
+        "properties": {
+          "series": {
+            "$ref": "#/components/schemas/SeriesRef"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "rotation_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotation Band"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "demand_mean": {
+            "type": "number",
+            "title": "Demand Mean"
+          },
+          "estimated_share": {
+            "type": "number",
+            "title": "Estimated Share"
+          },
+          "current_run_days": {
+            "type": "integer",
+            "title": "Current Run Days"
+          },
+          "stockout_rate": {
+            "type": "number",
+            "title": "Stockout Rate"
+          },
+          "mase": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mase"
+          },
+          "waste_policy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waste Policy"
+          },
+          "waste_model": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waste Model"
+          },
+          "waste_avoidable": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waste Avoidable"
+          },
+          "policy_qty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Qty"
+          },
+          "suggested_qty": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Qty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series",
+          "label",
+          "reasons",
+          "demand_mean",
+          "estimated_share",
+          "current_run_days",
+          "stockout_rate"
+        ],
+        "title": "AlertItem"
+      },
+      "AlertUnavailable": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "reason"
+        ],
+        "title": "AlertUnavailable",
+        "description": "Grupo que no se pudo calcular, con el motivo y el comando que lo arregla."
+      },
+      "AlertsResponse": {
+        "properties": {
+          "data_date_max": {
+            "type": "string",
+            "format": "date",
+            "title": "Data Date Max"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/Basis"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "n_series": {
+            "type": "integer",
+            "title": "N Series"
+          },
+          "n_flagged": {
+            "type": "integer",
+            "title": "N Flagged"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/AlertGroup"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "unavailable": {
+            "items": {
+              "$ref": "#/components/schemas/AlertUnavailable"
+            },
+            "type": "array",
+            "title": "Unavailable",
+            "default": []
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AlertItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data_date_max",
+          "basis",
+          "n_series",
+          "n_flagged",
+          "groups",
+          "total",
+          "items"
+        ],
+        "title": "AlertsResponse",
+        "description": "Que series mirar primero y por que. **No es un ranking**: ver triage.py."
+      },
+      "ArtifactVersions": {
+        "properties": {
+          "basis": {
+            "$ref": "#/components/schemas/Basis"
+          },
+          "current": {
+            "$ref": "#/components/schemas/LayerFile"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/LayerFile"
+          },
+          "candidate": {
+            "$ref": "#/components/schemas/LayerFile"
+          },
+          "trained_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trained Until"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "basis",
+          "current",
+          "previous",
+          "candidate"
+        ],
+        "title": "ArtifactVersions"
+      },
       "BacktestBreakdown": {
         "properties": {
           "target": {
@@ -587,6 +1225,39 @@
         ],
         "title": "BandMetric"
       },
+      "BandStat": {
+        "properties": {
+          "band": {
+            "type": "string",
+            "title": "Band"
+          },
+          "n_series": {
+            "type": "integer",
+            "title": "N Series"
+          },
+          "share_series": {
+            "type": "number",
+            "title": "Share Series"
+          },
+          "share_volume": {
+            "type": "number",
+            "title": "Share Volume"
+          },
+          "share_censored": {
+            "type": "number",
+            "title": "Share Censored"
+          }
+        },
+        "type": "object",
+        "required": [
+          "band",
+          "n_series",
+          "share_series",
+          "share_volume",
+          "share_censored"
+        ],
+        "title": "BandStat"
+      },
       "Basis": {
         "type": "string",
         "enum": [
@@ -595,6 +1266,175 @@
         ],
         "title": "Basis",
         "description": "Base de calculo. Es el vocabulario del toggle de la interfaz (`?basis=`).\n\nNo reemplaza a `recover_censoring` en los requests: ese nombre ya esta en el\ncontrato y renombrarlo seria un rename en tres lugares mas. El booleano\nentra, la base sale — asi la respuesta dice con que artefacto se contesto."
+      },
+      "CatalogLine": {
+        "properties": {
+          "series": {
+            "$ref": "#/components/schemas/SeriesRef"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "rotation_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotation Band"
+          },
+          "qty": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Qty"
+          },
+          "policy_qty": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Policy Qty"
+          },
+          "delta_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delta Pct"
+          },
+          "expected_demand": {
+            "type": "number",
+            "title": "Expected Demand"
+          },
+          "expected_shortfall": {
+            "type": "number",
+            "title": "Expected Shortfall"
+          },
+          "expected_overage": {
+            "type": "number",
+            "title": "Expected Overage"
+          },
+          "saving": {
+            "type": "number",
+            "title": "Saving"
+          },
+          "saving_share": {
+            "type": "number",
+            "title": "Saving Share"
+          },
+          "cost_delta_pct": {
+            "type": "number",
+            "title": "Cost Delta Pct"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "series",
+          "label",
+          "qty",
+          "policy_qty",
+          "expected_demand",
+          "expected_shortfall",
+          "expected_overage",
+          "saving",
+          "saving_share",
+          "cost_delta_pct"
+        ],
+        "title": "CatalogLine",
+        "description": "La orden de una serie para el primer dia del horizonte."
+      },
+      "CatalogTotals": {
+        "properties": {
+          "n_series": {
+            "type": "integer",
+            "title": "N Series"
+          },
+          "qty": {
+            "type": "number",
+            "title": "Qty"
+          },
+          "policy_qty": {
+            "type": "number",
+            "title": "Policy Qty"
+          },
+          "qty_delta_pct": {
+            "type": "number",
+            "title": "Qty Delta Pct"
+          },
+          "cost_model": {
+            "type": "number",
+            "title": "Cost Model"
+          },
+          "cost_policy": {
+            "type": "number",
+            "title": "Cost Policy"
+          },
+          "cost_delta_pct": {
+            "type": "number",
+            "title": "Cost Delta Pct"
+          },
+          "overage_model": {
+            "type": "number",
+            "title": "Overage Model"
+          },
+          "overage_policy": {
+            "type": "number",
+            "title": "Overage Policy"
+          },
+          "overage_delta_pct": {
+            "type": "number",
+            "title": "Overage Delta Pct"
+          },
+          "shortfall_model": {
+            "type": "number",
+            "title": "Shortfall Model"
+          },
+          "shortfall_policy": {
+            "type": "number",
+            "title": "Shortfall Policy"
+          },
+          "shortfall_delta_pct": {
+            "type": "number",
+            "title": "Shortfall Delta Pct"
+          },
+          "n_big_change": {
+            "type": "integer",
+            "title": "N Big Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n_series",
+          "qty",
+          "policy_qty",
+          "qty_delta_pct",
+          "cost_model",
+          "cost_policy",
+          "cost_delta_pct",
+          "overage_model",
+          "overage_policy",
+          "overage_delta_pct",
+          "shortfall_model",
+          "shortfall_policy",
+          "shortfall_delta_pct",
+          "n_big_change"
+        ],
+        "title": "CatalogTotals",
+        "description": "Totales del catalogo filtrado. Todo se lee **contra la politica actual**."
       },
       "CommercialPlan": {
         "properties": {
@@ -654,6 +1494,184 @@
         ],
         "title": "CoveragePoint",
         "description": "Cobertura empirica de un paso del horizonte contra la nominal.\n\nLa degradacion **no** es monotona y eso es correcto: con estacionalidad\nsemanal el objetivo de h7 cae el mismo dia de la semana que el origen."
+      },
+      "DailyPoint": {
+        "properties": {
+          "dt": {
+            "type": "string",
+            "format": "date",
+            "title": "Dt"
+          },
+          "observed": {
+            "type": "number",
+            "title": "Observed"
+          },
+          "recovered": {
+            "type": "number",
+            "title": "Recovered"
+          },
+          "share_censored": {
+            "type": "number",
+            "title": "Share Censored"
+          },
+          "n_series": {
+            "type": "integer",
+            "title": "N Series"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dt",
+          "observed",
+          "recovered",
+          "share_censored",
+          "n_series"
+        ],
+        "title": "DailyPoint"
+      },
+      "DatasetSummary": {
+        "properties": {
+          "panel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PanelInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "totals": {
+            "$ref": "#/components/schemas/DatasetTotals"
+          },
+          "daily": {
+            "items": {
+              "$ref": "#/components/schemas/DailyPoint"
+            },
+            "type": "array",
+            "title": "Daily"
+          },
+          "weekday": {
+            "items": {
+              "$ref": "#/components/schemas/WeekdayPoint"
+            },
+            "type": "array",
+            "title": "Weekday"
+          },
+          "hourly": {
+            "items": {
+              "$ref": "#/components/schemas/HourPoint"
+            },
+            "type": "array",
+            "title": "Hourly",
+            "default": []
+          },
+          "hourly_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Note"
+          },
+          "stores": {
+            "items": {
+              "$ref": "#/components/schemas/GroupStat"
+            },
+            "type": "array",
+            "title": "Stores"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/GroupStat"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "rotation": {
+            "items": {
+              "$ref": "#/components/schemas/BandStat"
+            },
+            "type": "array",
+            "title": "Rotation"
+          },
+          "stockout_hist": {
+            "items": {
+              "$ref": "#/components/schemas/HistBin"
+            },
+            "type": "array",
+            "title": "Stockout Hist"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "default": "FreshRetailNet-50K (Dingdong-Inc, CC BY 4.0)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "totals",
+          "daily",
+          "weekday",
+          "stores",
+          "categories",
+          "rotation",
+          "stockout_hist"
+        ],
+        "title": "DatasetSummary",
+        "description": "Lo que hay en el panel servido, en las formas que lo explican."
+      },
+      "DatasetTotals": {
+        "properties": {
+          "n_rows": {
+            "type": "integer",
+            "title": "N Rows"
+          },
+          "n_series": {
+            "type": "integer",
+            "title": "N Series"
+          },
+          "n_days": {
+            "type": "integer",
+            "title": "N Days"
+          },
+          "share_censored_days": {
+            "type": "number",
+            "title": "Share Censored Days"
+          },
+          "share_zero_sale_days": {
+            "type": "number",
+            "title": "Share Zero Sale Days"
+          },
+          "mean_oos_hours_when_censored": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Oos Hours When Censored"
+          },
+          "uplift_pct": {
+            "type": "number",
+            "title": "Uplift Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n_rows",
+          "n_series",
+          "n_days",
+          "share_censored_days",
+          "share_zero_sale_days",
+          "uplift_pct"
+        ],
+        "title": "DatasetTotals"
       },
       "ExplainRequest": {
         "properties": {
@@ -731,6 +1749,22 @@
           "prediction": {
             "type": "number",
             "title": "Prediction"
+          },
+          "rest": {
+            "type": "number",
+            "title": "Rest",
+            "default": 0.0
+          },
+          "point_forecast": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Point Forecast"
           },
           "plan": {
             "$ref": "#/components/schemas/PlanEcho"
@@ -898,6 +1932,133 @@
         ],
         "title": "ForecastResponse"
       },
+      "Freshness": {
+        "properties": {
+          "data_date_max": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Date Max"
+          },
+          "trained_until": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trained Until"
+          },
+          "days_behind": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days Behind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "al_dia",
+              "desfasado",
+              "sin_modelo",
+              "sin_datos"
+            ],
+            "title": "Status"
+          },
+          "loaded_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loaded At"
+          },
+          "last_update_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Update At"
+          },
+          "last_update_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Update Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "Freshness",
+        "description": "Que tan al dia estan los datos y el modelo, uno contra el otro.\n\nEs **frescura**, no deriva: que el artefacto este entrenado hasta una fecha\nvieja no dice que la distribucion haya cambiado, dice que el modelo no vio los\nultimos dias. Llamar \"drift\" a una fecha vieja seria prometer una medicion que\nla API no hace."
+      },
+      "GroupStat": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "n_series": {
+            "type": "integer",
+            "title": "N Series"
+          },
+          "demand_mean": {
+            "type": "number",
+            "title": "Demand Mean"
+          },
+          "share_volume": {
+            "type": "number",
+            "title": "Share Volume"
+          },
+          "share_censored": {
+            "type": "number",
+            "title": "Share Censored"
+          },
+          "uplift_pct": {
+            "type": "number",
+            "title": "Uplift Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "n_series",
+          "demand_mean",
+          "share_volume",
+          "share_censored",
+          "uplift_pct"
+        ],
+        "title": "GroupStat",
+        "description": "Una tienda o una categoria, con su censura y su volumen."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1007,6 +2168,16 @@
               }
             ],
             "title": "Coverage Note"
+          },
+          "freshness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Freshness"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -1016,6 +2187,29 @@
         ],
         "title": "Health",
         "description": "Respuesta de /health. Sirve para el healthcheck de Docker Compose."
+      },
+      "HistBin": {
+        "properties": {
+          "lo": {
+            "type": "number",
+            "title": "Lo"
+          },
+          "hi": {
+            "type": "number",
+            "title": "Hi"
+          },
+          "n_series": {
+            "type": "integer",
+            "title": "N Series"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lo",
+          "hi",
+          "n_series"
+        ],
+        "title": "HistBin"
       },
       "HistoryPoint": {
         "properties": {
@@ -1177,6 +2371,76 @@
           "value"
         ],
         "title": "HorizonMetric"
+      },
+      "HourPoint": {
+        "properties": {
+          "hour": {
+            "type": "integer",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Hour"
+          },
+          "share_stockout": {
+            "type": "number",
+            "title": "Share Stockout"
+          },
+          "share_sales": {
+            "type": "number",
+            "title": "Share Sales"
+          },
+          "open": {
+            "type": "boolean",
+            "title": "Open"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hour",
+          "share_stockout",
+          "share_sales",
+          "open"
+        ],
+        "title": "HourPoint"
+      },
+      "LayerFile": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "title": "File"
+          },
+          "exists": {
+            "type": "boolean",
+            "title": "Exists"
+          },
+          "modified": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified"
+          },
+          "bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "exists"
+        ],
+        "title": "LayerFile"
       },
       "MetricRow": {
         "properties": {
@@ -1419,6 +2683,14 @@
               }
             ],
             "title": "Reference N Products"
+          },
+          "store_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Store Ids",
+            "default": []
           }
         },
         "type": "object",
@@ -1434,6 +2706,100 @@
         ],
         "title": "PanelInfo",
         "description": "Que datos se estan sirviendo. Dispara el estado de muestra de la interfaz.\n\nLos conteos van **siempre contra su referencia**: \"60 de 3066 series\" dice\nalgo, \"60 series\" no. La referencia sale del manifiesto del submuestreo, asi\nque es `None` si no esta — y en ese caso la interfaz no puede afirmar que\nesta viendo el panel completo."
+      },
+      "PipelineStatus": {
+        "properties": {
+          "layer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "processed",
+                  "sample"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Layer"
+          },
+          "panel_file": {
+            "$ref": "#/components/schemas/LayerFile"
+          },
+          "demand_file": {
+            "$ref": "#/components/schemas/LayerFile"
+          },
+          "freshness": {
+            "$ref": "#/components/schemas/Freshness"
+          },
+          "artifacts": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactVersions"
+            },
+            "type": "array",
+            "title": "Artifacts"
+          },
+          "updates": {
+            "items": {
+              "$ref": "#/components/schemas/UpdateRecord"
+            },
+            "type": "array",
+            "title": "Updates"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/PipelineStep"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "auto_reload_seconds": {
+            "type": "number",
+            "title": "Auto Reload Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "panel_file",
+          "demand_file",
+          "freshness",
+          "artifacts",
+          "updates",
+          "steps",
+          "auto_reload_seconds"
+        ],
+        "title": "PipelineStatus",
+        "description": "Estado del pipeline de datos. **Solo lectura**: nada de esto se dispara por\nHTTP, porque la API no tiene autenticacion."
+      },
+      "PipelineStep": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "command": {
+            "type": "string",
+            "title": "Command"
+          },
+          "what": {
+            "type": "string",
+            "title": "What"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "command",
+          "what"
+        ],
+        "title": "PipelineStep",
+        "description": "Un paso del pipeline, con el comando que lo corre."
       },
       "PlanEcho": {
         "properties": {
@@ -1549,6 +2915,103 @@
           "n_series"
         ],
         "title": "ProductPoint"
+      },
+      "ReorderCatalog": {
+        "properties": {
+          "dt": {
+            "type": "string",
+            "format": "date",
+            "title": "Dt"
+          },
+          "basis": {
+            "$ref": "#/components/schemas/Basis"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "critical_fraction": {
+            "type": "number",
+            "title": "Critical Fraction"
+          },
+          "cu": {
+            "type": "number",
+            "title": "Cu"
+          },
+          "co": {
+            "type": "number",
+            "title": "Co"
+          },
+          "policy_window": {
+            "type": "integer",
+            "title": "Policy Window"
+          },
+          "tail_mass": {
+            "type": "number",
+            "title": "Tail Mass"
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "impacto",
+              "delta",
+              "sugerido",
+              "politica",
+              "serie"
+            ],
+            "title": "Sort"
+          },
+          "dir": {
+            "type": "string",
+            "enum": [
+              "asc",
+              "desc"
+            ],
+            "title": "Dir"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/CatalogTotals"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogLine"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dt",
+          "basis",
+          "model_name",
+          "critical_fraction",
+          "cu",
+          "co",
+          "policy_window",
+          "tail_mass",
+          "sort",
+          "dir",
+          "totals",
+          "total",
+          "limit",
+          "offset",
+          "items"
+        ],
+        "title": "ReorderCatalog",
+        "description": "Reposicion del catalogo entero, ordenada y paginada en el servidor."
       },
       "ReorderLine": {
         "properties": {
@@ -2058,6 +3521,184 @@
         "title": "StockoutRun",
         "description": "Racha de dias consecutivos con quiebre. Es el sombreado del grafico.\n\nSe entregan los tramos ya agrupados y no solo la bandera por dia porque el\ngrafico necesita el tramo como unidad: una racha de un dia se dibuja con\nancho minimo, y la mediana del panel real es de 2 dias."
       },
+      "UpdateRecord": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": ""
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input"
+          },
+          "rows_in": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows In"
+          },
+          "rows_new": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows New"
+          },
+          "rows_duplicate": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Duplicate"
+          },
+          "rows_conflict": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Conflict"
+          },
+          "rows_replaced": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Replaced"
+          },
+          "new_series": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Series"
+          },
+          "batch_date_min": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Date Min"
+          },
+          "batch_date_max": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Date Max"
+          },
+          "panel_date_max_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Panel Date Max After"
+          },
+          "trained": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trained"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "status"
+        ],
+        "title": "UpdateRecord",
+        "description": "Una entrada del registro de `blindside.data.update`."
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -2090,6 +3731,36 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WeekdayPoint": {
+        "properties": {
+          "dow": {
+            "type": "integer",
+            "maximum": 6.0,
+            "minimum": 0.0,
+            "title": "Dow"
+          },
+          "observed_mean": {
+            "type": "number",
+            "title": "Observed Mean"
+          },
+          "recovered_mean": {
+            "type": "number",
+            "title": "Recovered Mean"
+          },
+          "share_censored": {
+            "type": "number",
+            "title": "Share Censored"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dow",
+          "observed_mean",
+          "recovered_mean",
+          "share_censored"
+        ],
+        "title": "WeekdayPoint"
       }
     }
   }

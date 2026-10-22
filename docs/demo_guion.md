@@ -15,8 +15,12 @@ make front                          # React en http://127.0.0.1:5173
 docker compose ps                   # api y Streamlit en (healthy) ANTES de empezar
 ```
 
-**El video principal usa React.** Es la superficie operativa: abre en «Reposición» y responde
-cuánto pedir hoy. Streamlit es la red de seguridad independiente y abre en «Qué mirar primero»,
+**El video principal usa React.** Es la superficie operativa. La app abre en el Panel y en inglés,
+pero el video entra directo a Reposición y en español con
+`http://127.0.0.1:5173/?screen=reorder&basis=observed&lang=es`, que responde cuánto pedir hoy.
+`lang=es` queda guardado en el navegador, así que las pestañas siguientes ya abren en español; si
+no, se cambia en Preferencias, arriba a la derecha, que es también donde se fija el tema claro.
+Streamlit es la red de seguridad independiente y abre en «Qué mirar primero»,
 el triage del catálogo; no conviene saltar entre las dos en un video de 2 minutos. Si React no
 levanta, grabar la variante de respaldo en `:8501`: mostrar 15 segundos del triage y después
 «Reposición», «Serie individual» y «Validación y antifugas».
@@ -29,11 +33,11 @@ no debe mostrar un spinner de arranque.
 
 | Tiempo | Pantalla | Qué se hace | Qué se ve |
 |---|---|---|---|
-| 0:00–0:20 | Reposición | Nada, dejar quieto | 3.066 series, la tabla con cantidad a pedir, la columna Señal, el paginador «1–25 de 3.066» |
-| 0:20–0:50 | Reposición | **Activar el toggle de censura** y esperar | El pronóstico y la **cantidad** cambian: 210,958 → 268,478. Es el momento más importante del video |
-| 0:50–1:10 | Serie | Clic en una serie con señal «parcial» | La banda del intervalo, el sparkline, la política de media móvil al lado de la del modelo |
-| 1:10–1:35 | Serie | Abrir la atribución | Los aportes por feature con valor y signo, el cuantil 0,625 declarado |
-| 1:35–1:50 | Salud | — | El modelo cargado, MASE y cobertura servidos por la API |
+| 0:00–0:20 | Reposición | Nada, dejar quieto | 3.066 series ordenadas por ahorro esperado sobre todo el catálogo, los motivos de cada fila, los cuatro KPI contra la política |
+| 0:20–0:50 | Reposición | **Activar el toggle de censura** y esperar | Las **cantidades** cambian fila por fila y el orden del catálogo se rehace. La orden total pasa de 3.601 a 4.218. Es el momento más importante del video |
+| 0:50–1:15 | Serie | Clic en la primera fila | El gráfico con la brecha observada contra recuperada, la cantidad sugerida, los motivos de alerta y los próximos 7 días |
+| 1:15–1:35 | Serie | Bajar a «Por qué este número» | Los aportes por variable con valor y signo, que suman **exactamente** la cantidad sugerida |
+| 1:35–1:50 | Modelos | — | MASE 0,822 ± 0,045, 25,3 % menos error que el naive estacional, y la cobertura CQR contra la del conformal de residuos |
 | 1:50–2:00 | Terminal | `make test-leakage` | Los asserts antifugas pasando en verde |
 
 ## El plano que no se puede saltear
@@ -43,7 +47,8 @@ artefactos** entrenados con la misma arquitectura, uno sobre venta observada y o
 latente, así que el toggle cambia **la cantidad a pedir** y no el dibujo. Si el video muestra una
 sola cosa, es esa.
 
-Al narrarlo: «corregir la censura sube el pronóstico 25,3 % y la orden 27,3 %».
+Al narrarlo: «corregir la censura sube la orden total del catálogo un 17 %, de 3.601 a 4.218».
+El atajo `B` alterna la base sin tocar el mouse.
 
 ## Errores a evitar
 

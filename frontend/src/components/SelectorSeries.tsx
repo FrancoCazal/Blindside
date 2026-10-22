@@ -10,7 +10,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import { api, type SeriesItem } from "../api/client";
-import { conteoDeTotal } from "../format";
+import { conteoDeTotal, descripcionCatalogo, serieCorta } from "../format";
+import { t } from "../i18n";
 import { IconoLupa } from "./piezas";
 
 /** Referencia estable mientras la búsqueda todavía no devolvió resultados. */
@@ -73,6 +74,9 @@ export function SelectorSeries({
 
   if (!abierto) return null;
 
+  const textos = t();
+  const sel = textos.selector;
+
   const alTeclear = (e: React.KeyboardEvent) => {
     if (e.key === "Tab") {
       const alcanzables = Array.from(
@@ -116,7 +120,7 @@ export function SelectorSeries({
         className="selector"
         role="dialog"
         aria-modal="true"
-        aria-label="Buscar serie"
+        aria-label={sel.aria}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={alTeclear}
       >
@@ -131,8 +135,8 @@ export function SelectorSeries({
             aria-activedescendant={items[activo] ? `serie-opcion-${items[activo].series_id}` : undefined}
             value={consulta}
             onChange={(e) => setConsulta(e.target.value)}
-            placeholder="Tienda, producto o código de serie"
-            aria-label="Buscar serie"
+            placeholder={sel.placeholder}
+            aria-label={sel.aria}
           />
           <span className="nota" style={{ flex: "none" }}>
             {pagina ? conteoDeTotal(items.length, pagina.total) : "…"}
@@ -143,7 +147,7 @@ export function SelectorSeries({
           id="resultados-series"
           className="selector-resultados"
           role="listbox"
-          aria-label="Resultados"
+          aria-label={sel.resultados}
           tabIndex={-1}
         >
           {items.map((s, i) => (
@@ -162,29 +166,31 @@ export function SelectorSeries({
                 onCerrar();
               }}
             >
-              <span className="rotulo">Serie</span>
-              <span className="codigo">{s.series_id}</span>
-              <span className="descripcion">{s.label}</span>
+              <span className="codigo">{serieCorta(s.store_id, s.product_id)}</span>
+              <span className="descripcion">{descripcionCatalogo(s.label)}</span>
+              <span className="nota">
+                {s.rotation_band ? textos.rotacionDe(textos.bandas[s.rotation_band] ?? s.rotation_band) : ""}
+              </span>
             </button>
           ))}
           {items.length === 0 && (
             <div className="nota" style={{ padding: "12px 16px" }}>
-              Sin resultados para «{consulta}».
+              {sel.sinResultados(consulta)}
             </div>
           )}
         </div>
 
         <div className="selector-pie">
-          <span>↑↓ mover</span>
-          <span>↵ abrir</span>
-          <span>esc cerrar</span>
+          <span>{sel.mover}</span>
+          <span>{sel.abrir}</span>
+          <span>{sel.cerrarTecla}</span>
           <button
             type="button"
             className="boton-sutil"
             style={{ marginLeft: "auto" }}
             onClick={onCerrar}
           >
-            Cerrar
+            {sel.cerrar}
           </button>
         </div>
       </div>

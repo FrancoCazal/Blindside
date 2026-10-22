@@ -5,11 +5,15 @@
  * primero es un proceso que no está corriendo, el segundo es una capa de datos
  * que no se generó. Mostrar el mismo cartel para los dos hace perder el tiempo
  * de quien lo lee.
+ *
+ * Los mensajes de error que vienen del backend (`api.message`) quedan como
+ * llegan, en español: son diagnóstico para quien opera la API.
  */
 
 import { useEffect, useState } from "react";
 
 import { API_BASE, ApiError } from "../api/client";
+import { t } from "../i18n";
 
 /**
  * Sin artefacto. Es el estado inicial de un clon del repositorio: la API levanta,
@@ -26,26 +30,26 @@ export function SinArtefacto({
   modelos: { basis: string; artifact: string; loaded: boolean; error?: string | null }[];
   onReintentar: () => void;
 }) {
+  const textos = t();
+  const e = textos.estados;
   return (
     <div className="pagina">
-      <h2>Falta entrenar el modelo</h2>
+      <h2>{e.sinArtefactoTitulo}</h2>
       <p className="nota" style={{ maxWidth: "78ch", marginTop: 8 }}>
-        La API está en pie y sirviendo datos, pero no hay artefacto que pueda emitir una cantidad a
-        reponer. Las pantallas de evidencia — vista general y comparativa — funcionan igual, porque
-        no dependen del modelo.
+        {e.sinArtefactoTexto}
       </p>
 
       <table className="tabla" style={{ maxWidth: 560, marginTop: 18 }}>
         <thead>
           <tr>
             <th scope="col" className="izq">
-              Base de cálculo
+              {e.base}
             </th>
             <th scope="col" className="izq">
-              Artefacto
+              {e.artefacto}
             </th>
             <th scope="col" className="izq">
-              Estado
+              {e.estado}
             </th>
           </tr>
         </thead>
@@ -53,11 +57,11 @@ export function SinArtefacto({
           {modelos.map((m) => (
             <tr className="fila" key={m.basis}>
               <td className="izq tinta">
-                {m.basis === "recovered" ? "Demanda recuperada" : "Venta observada"}
+                {m.basis === "recovered" ? textos.bases.recovered : textos.bases.observed}
               </td>
               <td className="izq apagada">{m.artifact}</td>
               <td className="izq" style={{ color: m.loaded ? undefined : "var(--advertencia-texto)" }}>
-                {m.loaded ? "cargado" : (m.error ?? "falta")}
+                {m.loaded ? e.cargado : (m.error ?? e.falta)}
               </td>
             </tr>
           ))}
@@ -65,9 +69,7 @@ export function SinArtefacto({
       </table>
 
       <div className="consecuencia" style={{ marginTop: 18, maxWidth: 620 }}>
-        <code style={{ fontFamily: "inherit" }}>make train</code> serializa los dos artefactos, uno
-        por base de cálculo. Hacen falta los dos: con uno solo el toggle de censura cambia el gráfico
-        y devuelve la misma cantidad en las dos posiciones.
+        {e.sinArtefactoComando}
       </div>
 
       <button
@@ -82,7 +84,7 @@ export function SinArtefacto({
           fontWeight: 600,
         }}
       >
-        Volver a consultar
+        {e.volverAConsultar}
       </button>
     </div>
   );
@@ -107,6 +109,8 @@ export function ApiCaida({ error, onReintentar }: { error: unknown; onReintentar
 
   const api = error instanceof ApiError ? error : null;
   const esRed = api?.kind === "network";
+  const textos = t();
+  const e = textos.estados;
 
   return (
     <div className="pagina">
@@ -114,35 +118,25 @@ export function ApiCaida({ error, onReintentar }: { error: unknown; onReintentar
         <circle cx="17" cy="17" r="15" fill="none" stroke="var(--apagada)" strokeWidth="2" />
         <line x1="10" y1="24" x2="24" y2="10" stroke="var(--apagada)" strokeWidth="2" />
       </svg>
-      <h2 style={{ fontSize: 21, marginTop: 14 }}>
-        {esRed ? "No hay respuesta de la API" : "La API respondió con un error"}
-      </h2>
+      <h2 style={{ fontSize: 21, marginTop: 14 }}>{esRed ? e.sinRespuesta : e.conError}</h2>
       <p className="nota" style={{ maxWidth: "74ch", marginTop: 6 }}>
-        {esRed ? (
-          <>
-            El dashboard no encuentra nada escuchando en <strong>{API_BASE}</strong>. No es que no
-            haya datos: es que no hay proceso. Si la API está corriendo, esto también pasa cuando el
-            origen del navegador no está en el allowlist de CORS.
-          </>
-        ) : (
-          <>La API está en pie y rechazó la consulta. El detalle de abajo viene del backend.</>
-        )}
+        {esRed ? e.sinRespuestaTexto(API_BASE) : e.conErrorTexto}
       </p>
 
       <table className="tabla" style={{ maxWidth: 560, marginTop: 18 }}>
         <tbody>
-          <Fila rotulo="Último intento" valor={ultimoIntento.toLocaleTimeString("es-PY")} />
-          <Fila rotulo="Próximo reintento" valor={`en ${segundos} s`} />
-          <Fila rotulo="Endpoint" valor={api?.endpoint ?? "—"} />
+          <Fila rotulo={e.ultimoIntento} valor={ultimoIntento.toLocaleTimeString(textos.locale)} />
+          <Fila rotulo={e.proximoIntento} valor={e.enSegundos(String(segundos))} />
+          <Fila rotulo={e.endpoint} valor={api?.endpoint ?? "—"} />
           <Fila
-            rotulo={esRed ? "Motivo" : `Código ${api?.status ?? "—"}`}
+            rotulo={esRed ? e.motivo : e.codigo(String(api?.status ?? "—"))}
             valor={api?.message ?? String(error)}
           />
         </tbody>
       </table>
 
       <div className="consecuencia" style={{ marginTop: 18, maxWidth: 560 }}>
-        <code style={{ fontFamily: "inherit" }}>make api</code> o bien{" "}
+        <code style={{ fontFamily: "inherit" }}>make api</code> {e.oBien}{" "}
         <code style={{ fontFamily: "inherit" }}>
           uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
         </code>
@@ -160,7 +154,7 @@ export function ApiCaida({ error, onReintentar }: { error: unknown; onReintentar
           fontWeight: 600,
         }}
       >
-        Reintentar ahora
+        {e.reintentarAhora}
       </button>
     </div>
   );
@@ -215,7 +209,7 @@ export function Esqueleto({ filas = 8 }: { filas?: number }) {
           <div className="hueso" style={{ height: 64 }} />
         </div>
       </div>
-      <span style={{ position: "absolute", left: -9999 }}>Cargando datos del panel</span>
+      <span style={{ position: "absolute", left: -9999 }}>{t().estados.cargandoPanel}</span>
     </div>
   );
 }

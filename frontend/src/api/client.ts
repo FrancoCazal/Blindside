@@ -36,6 +36,16 @@ export type ShapContribution = Schemas["ShapContribution"];
 export type ProductMap = Schemas["ProductMap"];
 export type ProductPoint = Schemas["ProductPoint"];
 export type Basis = Schemas["Basis"];
+export type Freshness = Schemas["Freshness"];
+export type AlertsResponse = Schemas["AlertsResponse"];
+export type AlertGroup = Schemas["AlertGroup"];
+export type AlertItem = Schemas["AlertItem"];
+export type DatasetSummary = Schemas["DatasetSummary"];
+export type GroupStat = Schemas["GroupStat"];
+export type PipelineStatus = Schemas["PipelineStatus"];
+export type UpdateRecord = Schemas["UpdateRecord"];
+export type ReorderCatalog = Schemas["ReorderCatalog"];
+export type CatalogLine = Schemas["CatalogLine"];
 
 export const API_BASE: string =
   (import.meta.env.VITE_API_BASE as string | undefined) ?? "http://127.0.0.1:8000";
@@ -177,4 +187,50 @@ export const api = {
     }),
 
   productsMap: () => request<ProductMap>("/products/map"),
+
+  reorderCatalog: (args: {
+    recoverCensoring: boolean;
+    co: number;
+    storeId?: number | null;
+    rotationBand?: string | null;
+    sort?: string;
+    dir?: "asc" | "desc";
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    qs.set("recover_censoring", String(args.recoverCensoring));
+    qs.set("co", String(args.co));
+    if (args.storeId != null) qs.set("store_id", String(args.storeId));
+    if (args.rotationBand) qs.set("rotation_band", args.rotationBand);
+    qs.set("sort", args.sort ?? "impacto");
+    qs.set("dir", args.dir ?? "desc");
+    qs.set("limit", String(args.limit ?? 25));
+    qs.set("offset", String(args.offset ?? 0));
+    return request<ReorderCatalog>(`/reorder/catalog?${qs.toString()}`);
+  },
+
+  alerts: (
+    params: {
+      group?: string | null;
+      storeId?: number | null;
+      rotationBand?: string | null;
+      seriesId?: string | null;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ) => {
+    const qs = new URLSearchParams();
+    if (params.group) qs.set("group", params.group);
+    if (params.storeId != null) qs.set("store_id", String(params.storeId));
+    if (params.rotationBand) qs.set("rotation_band", params.rotationBand);
+    if (params.seriesId) qs.set("series_id", params.seriesId);
+    qs.set("limit", String(params.limit ?? 50));
+    qs.set("offset", String(params.offset ?? 0));
+    return request<AlertsResponse>(`/alerts?${qs.toString()}`);
+  },
+
+  datasetSummary: () => request<DatasetSummary>("/dataset/summary"),
+
+  pipeline: () => request<PipelineStatus>("/pipeline"),
 };

@@ -20,6 +20,7 @@ modelo rompa esta separacion.
 
 from __future__ import annotations
 
+import os
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Final
 
@@ -177,11 +178,22 @@ class Forecaster(ABC):
 
     # -- Persistencia -----------------------------------------------------
     def save(self, path: Path) -> Path:
-        """Serializa el modelo entrenado. Formato unico para todo el proyecto."""
+        """Serializa el modelo entrenado. Formato unico para todo el proyecto.
+
+        La escritura es **atomica**: se vuelca a un temporal en el mismo directorio
+        y se mueve con `os.replace`. Antes se escribia directo sobre el archivo
+        final, y la API recarga el artefacto cuando cambia su fecha de
+        modificacion: podia leer un pickle a medio escribir.
+        """
         if not self._fitted:
             raise NotFittedError(f"{self.name} no esta entrenado")
         path.parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump(self, path, compress=3)
+        tmp = path.with_name(f".{path.name}.tmp")
+        try:
+            joblib.dump(self, tmp, compress=3)
+            os.replace(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
         return path
 
     @staticmethod

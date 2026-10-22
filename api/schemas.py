@@ -75,6 +75,10 @@ class PanelInfo(BaseModel):
     reference_n_series: int | None = None
     reference_n_stores: int | None = None
     reference_n_products: int | None = None
+    #: Ids de tienda presentes, ordenados. Existen porque los ids **no son
+    #: contiguos** (0, 41, 48, 60...): el filtro de la interfaz armaba la lista con
+    #: `range(n_stores)` y 37 de sus 38 opciones devolvian una lista vacia.
+    store_ids: list[int] = []
 
 
 class CoveragePoint(BaseModel):
@@ -88,6 +92,29 @@ class CoveragePoint(BaseModel):
     coverage_nominal: float
     coverage_empirical: float
     n: Annotated[int, Field(ge=1)]
+
+
+class Freshness(BaseModel):
+    """Que tan al dia estan los datos y el modelo, uno contra el otro.
+
+    Es **frescura**, no deriva: que el artefacto este entrenado hasta una fecha
+    vieja no dice que la distribucion haya cambiado, dice que el modelo no vio los
+    ultimos dias. Llamar "drift" a una fecha vieja seria prometer una medicion que
+    la API no hace.
+    """
+
+    data_date_max: date | None = None
+    #: Fecha de corte del artefacto de la base por defecto.
+    trained_until: date | None = None
+    #: Dias de datos que el modelo servido no vio. Cero es lo esperado justo
+    #: despues de `make train`.
+    days_behind: int | None = None
+    status: Literal["al_dia", "desfasado", "sin_modelo", "sin_datos"]
+    #: Cuando la API cargo lo que esta sirviendo. Cambia al recargar sola.
+    loaded_at: str | None = None
+    #: Ultima ingesta registrada por `blindside.data.update`, si hubo alguna.
+    last_update_at: str | None = None
+    last_update_status: str | None = None
 
 
 class Health(BaseModel):
@@ -118,6 +145,7 @@ class Health(BaseModel):
     #: Por que `coverage_by_horizon` viene vacio, cuando viene vacio. Un bloque
     #: sin datos con el motivo a la vista es honesto; un numero inventado no.
     coverage_note: str | None = None
+    freshness: Freshness | None = None
 
     model_config = ConfigDict(protected_namespaces=())
 
@@ -503,7 +531,18 @@ class ExplainResponse(BaseModel):
     #: otra cifra.
     quantile: float | None = None
     base_value: float
+    #: La cifra explicada: valor base mas **todas** las contribuciones. Con el
+    #: modelo cuantilico es la salida del cuantil critico, o sea la cantidad a
+    #: pedir. Antes se devolvia la mediana y la interfaz mostraba 5,14 explicado
+    #: contra 5,53 sugerido para la misma serie y el mismo dia.
     prediction: float
+    #: Suma de las contribuciones que no entraron en `contributions` por `top_k`.
+    #: La calcula el servidor: con ella la identidad base + aportes + resto =
+    #: prediccion cierra exacta.
+    rest: float = 0.0
+    #: Pronostico puntual (la mediana) del mismo dia, para contexto. No es la
+    #: cifra explicada.
+    point_forecast: float | None = None
     #: Plan comercial con el que se armo la matriz de features explicada.
     plan: PlanEcho
     contributions: list[ShapContribution]
@@ -611,34 +650,353 @@ class BacktestResponse(BaseModel):
     external_baseline: MetricRow | None = None
 
 
+# --- /reorder/catalog ----------------------------------------------------
+CatalogSort = Literal["impacto", "delta", "sugerido", "politica", "serie"]
+
+
+class CatalogLine(BaseModel):
+    """La orden de una serie para el primer dia del horizonte."""
+
+    series: SeriesRef
+    label: str
+    rotation_band: str | None = None
+    qty: Annotated[float, Field(ge=0)]
+    policy_qty: Annotated[float, Field(ge=0)]
+    #: Cambio de la cantidad contra la politica, en porcentaje. `None` si la
+    #: politica es cero: un "+100 %" sobre nada no informa.
+    delta_pct: float | None = None
+    expected_demand: float
+    expected_shortfall: float
+    expected_overage: float
+    #: Costo esperado de la politica menos el de la orden, bajo la misma
+    #: distribucion predictiva. Es lo que se gana pidiendo la cantidad sugerida.
+    saving: float
+    #: Fraccion del ahorro total del catalogo filtrado que aporta esta serie. Es la
+    #: cifra legible de la columna: el ahorro absoluto es adimensional.
+    saving_share: float
+    cost_delta_pct: float
+    #: Motivos de alerta de la serie, con las claves de `/alerts`.
+    reasons: list[str] = []
+
+
+class CatalogTotals(BaseModel):
+    """Totales del catalogo filtrado. Todo se lee **contra la politica actual**."""
+
+    n_series: int
+    qty: float
+    policy_qty: float
+    qty_delta_pct: float
+    cost_model: float
+    cost_policy: float
+    cost_delta_pct: float
+    overage_model: float
+    overage_policy: float
+    overage_delta_pct: float
+    shortfall_model: float
+    shortfall_policy: float
+    shortfall_delta_pct: float
+    #: Series donde la cantidad sugerida se aparta mas del 20 % de la politica.
+    n_big_change: int
+
+
+class ReorderCatalog(BaseModel):
+    """Reposicion del catalogo entero, ordenada y paginada en el servidor."""
+
+    dt: date
+    basis: Basis
+    model_name: str
+    critical_fraction: float
+    cu: float
+    co: float
+    policy_window: int
+    tail_mass: float
+    sort: CatalogSort
+    dir: Literal["asc", "desc"]
+    totals: CatalogTotals
+    total: int
+    limit: int
+    offset: int
+    items: list[CatalogLine]
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+# --- /alerts -------------------------------------------------------------
+class AlertGroup(BaseModel):
+    """Un motivo por el que una serie pide atencion, con su remedio.
+
+    Los textos son los de `blindside.evaluate.triage`, que tambien usa el
+    dashboard de Streamlit: una sola redaccion para las dos superficies.
+    """
+
+    key: str
+    label: str
+    meaning: str
+    action: str
+    #: Accion de hoy y no de analisis. La interfaz los pone primero.
+    urgent: bool
+    n_series: int
+    share_series: float
+    #: Fraccion del volumen de demanda que cae en el grupo. Series y volumen no
+    #: son lo mismo, y para priorizar hacen falta las dos.
+    share_volume: float
+    #: Series que **solo** este grupo detecta.
+    only_this: int
+    #: Corte que activa el grupo, en palabras. Los umbrales estan medidos.
+    threshold: str
+    #: El mismo corte como numero, para que la interfaz lo redacte en su idioma.
+    #: Es la fraccion o el conteo que compara `triage`: 1,0 de MASE, 0,30 de
+    #: demanda estimada, 5 dias de racha, 0,90 de cuantil de volumen, 0,50 de merma.
+    threshold_value: float | None = None
+
+
+class AlertUnavailable(BaseModel):
+    """Grupo que no se pudo calcular, con el motivo y el comando que lo arregla."""
+
+    key: str
+    label: str
+    reason: str
+
+
+class AlertItem(BaseModel):
+    series: SeriesRef
+    label: str
+    rotation_band: str | None = None
+    #: Claves de los grupos que aplican. Una serie puede estar en varios.
+    reasons: list[str]
+    demand_mean: float
+    #: Fraccion de la demanda de los ultimos 28 dias que es estimada.
+    estimated_share: float
+    #: Dias de quiebre consecutivos que terminan en el ultimo dia.
+    current_run_days: int
+    stockout_rate: float
+    #: MASE de la serie en el backtest. `None` si no hay backtest guardado.
+    mase: float | None = None
+    #: Sobrante esperado de la politica actual sobre la demanda esperada.
+    waste_policy: float | None = None
+    #: Sobrante esperado con la orden sugerida, misma base.
+    waste_model: float | None = None
+    #: Cuanto de ese sobrante desaparece pidiendo la cantidad sugerida.
+    waste_avoidable: float | None = None
+    policy_qty: float | None = None
+    suggested_qty: float | None = None
+
+
+class AlertsResponse(BaseModel):
+    """Que series mirar primero y por que. **No es un ranking**: ver triage.py."""
+
+    data_date_max: date
+    basis: Basis
+    model_name: str | None = None
+    n_series: int
+    n_flagged: int
+    groups: list[AlertGroup]
+    unavailable: list[AlertUnavailable] = []
+    #: Total de series que cumplen el filtro pedido, antes del limite.
+    total: int
+    items: list[AlertItem]
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+# --- /dataset/summary ----------------------------------------------------
+class DailyPoint(BaseModel):
+    dt: date
+    #: Suma de la venta observada de todas las series ese dia.
+    observed: float
+    #: Suma de la demanda latente recuperada.
+    recovered: float
+    #: Fraccion de series con quiebre ese dia.
+    share_censored: float
+    n_series: int
+
+
+class WeekdayPoint(BaseModel):
+    #: 0 es lunes.
+    dow: Annotated[int, Field(ge=0, le=6)]
+    observed_mean: float
+    recovered_mean: float
+    share_censored: float
+
+
+class HourPoint(BaseModel):
+    hour: Annotated[int, Field(ge=0, le=23)]
+    #: Fraccion de dias-serie con quiebre en esa hora.
+    share_stockout: float
+    #: Fraccion de la venta del dia que ocurre en esa hora.
+    share_sales: float
+    #: Si la hora esta dentro de la ventana comercial 6:00-22:00.
+    open: bool
+
+
+class GroupStat(BaseModel):
+    """Una tienda o una categoria, con su censura y su volumen."""
+
+    id: int
+    n_series: int
+    demand_mean: float
+    share_volume: float
+    share_censored: float
+    uplift_pct: float
+
+
+class BandStat(BaseModel):
+    band: str
+    n_series: int
+    share_series: float
+    share_volume: float
+    share_censored: float
+
+
+class HistBin(BaseModel):
+    lo: float
+    hi: float
+    n_series: int
+
+
+class DatasetTotals(BaseModel):
+    n_rows: int
+    n_series: int
+    n_days: int
+    share_censored_days: float
+    share_zero_sale_days: float
+    mean_oos_hours_when_censored: float | None = None
+    #: Cuanto mas alta es la demanda latente que la venta observada, en total.
+    uplift_pct: float
+
+
+class DatasetSummary(BaseModel):
+    """Lo que hay en el panel servido, en las formas que lo explican."""
+
+    panel: PanelInfo | None = None
+    totals: DatasetTotals
+    daily: list[DailyPoint]
+    weekday: list[WeekdayPoint]
+    #: Vacio si la capa con secuencias horarias no esta disponible.
+    hourly: list[HourPoint] = []
+    hourly_note: str | None = None
+    stores: list[GroupStat]
+    categories: list[GroupStat]
+    rotation: list[BandStat]
+    #: Distribucion de la tasa de quiebre por serie.
+    stockout_hist: list[HistBin]
+    source: str = "FreshRetailNet-50K (Dingdong-Inc, CC BY 4.0)"
+
+
+# --- /pipeline -----------------------------------------------------------
+class LayerFile(BaseModel):
+    file: str
+    exists: bool
+    modified: str | None = None
+    bytes: int | None = None
+
+
+class ArtifactVersions(BaseModel):
+    basis: Basis
+    current: LayerFile
+    previous: LayerFile
+    candidate: LayerFile
+    trained_until: date | None = None
+    model_name: str | None = None
+
+    model_config = ConfigDict(protected_namespaces=())
+
+
+class UpdateRecord(BaseModel):
+    """Una entrada del registro de `blindside.data.update`."""
+
+    kind: str
+    status: str
+    message: str = ""
+    started_at: str | None = None
+    finished_at: str | None = None
+    input: str | None = None
+    rows_in: int | None = None
+    rows_new: int | None = None
+    rows_duplicate: int | None = None
+    rows_conflict: int | None = None
+    rows_replaced: int | None = None
+    new_series: int | None = None
+    batch_date_min: str | None = None
+    batch_date_max: str | None = None
+    panel_date_max_after: str | None = None
+    trained: bool | None = None
+    seconds: float | None = None
+
+
+class PipelineStep(BaseModel):
+    """Un paso del pipeline, con el comando que lo corre."""
+
+    #: Clave estable del paso. La interfaz traduce nombre y descripcion por clave.
+    key: str
+    name: str
+    command: str
+    what: str
+
+
+class PipelineStatus(BaseModel):
+    """Estado del pipeline de datos. **Solo lectura**: nada de esto se dispara por
+    HTTP, porque la API no tiene autenticacion."""
+
+    layer: Literal["processed", "sample"] | None = None
+    panel_file: LayerFile
+    demand_file: LayerFile
+    freshness: Freshness
+    artifacts: list[ArtifactVersions]
+    updates: list[UpdateRecord]
+    steps: list[PipelineStep]
+    #: Si la API recarga sola cuando cambian los archivos, y cada cuanto mira.
+    auto_reload_seconds: float
+
+
 __all__ = [
     "PLAN_NEUTRO",
     "PLAN_WINDOW_DAYS",
+    "AlertGroup",
+    "AlertItem",
+    "AlertUnavailable",
+    "AlertsResponse",
     "Anomaly",
     "AnomalyKind",
     "AnomalyResponse",
+    "ArtifactVersions",
     "BacktestBreakdown",
     "BacktestResponse",
     "BandMetric",
+    "BandStat",
     "Basis",
+    "CatalogLine",
+    "CatalogSort",
+    "CatalogTotals",
     "CommercialPlan",
     "CoveragePoint",
+    "DailyPoint",
+    "DatasetSummary",
+    "DatasetTotals",
     "ExplainRequest",
     "ExplainResponse",
     "ForecastPoint",
     "ForecastRequest",
     "ForecastResponse",
+    "Freshness",
+    "GroupStat",
     "Health",
+    "HistBin",
     "HistoryPoint",
     "HistorySummary",
     "HorizonMetric",
+    "HourPoint",
+    "LayerFile",
     "MetricRow",
     "ModelStatus",
     "OriginMetric",
     "PanelInfo",
+    "PipelineStatus",
+    "PipelineStep",
     "PlanEcho",
     "ProductMap",
     "ProductPoint",
+    "ReorderCatalog",
     "ReorderLine",
     "ReorderRequest",
     "ReorderResponse",
@@ -651,4 +1009,6 @@ __all__ = [
     "SeriesRef",
     "ShapContribution",
     "StockoutRun",
+    "UpdateRecord",
+    "WeekdayPoint",
 ]

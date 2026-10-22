@@ -26,10 +26,11 @@ const fallos: FalloContraste[] = [];
 const otros: string[] = [];
 const desbordes: string[] = [];
 
+/** En español, como la demo: `lang=es` se aplica al cargar. */
 const CASOS = [
-  { id: "4a-reposicion", ruta: "?screen=reorder&basis=observed", ancla: /Qué pedir hoy/ },
-  { id: "2a-serie", ruta: "?screen=series&basis=recovered", ancla: /Cantidad sugerida/ },
-  { id: "4d-mapa", ruta: "?screen=map&basis=recovered", ancla: /Mapa de productos/ },
+  { id: "reposicion", ruta: "?screen=reorder&basis=observed&lang=es", ancla: /Ahorro esperado/ },
+  { id: "serie", ruta: "?screen=series&basis=recovered&lang=es", ancla: /Por qué este número/ },
+  { id: "datos", ruta: "?screen=data&basis=recovered&lang=es", ancla: /Catálogo por comportamiento/ },
 ];
 
 for (const caso of CASOS) {
@@ -39,7 +40,7 @@ for (const caso of CASOS) {
       await page.emulateMedia({ colorScheme: tema });
       await page.goto(`/${caso.ruta}`);
       await expect(page.getByText(caso.ancla).first()).toBeVisible({ timeout: 90_000 });
-      await expect(page.getByText(/MASE · cargando…/)).toHaveCount(0, { timeout: 90_000 });
+      await expect(page.locator(".hueso")).toHaveCount(0, { timeout: 90_000 });
       await page.evaluate((t) => {
         document.documentElement.dataset.theme = t === "dark" ? "dark" : "light";
       }, tema);
@@ -78,8 +79,8 @@ for (const caso of CASOS) {
 test("quien desborda a 1024", async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
   await page.emulateMedia({ colorScheme: "light" });
-  await page.goto("/?screen=reorder&basis=observed");
-  await expect(page.getByText(/Qué pedir hoy/)).toBeVisible({ timeout: 90_000 });
+  await page.goto("/?screen=reorder&basis=observed&lang=es");
+  await expect(page.getByText(/Ahorro esperado/)).toBeVisible({ timeout: 90_000 });
 
   const culpables = await page.evaluate(() => {
     const limite = window.innerWidth;

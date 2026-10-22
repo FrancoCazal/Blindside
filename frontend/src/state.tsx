@@ -9,6 +9,10 @@
  *
  * `basis` arranca en `observed` a propósito. La demo empieza en el modo
  * equivocado — el que ve el ERP — y se corrige en vivo.
+ *
+ * El idioma y el tema **no** van en la URL: son preferencias de quien mira, no
+ * parte de lo que se está mostrando. Viven en `localStorage`. `?lang=es` se
+ * acepta al cargar, para abrir la demo en español con un enlace, y se guarda.
  */
 
 import {
@@ -24,23 +28,33 @@ import {
 
 import { api, type Health as Salud } from "./api/client";
 import { RATIO_POR_DEFECTO } from "./domain";
+import { IDIOMA_POR_DEFECTO, esIdioma, fijarIdioma, type Idioma } from "./i18n";
 
-export type Pantalla = "reorder" | "series" | "overview" | "compare" | "explain" | "health" | "map";
+/** Las siete pantallas. Ver `docs/rediseno_frontend.md`, sección 3. */
+export type Pantalla = "panel" | "alerts" | "reorder" | "series" | "models" | "data" | "pipeline";
 export type Basis = "observed" | "recovered";
+/** El tema que se pinta. */
 export type Tema = "claro" | "oscuro";
+/** Lo que eligió quien mira. `sistema` sigue al sistema operativo, también si cambia. */
+export type PreferenciaTema = "sistema" | Tema;
 
-/** Columnas por las que la tabla de reposición se puede ordenar. */
-export type Columna = "impacto" | "sugerido" | "politica" | "delta" | "senal" | "serie";
+export const PREFERENCIAS_TEMA: PreferenciaTema[] = ["sistema", "claro", "oscuro"];
+
+const CLAVE_IDIOMA = "blindside:idioma";
+const CLAVE_TEMA = "blindside:tema";
+
+/**
+ * Columnas por las que la tabla de reposición se puede ordenar. El orden se hace
+ * **en el servidor** sobre todo el catálogo (`/reorder/catalog`): ordenar la
+ * página en el cliente dejaba la serie de mayor ahorro en cualquier página.
+ */
+export type Columna = "impacto" | "sugerido" | "politica" | "delta" | "serie";
 export type Direccion = "asc" | "desc";
 
-export const COLUMNAS: Columna[] = [
-  "impacto",
-  "sugerido",
-  "politica",
-  "delta",
-  "senal",
-  "serie",
-];
+export const COLUMNAS: Columna[] = ["impacto", "sugerido", "politica", "delta", "serie"];
+
+/** Pantallas donde el toggle de base cambia alguna cifra. */
+export const PANTALLAS_CON_BASE: Pantalla[] = ["reorder", "series"];
 
 export interface AppState {
   pantalla: Pantalla;
@@ -51,6 +65,8 @@ export interface AppState {
   tienda: number | null;
   /** Filtro de clase de rotación: baja, media o alta. */
   clase: string | null;
+  /** Grupo de alerta elegido en la pantalla de alertas. `null` es todas. */
+  grupo: string | null;
   /** Columna de ordenamiento de la tabla de reposición. */
   orden: Columna;
   /** Dirección del ordenamiento. */
@@ -61,7 +77,10 @@ export interface AppState {
    * mostrarle a otra persona lo que se está viendo.
    */
   offset: number;
+  /** El tema efectivo: la preferencia resuelta contra el sistema. */
   tema: Tema;
+  preferenciaTema: PreferenciaTema;
+  idioma: Idioma;
   /**
    * Estado del panel y de los artefactos. Es estado **global**: de acá salen la
    * barra de filtros, el sello de muestra, la franja de contexto y la decisión de
@@ -78,10 +97,12 @@ export interface AppState {
   setRatio: (ratio: number) => void;
   setTienda: (tienda: number | null) => void;
   setClase: (clase: string | null) => void;
+  setGrupo: (grupo: string | null) => void;
   /** Ordena por una columna. Repetir la misma invierte la dirección. */
   ordenarPor: (columna: Columna) => void;
   setOffset: (offset: number) => void;
-  alternarTema: () => void;
+  setPreferenciaTema: (preferencia: PreferenciaTema) => void;
+  setIdioma: (idioma: Idioma) => void;
   /** Texto que lee el lector de pantalla cuando cambia un valor. */
   anuncio: string;
   anunciar: (texto: string) => void;
@@ -89,15 +110,29 @@ export interface AppState {
 
 const Contexto = createContext<AppState | null>(null);
 
-const PANTALLAS: Pantalla[] = [
-  "reorder",
-  "series",
-  "overview",
-  "compare",
-  "explain",
-  "health",
-  "map",
-];
+const PANTALLAS: Pantalla[] = ["panel", "alerts", "reorder", "series", "models", "data", "pipeline"];
+
+/**
+ * Pantallas que existieron y se fusionaron. Un enlace viejo redirige en vez de
+ * caer en el panel sin explicación: hay guiones y videos con esas URL.
+ */
+const REDIRECCIONES: Record<string, Pantalla> = {
+  overview: "data",
+  map: "data",
+  compare: "models",
+  health: "models",
+  explain: "series",
+};
+
+/**
+ * La app abre en el panel y no en la reposición. El panel responde «qué pasa
+ * hoy y qué miro primero» en una pantalla, y lleva a la reposición con un clic.
+ * La demo sigue entrando directo con `?screen=reorder`.
+ */
+const PANTALLA_INICIAL: Pantalla = "panel";
+
+/** Claves de grupo válidas en la URL. Lo que no sea una clave conocida se ignora. */
+const GRUPO_VALIDO = /^[a-z_]{3,40}$/;
 
 function leerUrl() {
   const p = new URLSearchParams(window.location.search);
@@ -109,8 +144,11 @@ function leerUrl() {
   const orden = p.get("sort");
   const direccion = p.get("dir");
   const offset = Number(p.get("offset"));
+  const grupo = p.get("alert");
+  const destino = pantalla ? (REDIRECCIONES[pantalla] ?? pantalla) : null;
   return {
-    pantalla: (PANTALLAS.includes(pantalla as Pantalla) ? pantalla : "reorder") as Pantalla,
+    pantalla: (PANTALLAS.includes(destino as Pantalla) ? destino : PANTALLA_INICIAL) as Pantalla,
+    grupo: grupo && GRUPO_VALIDO.test(grupo) ? grupo : null,
     basis: (basis === "recovered" ? "recovered" : "observed") as Basis,
     serie: p.get("series"),
     ratio: Number.isFinite(ratio) && ratio > 0 ? ratio : RATIO_POR_DEFECTO,
@@ -122,17 +160,90 @@ function leerUrl() {
   };
 }
 
-function temaInicial(): Tema {
-  const guardado = window.localStorage.getItem("blindside:tema");
-  if (guardado === "claro" || guardado === "oscuro") return guardado;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "oscuro" : "claro";
+/**
+ * `localStorage` puede tirar (modo privado de algunos navegadores, cuota llena).
+ * Una preferencia que no se guarda no es motivo para que la app no arranque.
+ */
+function leerGuardado(clave: string): string | null {
+  try {
+    return window.localStorage.getItem(clave);
+  } catch {
+    return null;
+  }
 }
+
+function guardar(clave: string, valor: string): void {
+  try {
+    window.localStorage.setItem(clave, valor);
+  } catch {
+    // Sin persistencia la preferencia dura lo que dura la pestaña.
+  }
+}
+
+/**
+ * `?lang=` gana sobre lo guardado y se guarda, para que un enlace de demo deje el
+ * idioma elegido también en las visitas siguientes. Sin nada, inglés: el idioma
+ * del navegador no se adivina, porque la demo tiene que verse igual en cualquier
+ * máquina.
+ */
+function idiomaInicial(): Idioma {
+  const deUrl = new URLSearchParams(window.location.search).get("lang");
+  if (esIdioma(deUrl)) {
+    guardar(CLAVE_IDIOMA, deUrl);
+    return deUrl;
+  }
+  const guardado = leerGuardado(CLAVE_IDIOMA);
+  return esIdioma(guardado) ? guardado : IDIOMA_POR_DEFECTO;
+}
+
+/** Compatible con lo que guardaba el botón anterior: `claro` u `oscuro`. */
+function preferenciaInicial(): PreferenciaTema {
+  const guardado = leerGuardado(CLAVE_TEMA);
+  return PREFERENCIAS_TEMA.includes(guardado as PreferenciaTema)
+    ? (guardado as PreferenciaTema)
+    : "sistema";
+}
+
+const CONSULTA_OSCURO = "(prefers-color-scheme: dark)";
 
 export function ProveedorEstado({ children }: { children: ReactNode }) {
   const [url, setUrl] = useState(leerUrl);
-  const [tema, setTema] = useState<Tema>(temaInicial);
+  const [idioma, setIdiomaEstado] = useState<Idioma>(() => {
+    // El idioma se fija en el módulo antes del primer render de los hijos: las
+    // funciones de formato lo leen de ahí.
+    const inicial = idiomaInicial();
+    fijarIdioma(inicial);
+    return inicial;
+  });
+  const [preferenciaTema, setPreferenciaTemaEstado] = useState<PreferenciaTema>(preferenciaInicial);
+  const [sistemaOscuro, setSistemaOscuro] = useState(() => window.matchMedia(CONSULTA_OSCURO).matches);
   const [anuncio, setAnuncio] = useState("");
   const salud = useAsincrono(() => api.health(), []);
+
+  const tema: Tema = preferenciaTema === "sistema" ? (sistemaOscuro ? "oscuro" : "claro") : preferenciaTema;
+
+  // Con «Sistema», cambiar el tema del sistema operativo cambia la app sin recargar.
+  useEffect(() => {
+    const consulta = window.matchMedia(CONSULTA_OSCURO);
+    const alCambiar = (e: MediaQueryListEvent) => setSistemaOscuro(e.matches);
+    consulta.addEventListener("change", alCambiar);
+    return () => consulta.removeEventListener("change", alCambiar);
+  }, []);
+
+  const setIdioma = useCallback((nuevo: Idioma) => {
+    // Primero el módulo y después el estado: el render que dispara el estado ya
+    // tiene que leer el idioma nuevo. Como `App` consume este contexto y ningún
+    // componente está memorizado, todo el árbol se vuelve a pintar sin
+    // remontarse: no se pierden los datos cargados ni el foco.
+    fijarIdioma(nuevo);
+    guardar(CLAVE_IDIOMA, nuevo);
+    setIdiomaEstado(nuevo);
+  }, []);
+
+  const setPreferenciaTema = useCallback((preferencia: PreferenciaTema) => {
+    guardar(CLAVE_TEMA, preferencia);
+    setPreferenciaTemaEstado(preferencia);
+  }, []);
 
   // El estado se refleja en la URL sin recargar, y el botón «atrás» del
   // navegador vuelve al estado anterior en vez de salir de la app.
@@ -144,13 +255,22 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
     if (url.ratio !== RATIO_POR_DEFECTO) p.set("ratio", String(url.ratio));
     if (url.tienda != null) p.set("store", String(url.tienda));
     if (url.clase) p.set("class", url.clase);
+    if (url.grupo) p.set("alert", url.grupo);
     // Solo lo que no es el default, para que la URL siga siendo legible.
     if (url.orden !== "impacto") p.set("sort", url.orden);
     if (url.direccion !== "desc") p.set("dir", url.direccion);
     if (url.offset > 0) p.set("offset", String(url.offset));
     const nueva = `${window.location.pathname}?${p.toString()}`;
     if (nueva !== `${window.location.pathname}${window.location.search}`) {
-      window.history.pushState(null, "", nueva);
+      // Un enlace viejo se reemplaza en vez de apilarse: «atrás» no tiene que
+      // volver a una pantalla que ya no existe.
+      // Lo mismo con `?lang=`: ya se leyó y se guardó, y quitarlo de la URL no es
+      // un paso de navegación al que «atrás» tenga que volver.
+      const anterior = new URLSearchParams(window.location.search);
+      const vieja = anterior.get("screen");
+      if ((vieja && REDIRECCIONES[vieja]) || anterior.has("lang")) {
+        window.history.replaceState(null, "", nueva);
+      } else window.history.pushState(null, "", nueva);
     }
   }, [url]);
 
@@ -162,18 +282,22 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.dataset.theme = tema === "oscuro" ? "dark" : "light";
-    window.localStorage.setItem("blindside:tema", tema);
   }, [tema]);
 
   const valor = useMemo<AppState>(
     () => ({
       ...url,
       tema,
+      preferenciaTema,
+      idioma,
       health: salud.datos,
       healthCargando: salud.cargando,
       healthError: salud.error,
       recargarHealth: salud.recargar,
-      irA: (pantalla) => setUrl((u) => ({ ...u, pantalla })),
+      // Cambiar de pantalla vuelve a la primera página: el desplazamiento de la
+      // tabla de reposición no significa nada en la lista de alertas.
+      irA: (pantalla) =>
+        setUrl((u) => (u.pantalla === pantalla ? u : { ...u, pantalla, offset: 0 })),
       setBasis: (basis) => setUrl((u) => ({ ...u, basis })),
       setSerie: (serie) => setUrl((u) => ({ ...u, serie })),
       setRatio: (ratio) => setUrl((u) => ({ ...u, ratio })),
@@ -182,6 +306,7 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
       // desplazamiento anterior, y eso se lee como un error de la app.
       setTienda: (tienda) => setUrl((u) => ({ ...u, tienda, offset: 0 })),
       setClase: (clase) => setUrl((u) => ({ ...u, clase, offset: 0 })),
+      setGrupo: (grupo) => setUrl((u) => ({ ...u, grupo, offset: 0 })),
       ordenarPor: (columna) =>
         setUrl((u) => ({
           ...u,
@@ -192,11 +317,24 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
           offset: 0,
         })),
       setOffset: (offset) => setUrl((u) => ({ ...u, offset: Math.max(0, offset) })),
-      alternarTema: () => setTema((t) => (t === "claro" ? "oscuro" : "claro")),
+      setPreferenciaTema,
+      setIdioma,
       anuncio,
       anunciar: setAnuncio,
     }),
-    [url, tema, anuncio, salud.datos, salud.cargando, salud.error, salud.recargar],
+    [
+      url,
+      tema,
+      preferenciaTema,
+      idioma,
+      setPreferenciaTema,
+      setIdioma,
+      anuncio,
+      salud.datos,
+      salud.cargando,
+      salud.error,
+      salud.recargar,
+    ],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

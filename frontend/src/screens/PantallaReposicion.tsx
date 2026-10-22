@@ -1,398 +1,156 @@
 /**
- * Pantalla 4a · reposición. Es la landing.
+ * Reposición · cuánto pedir de cada serie, y dónde se gana más.
  *
- * Responde «¿qué pido hoy, y cuánto?». El sistema no termina en una predicción,
- * termina en una cantidad, así que la entrada es la lista de reposición y no un
- * resumen de exactitud.
+ * La lista se ordena **en el servidor sobre todo el catálogo** (`/reorder/catalog`).
+ * La versión anterior pedía `/reorder` para las 25 series de una página de
+ * `/series`, que viene ordenada por id, y ordenaba esas 25: la página 1 de «qué
+ * pedir hoy» eran las series de la tienda 0 en orden alfabético.
+ *
+ * Los cuatro KPI son del catálogo filtrado y todos se leen contra la política
+ * actual de la misma base, así que el toggle los mueve. No hay «total a pedir»:
+ * sumar cantidades de productos distintos no significa nada.
+ *
+ * Especificación: `docs/rediseno_frontend.md`, sección 5.3.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 
-import {
-  api,
-  type BacktestResponse,
-  type ForecastResponse,
-  type ReorderResponse,
-  type SeriesHistory,
-  type SeriesItem,
-} from "../api/client";
-import {
-  RATIOS,
-  SENAL,
-  type Senal,
-  aCsv,
-  clasificarSenal,
-  cuantilCritico,
-  deltaPct,
-  diasConQuiebre,
-  impactoDeLinea,
-} from "../domain";
+import { api, type CatalogLine, type ReorderCatalog, type SeriesHistory } from "../api/client";
+import { SelloMotivo } from "../components/alertas";
+import { ComoSeCalcula, Encabezado, FiltrosCatalogo, RatioCosto } from "../components/controles";
+import { Esqueleto } from "../components/estados";
+import { Sparkline, ToggleCensura } from "../components/piezas";
+import { aCsv, diasConQuiebre } from "../domain";
 import {
   conteo,
   conteoDeTotal,
   cuantil,
-  error as fmtError,
+  descripcionCatalogo,
   etiquetaFecha,
   magnitud,
   porcentaje,
+  porcentajeSimple,
   serieCorta,
 } from "../format";
+import { t } from "../i18n";
 import { type Columna, useAsincrono, useConteo, useEstado } from "../state";
-import { Esqueleto } from "../components/estados";
-import { Sparkline } from "../components/piezas";
+import { ErrorDeBloque } from "./PantallaPanel";
 
-/** Series que entran a la vista. Un `/forecast` de 500 series es costoso. */
+/** Filas por página. */
 const FILAS = 25;
 
-/** Cómo se nombra cada columna en el subtítulo de la tabla. */
-const ROTULO_ORDEN: Record<Columna, string> = {
-  impacto: "impacto esperado",
-  sugerido: "cantidad sugerida",
-  politica: "política actual",
-  delta: "delta contra la política",
-  senal: "fracción de demanda estimada",
-  serie: "identificador de serie",
-};
-
-interface Fila {
-  serie: SeriesItem;
-  historia: SeriesHistory;
-  politica: number;
-  sugerido: number;
-  delta: number;
-  impacto: number;
-  /** E[(D-q)+] bajo la distribución del modelo. Cota inferior: ver tail_mass. */
-  faltante: number;
-  /** E[(q-D)+]. En perecederos es merma esperada. */
-  sobrante: number;
-  /** Cuánto de la señal reciente es observada y cuánto estimada. */
-  senal: Senal;
-  quiebre14: number[];
-  diasQuiebre28: number;
-  rachaMax: number;
-  pronostico: ForecastResponse["forecasts"][number]["points"];
-}
-
-/** Orden local de la página ya materializada; no requiere volver a consultar la API. */
-function ordenarFilas(filas: Fila[], columna: Columna, direccion: "asc" | "desc"): Fila[] {
-  const signo = direccion === "desc" ? -1 : 1;
-  const clave = (f: Fila): number | string => {
-    switch (columna) {
-      case "serie":
-        return f.serie.series_id;
-      case "politica":
-        return f.politica;
-      case "sugerido":
-        return f.sugerido;
-      case "delta":
-        return f.delta;
-      case "senal":
-        return f.senal.fraccionEstimada;
-      default:
-        return f.impacto;
-    }
-  };
-
-  return [...filas].sort((a, b) => {
-    const ka = clave(a);
-    const kb = clave(b);
-    if (typeof ka === "string" || typeof kb === "string") {
-      return signo * String(ka).localeCompare(String(kb), "es");
-    }
-    return signo * (ka - kb);
-  });
-}
-
-export function PantallaReposicion({
-  backtest,
-  onElegirSerie,
-}: {
-  backtest: BacktestResponse | null;
-  onElegirSerie: (id: string) => void;
-}) {
-  const { basis, ratio, tienda, clase } = useEstado();
-  // La fila abierta se resetea al cambiar de base, de ratio o de filtro, y la
-  // forma idiomática de resetear estado local es remontar.
-  return (
-    <Reposicion
-      key={`${basis}-${ratio}-${tienda}-${clase}`}
-      backtest={backtest}
-      onElegirSerie={onElegirSerie}
-    />
-  );
-}
+/** Ventana del minigráfico de quiebre. El conteo de la columna usa la misma. */
+const DIAS_QUIEBRE = 14;
 
 /**
- * Encabezado que ordena al hacer clic.
- *
- * Es un `<button>` dentro del `<th>` y no un `<th onClick>`: un th con manejador
- * no es alcanzable por teclado ni se anuncia como control. `aria-sort` en el th es
- * lo que le dice al lector de pantalla por qué columna está ordenada la tabla.
+ * Encabezados del CSV. Son identificadores y no texto de interfaz: no cambian con
+ * el idioma, para que una planilla que los lee no se rompa según quién exportó.
  */
-function ThOrden({
-  columna,
-  etiqueta,
-  className,
-}: {
-  columna: Columna;
-  etiqueta: string;
-  className?: string;
-}) {
-  const { orden, direccion, ordenarPor } = useEstado();
-  const activa = orden === columna;
-  const aria = activa ? (direccion === "desc" ? "descending" : "ascending") : "none";
-  return (
-    <th scope="col" className={className} aria-sort={aria}>
-      <button
-        type="button"
-        className="th-orden"
-        onClick={() => ordenarPor(columna)}
-        aria-label={`Ordenar por ${etiqueta}`}
-      >
-        {etiqueta}
-        <span aria-hidden="true" className="flecha">
-          {activa ? (direccion === "desc" ? "▾" : "▴") : ""}
-        </span>
-      </button>
-    </th>
-  );
-}
+const COLUMNAS_CSV = [
+  "serie",
+  "tienda",
+  "producto",
+  "clase",
+  "fecha",
+  "politica",
+  "sugerido",
+  "delta_pct",
+  "faltante_esperado",
+  "sobrante_esperado",
+  "ahorro_esperado",
+  "parte_del_ahorro",
+  "motivos",
+];
 
-/** Navegación entre páginas. El total viene del envelope de `/series`. */
-function Paginador({ total }: { total: number }) {
-  const { offset, setOffset } = useEstado();
-  const desde = total === 0 ? 0 : offset + 1;
-  const hasta = Math.min(offset + FILAS, total);
-  const haySiguiente = hasta < total;
-  const hayAnterior = offset > 0;
-  const pagina = Math.floor(offset / FILAS) + 1;
-  const paginas = Math.max(1, Math.ceil(total / FILAS));
-
-  return (
-    <div className="paginador">
-      <span className="nota">
-        {conteoDeTotal(desde, total).replace(/^\d+/, `${desde}–${hasta}`)} · página {pagina} de{" "}
-        {paginas}
-      </span>
-      <div className="paginador-botones">
-        <button
-          type="button"
-          onClick={() => setOffset(0)}
-          disabled={!hayAnterior}
-          aria-label="Primera página"
-        >
-          ««
-        </button>
-        <button
-          type="button"
-          onClick={() => setOffset(offset - FILAS)}
-          disabled={!hayAnterior}
-          aria-label="Página anterior"
-        >
-          «
-        </button>
-        <button
-          type="button"
-          onClick={() => setOffset(offset + FILAS)}
-          disabled={!haySiguiente}
-          aria-label="Página siguiente"
-        >
-          »
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Reposicion({
-  backtest,
-  onElegirSerie,
-}: {
-  backtest: BacktestResponse | null;
-  onElegirSerie: (id: string) => void;
-}) {
-  const {
-    basis,
-    ratio,
-    setRatio,
-    tienda,
-    clase,
-    orden: columna,
-    direccion,
-    offset,
-    anunciar,
-  } = useEstado();
+export function PantallaReposicion({ onElegirSerie }: { onElegirSerie: (id: string) => void }) {
+  const { basis, ratio, tienda, clase, orden, direccion, offset, anunciar, health } = useEstado();
   const recoverCensoring = basis === "recovered";
-  const [abierta, setAbierta] = useState(0);
 
   const datos = useAsincrono<{
-    filas: Fila[];
-    total: number;
-    orden: ReorderResponse | null;
-    motivo: string | null;
+    catalogo: ReorderCatalog;
+    historias: Map<string, SeriesHistory>;
   }>(async () => {
-    const pagina = await api.series({
+    const catalogo = await api.reorderCatalog({
+      recoverCensoring,
+      co: ratio,
+      storeId: tienda,
+      rotationBand: clase,
+      sort: orden,
+      dir: direccion,
       limit: FILAS,
       offset,
-      storeId: tienda ?? undefined,
-      rotationBand: clase ?? undefined,
     });
-    if (pagina.items.length === 0) {
-      return { filas: [], total: pagina.total, orden: null, motivo: null };
+    const ids = catalogo.items.map((i) => i.series.series_id);
+    const historias = new Map<string, SeriesHistory>();
+    if (ids.length > 0) {
+      const lote = await api.historyBatch(ids, 28);
+      for (const h of lote.series) historias.set(h.series.series_id, h);
     }
-    const ids = pagina.items.map((s) => s.series_id);
-    const [historias, pronostico] = await Promise.all([
-      api.historyBatch(ids, 28),
-      api.forecast({ seriesIds: ids, recoverCensoring }),
-    ]);
+    return { catalogo, historias };
+  }, [basis, ratio, tienda, clase, orden, direccion, offset]);
 
-    let orden: ReorderResponse | null = null;
-    let motivo: string | null = null;
-    try {
-      orden = await api.reorder({
-        seriesIds: ids,
-        co: ratio,
-        recoverCensoring,
-      });
-    } catch (e) {
-      motivo = e instanceof Error ? e.message : String(e);
-    }
-
-    const porSerie = new Map(
-      historias.series.map((h) => [h.series.series_id, h]),
-    );
-    const pronosticoPorSerie = new Map(
-      pronostico.forecasts.map((f) => [f.series.series_id, f.points]),
-    );
-    // La cantidad de la fila es la del **primer** día del horizonte: la
-    // pregunta de la pantalla es qué pedir hoy, no cuánto en total en la semana.
-    const primeraFecha = orden?.lines[0]?.dt ?? null;
-    // Todo lo económico de la fila sale de la misma línea de `/reorder`, que
-    // ahora devuelve la política, el faltante y el sobrante esperados y el delta
-    // de costo. Antes la política se recalculaba acá desde la historia y el
-    // impacto se estimaba con la banda como uniforme; las dos cosas eran
-    // supuestos viviendo en la capa de presentación.
-    const lineaPorSerie = new Map(
-      (orden?.lines ?? [])
-        .filter((l) => l.dt === primeraFecha)
-        .map((l) => [l.series.series_id, l]),
-    );
-
-    const filas: Fila[] = pagina.items.map((serie) => {
-      const historia = porSerie.get(serie.series_id)!;
-      const puntos = pronosticoPorSerie.get(serie.series_id) ?? [];
-      const linea = lineaPorSerie.get(serie.series_id);
-      const politica = linea?.policy_qty ?? 0;
-      const sugerido = linea?.qty ?? puntos[0]?.y_pred ?? 0;
-      return {
-        serie,
-        historia,
-        politica,
-        sugerido,
-        delta: deltaPct(sugerido, politica),
-        // El costo esperado de la política menos el de la orden, o sea cuánto
-        // ahorra la sugerencia en esta serie. Sale de `cost_delta_pct`, que el
-        // backend calcula evaluando las dos cantidades bajo la misma
-        // distribución predictiva.
-        impacto: impactoDeLinea(linea, ratio),
-        faltante: linea?.expected_shortfall ?? 0,
-        sobrante: linea?.expected_overage ?? 0,
-        senal: clasificarSenal(historia.summary),
-        quiebre14: diasConQuiebre(historia.points, 14),
-        diasQuiebre28: historia.summary.censored_days_last_28,
-        rachaMax: historia.summary.max_run_days,
-        pronostico: puntos,
-      };
-    });
-
-    // Se devuelve en orden del servidor. El orden visible se deriva con `useMemo`
-    // para que un clic de encabezado no repita estas cuatro consultas.
-    return { filas, total: pagina.total, orden, motivo };
-  }, [basis, ratio, tienda, clase, offset]);
-
-  // El toggle global primero anuncia el nombre de la base. Cuando termina la
-  // consulta se anuncia también la cifra que cambió, que es lo que importa en
-  // esta landing. El `ref` evita repetirlo al re-renderizar la misma respuesta.
-  // No se anuncia mientras carga: useAsincrono conserva la respuesta anterior
-  // durante cambios de orden/página, y anunciarla con la base nueva mentiría.
-  const ultimoAnuncio = useRef<string | null>(null);
-  const totalAnunciable = datos.datos?.filas.reduce((a, f) => a + f.sugerido, 0) ?? null;
+  // Al cambiar de base se anuncia la cifra que cambió, cuando llega. El `ref`
+  // evita repetirlo al re-renderizar la misma respuesta.
+  const ultimo = useRef<string | null>(null);
+  const totales = datos.datos?.catalogo.totals ?? null;
   useEffect(() => {
-    if (datos.cargando || totalAnunciable == null) return;
-    const clave = `${basis}-${ratio}-${tienda ?? "todas"}-${clase ?? "todas"}-${offset}-${totalAnunciable}`;
-    if (ultimoAnuncio.current === clave) return;
-    ultimoAnuncio.current = clave;
-    const nombre = basis === "recovered" ? "Demanda recuperada" : "Venta observada";
-    anunciar(`${nombre}. Total a pedir en esta página: ${magnitud(totalAnunciable)}`);
-  }, [anunciar, basis, clase, datos.cargando, offset, ratio, tienda, totalAnunciable]);
+    if (datos.cargando || !totales) return;
+    const clave = `${basis}-${ratio}-${tienda}-${clase}-${totales.qty_delta_pct}`;
+    if (ultimo.current === clave) return;
+    const primera = ultimo.current == null;
+    ultimo.current = clave;
+    if (primera) return;
+    const textos = t();
+    anunciar(textos.reposicion.anuncio(textos.bases[basis], porcentaje(totales.qty_delta_pct)));
+  }, [anunciar, basis, clase, datos.cargando, ratio, tienda, totales]);
 
-  const filas = useMemo(
-    () => ordenarFilas(datos.datos?.filas ?? [], columna, direccion),
-    [columna, datos.datos?.filas, direccion],
-  );
+  const textos = t();
+  const r = textos.reposicion;
 
   if (datos.cargando && !datos.datos) return <Esqueleto filas={FILAS} />;
-  if (datos.error) throw datos.error;
+  if (datos.error) {
+    return <ErrorDeBloque titulo={r.titulo} error={datos.error} onReintentar={datos.recargar} />;
+  }
   if (!datos.datos) return null;
 
-  const { total, orden, motivo } = datos.datos;
-  const qEstrella = orden?.critical_fraction ?? cuantilCritico(1, ratio);
-  const totalSugerido = filas.reduce((a, f) => a + f.sugerido, 0);
-  const totalPolitica = filas.reduce((a, f) => a + f.politica, 0);
-  const impactoTotal = filas.reduce((a, f) => a + f.impacto, 0);
-  const faltanteTotal = filas.reduce((a, f) => a + f.faltante, 0);
-  const sobranteTotal = filas.reduce((a, f) => a + f.sobrante, 0);
-  const maxImpacto = filas.reduce((a, f) => Math.max(a, f.impacto), 0);
-  const maxHoras = Math.max(1, ...filas.flatMap((f) => f.quiebre14));
-  // La alerta es "el pronóstico de esta serie se apoya en la corrección de
-  // censura", no "esta serie tuvo quiebres". El criterio anterior contaba días
-  // censurados con umbral 14 de 28, y la mediana del panel es 12: marcaba el
-  // 35,6 % del catálogo, o sea que no separaba nada. Ver SENAL en domain.ts.
-  const enAlerta = filas.filter((f) => f.senal.estado !== "observada").length;
-  const mase = (backtest?.rows ?? [])
-    .filter((r) => r.metric === "mase")
-    .sort((a, b) => a.mean - b.mean)[0];
+  const { catalogo, historias } = datos.datos;
+  const tot = catalogo.totals;
+  const maxParte = Math.max(1e-9, ...catalogo.items.map((i) => i.saving_share));
+  const c = r.columnas;
 
-  /**
-   * Descarga la página visible como CSV.
-   *
-   * Exporta **lo que se está viendo** y no las 3.066 series, y eso es deliberado:
-   * las columnas económicas salen de `/reorder`, que se pide por lote de series, así
-   * que un export completo serían 123 llamadas y una espera sin indicación de
-   * progreso. El nombre del archivo lleva la base y los filtros para que dos
-   * descargas distintas no se pisen.
-   */
-  const exportar = () => {
+  const exportar = async () => {
+    // Exporta el catálogo filtrado entero, no la página: el servidor ya lo tiene
+    // calculado y en caché, así que son unas pocas llamadas de 500 filas.
+    const filas: CatalogLine[] = [];
+    for (let desde = 0; desde < catalogo.total; desde += 500) {
+      const parte = await api.reorderCatalog({
+        recoverCensoring,
+        co: ratio,
+        storeId: tienda,
+        rotationBand: clase,
+        sort: orden,
+        dir: direccion,
+        limit: 500,
+        offset: desde,
+      });
+      filas.push(...parte.items);
+    }
     const csv = aCsv(
-      [
-        "serie",
-        "tienda",
-        "producto",
-        "clase",
-        "politica",
-        "sugerido",
-        "delta_pct",
-        "impacto",
-        "faltante_esperado",
-        "sobrante_esperado",
-        "fraccion_estimada_28d",
-        "racha_quiebre_vigente_d",
-        "dias_quiebre_28d",
-      ],
+      COLUMNAS_CSV,
       filas.map((f) => [
-        f.serie.series_id,
-        f.serie.store_id,
-        f.serie.product_id,
-        f.serie.rotation_band ?? "",
-        f.politica,
-        f.sugerido,
-        f.delta,
-        f.impacto,
-        f.faltante,
-        f.sobrante,
-        f.senal.fraccionEstimada,
-        f.senal.rachaVigente,
-        f.diasQuiebre28,
+        f.series.series_id,
+        f.series.store_id,
+        f.series.product_id,
+        f.rotation_band ?? "",
+        catalogo.dt,
+        f.policy_qty,
+        f.qty,
+        f.delta_pct ?? null,
+        f.expected_shortfall,
+        f.expected_overage,
+        f.saving,
+        f.saving_share,
+        (f.reasons ?? []).join(" "),
       ]),
     );
     const partes = ["reposicion", basis, tienda != null ? `t${tienda}` : null, clase].filter(Boolean);
@@ -404,412 +162,270 @@ function Reposicion({
     URL.revokeObjectURL(url);
   };
 
-  if (filas.length === 0) {
-    return (
-      <div className="pagina">
-        <div className="tarjeta" style={{ padding: "20px var(--e5)" }}>
-          <h2>Sin series para estos filtros</h2>
-          <p className="nota" style={{ marginTop: 8, maxWidth: "70ch" }}>
-            Ninguna de las {conteo(total)} series del panel coincide con la combinación de tienda y
-            clase de rotación elegida. Limpiá un filtro para volver a ver la lista.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="pagina">
-      {/* La regla de los cinco segundos: lo primero que el ojo encuentra es la
-          decisión, y después su respaldo. La primera tarjeta ES la cantidad a
-          pedir, así que la jerarquía del handoff no se pierde — se refuerza,
-          porque antes ese número estaba arriba a la derecha. */}
-      <div className="kpis">
-        <div className="kpi" data-primario="true">
-          <div className="rotulo">Total a pedir</div>
+      <Encabezado
+        titulo={r.titulo}
+        contexto={r.contexto(
+          etiquetaFecha(catalogo.dt),
+          conteoDeTotal(catalogo.total, health?.panel?.n_series),
+          r.orden[orden],
+        )}
+      >
+        <ToggleCensura />
+      </Encabezado>
+
+      <div className="fila-controles">
+        <RatioCosto />
+        <FiltrosCatalogo />
+        <button type="button" className="boton-sutil" onClick={() => void exportar()} style={{ marginLeft: "auto" }}>
+          {textos.comun.exportarCsv}
+        </button>
+      </div>
+
+      {basis === "observed" && (
+        <p className="aviso-base" role="note">
+          {r.avisoObservada}
+        </p>
+      )}
+
+      <div className="kpis" role="list">
+        <div className="kpi" data-primario="true" role="listitem">
+          <div className="rotulo">{r.kpiAhorro}</div>
           <div className="kpi-valor">
-            <CifraTotal valor={totalSugerido} />
+            <CifraAnimada valor={-tot.cost_delta_pct} formato={(v) => porcentajeSimple(v, 1)} />
           </div>
-          <div className="kpi-pie">
-            q* {cuantil(qEstrella)} · {conteo(filas.length)} series · adimensional
-          </div>
+          <div className="kpi-pie">{r.kpiAhorroPie}</div>
         </div>
-        <div className="kpi">
-          <div className="rotulo">Δ contra la política</div>
-          <div className={`kpi-valor ${totalSugerido > totalPolitica ? "acento" : ""}`}>
-            {porcentaje(deltaPct(totalSugerido, totalPolitica))}
-          </div>
-          <div className="kpi-pie">media móvil 21 d: {magnitud(totalPolitica)}</div>
-        </div>
-        <div className="kpi">
-          <div className="rotulo">Señal recuperada</div>
-          <div
-            className="kpi-valor"
-            style={enAlerta > 0 ? { color: "var(--advertencia-texto)" } : undefined}
-          >
-            {conteoDeTotal(enAlerta, filas.length)}
-          </div>
-          <div className="kpi-pie">
-            más del {Math.round(SENAL.parcial * 100)} % de su demanda reciente es estimada
-          </div>
-        </div>
-        <div className="kpi">
-          <div className="rotulo">MASE del mejor modelo</div>
-          <div className="kpi-valor">{mase ? fmtError(mase.mean) : "—"}</div>
-          <div className="kpi-pie">
-            {mase
-              ? `± ${fmtError(mase.std)} entre orígenes · peor ${fmtError(mase.worst_origin)}`
-              : "falta correr el backtest"}
-          </div>
-        </div>
+        <Kpi
+          rotulo={r.kpiOrden}
+          valor={porcentaje(tot.qty_delta_pct)}
+          pie={r.kpiOrdenPie(conteoDeTotal(tot.n_big_change, tot.n_series))}
+        />
+        <Kpi rotulo={r.kpiSobrante} valor={porcentaje(tot.overage_delta_pct)} pie={r.kpiSobrantePie} />
+        <Kpi rotulo={r.kpiFaltante} valor={porcentaje(tot.shortfall_delta_pct)} pie={r.kpiFaltantePie} />
       </div>
 
       <div className="tarjeta">
-        <div className="cuerpo-reposicion" style={{ padding: "20px var(--e5) 8px" }}>
-          <div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                gap: 12,
-                marginBottom: 12,
-              }}
-            >
-              <h2>Qué pedir hoy</h2>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <span className="nota">
-                  {conteoDeTotal(filas.length, total)} · ordenadas por {ROTULO_ORDEN[columna]}
-                </span>
-                <button type="button" className="boton-sutil" onClick={exportar}>
-                  Exportar CSV
-                </button>
-              </div>
-            </div>
-
-            <table className="tabla">
-              <caption
-                className="nota"
-                style={{
-                  captionSide: "bottom",
-                  textAlign: "left",
-                  paddingTop: 10,
-                }}
-              >
-                Todo lo económico de la tabla viene de <code>/reorder</code>. El
-                faltante y el sobrante esperados salen de integrar E[(D−q)⁺] sobre
-                la distribución que describen los cuantiles del modelo; son
-                esperanzas implicadas por el modelo, no resultados medidos. El
-                faltante es una <strong>cota inferior</strong>: la grilla termina en
-                el cuantil 0,95 y el {porcentaje((orden?.tail_mass ?? 0) * 100, 1)}{" "}
-                de masa de arriba no está descrito. El delta compara la orden contra
-                la media móvil de {orden?.policy_window ?? 21} días{" "}
-                <strong>de la misma base</strong>, con las dos cantidades evaluadas
-                bajo la misma distribución.
-              </caption>
-              <thead>
-                <tr>
-                  <ThOrden columna="serie" etiqueta="Serie" className="izq" />
-                  <th scope="col" className="col-opcional">
-                    Clase
-                  </th>
-                  <th scope="col" className="col-opcional">
-                    Quiebre 14 d
-                  </th>
-                  <ThOrden columna="senal" etiqueta="Señal" className="col-opcional" />
-                  <ThOrden columna="politica" etiqueta="Política" />
-                  <ThOrden columna="sugerido" etiqueta="Sugerido" />
-                  <ThOrden columna="delta" etiqueta="Δ" />
-                  <ThOrden columna="impacto" etiqueta="Impacto" />
-                </tr>
-              </thead>
-              <tbody>
-                {filas.map((f, i) => (
-                  <FilaSerie
-                    key={f.serie.series_id}
-                    fila={f}
-                    abierta={i === abierta}
-                    maxImpacto={maxImpacto}
-                    maxHoras={maxHoras}
-                    onAbrir={() => setAbierta(i === abierta ? -1 : i)}
-                    onIrASerie={() => onElegirSerie(f.serie.series_id)}
-                  />
-                ))}
-              </tbody>
-            </table>
-
-            <Paginador total={total} />
-          </div>
-
-          <div className="panel panel-reposicion">
-            <div>
-              <div className="rotulo">Ratio de costo Co / Cu</div>
-              <div
-                className="ratios"
-                style={{ marginTop: 6 }}
-                role="group"
-                aria-label="Ratio de costo"
-              >
-                {RATIOS.map((r) => (
-                  <button
-                    key={r.co}
-                    type="button"
-                    aria-pressed={r.co === ratio}
-                    onClick={() => setRatio(r.co)}
-                  >
-                    <span className="valor">{magnitud(r.co, 1)}</span>
-                    <span className="cuantil">
-                      q* {cuantil(cuantilCritico(1, r.co))}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <div className="nota" style={{ marginTop: 6 }}>
-                {RATIOS.find((r) => r.co === ratio)?.lectura}
-              </div>
-            </div>
-
-            {/* El total, el delta y las series en alerta ya están en las tarjetas
-                de KPI, arriba a la izquierda. Repetirlos acá competía con ellos;
-                queda solo lo que las tarjetas no dicen. */}
-            <div className="bloque">
-              <dl>
-                <dt>Política actual</dt>
-                <dd>{magnitud(totalPolitica)}</dd>
-                <dt>Ahorro esperado</dt>
-                <dd>{magnitud(impactoTotal)}</dd>
-                <dt>Faltante esperado</dt>
-                <dd>{magnitud(faltanteTotal)}</dd>
-                <dt>Sobrante esperado</dt>
-                <dd>{magnitud(sobranteTotal)}</dd>
-                <dt>Cu / Co</dt>
-                <dd>1 / {magnitud(ratio, 1)}</dd>
-              </dl>
-              <div className="nota" style={{ marginTop: 8 }}>
-                Esperanzas bajo la distribución del modelo, no resultados medidos.
-                El faltante es cota inferior: el{" "}
-                {porcentaje((orden?.tail_mass ?? 0) * 100, 1)} de masa por encima
-                del cuantil 0,95 no está descrito.
-              </div>
-            </div>
-
-            <div className="consecuencia" data-basis={basis}>
-              {basis === "recovered" ? (
-                <>
-                  <strong style={{ fontWeight: 600 }}>
-                    Censura corregida.
-                  </strong>{" "}
-                  Es la base de las cantidades de esta lista.
-                </>
-              ) : (
-                <>
-                  <strong style={{ fontWeight: 600 }}>
-                    Es lo que ve el ERP.
-                  </strong>{" "}
-                  Subestima la demanda en los días con quiebre: pedir esto
-                  reproduce el quiebre de la semana que viene.
-                </>
-              )}
-            </div>
-
-            {motivo && (
-              <div
-                className="nota"
-                style={{ color: "var(--advertencia-texto)" }}
-              >
-                Las cantidades no vienen del newsvendor: {motivo}
-              </div>
-            )}
-          </div>
-        </div>
+        {catalogo.items.length === 0 ? (
+          <p className="nota" style={{ padding: "20px var(--e5)" }}>
+            {r.vacio}
+          </p>
+        ) : (
+          <table className="tabla tabla-reposicion">
+            <caption className="fuera-de-pantalla">{r.caption(catalogo.dt, r.orden[orden])}</caption>
+            <thead>
+              <tr>
+                <ThOrden columna="serie" etiqueta={c.serie} className="izq" />
+                <th scope="col" className="izq col-opcional">
+                  {c.clase}
+                </th>
+                <th scope="col" className="izq">
+                  {c.motivos}
+                </th>
+                <ThOrden columna="politica" etiqueta={c.politica} />
+                <ThOrden columna="sugerido" etiqueta={c.sugerido} />
+                <ThOrden columna="delta" etiqueta={c.delta} />
+                <ThOrden columna="impacto" etiqueta={c.ahorro} />
+                <th scope="col" className="col-opcional" title={c.quiebreTitulo(String(DIAS_QUIEBRE))}>
+                  {c.quiebre(String(DIAS_QUIEBRE))}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {catalogo.items.map((f) => (
+                <FilaSerie
+                  key={f.series.series_id}
+                  linea={f}
+                  historia={historias.get(f.series.series_id) ?? null}
+                  maxParte={maxParte}
+                  onAbrir={() => onElegirSerie(f.series.series_id)}
+                />
+              ))}
+            </tbody>
+          </table>
+        )}
+        <Paginador total={catalogo.total} />
       </div>
+
+      <ComoSeCalcula>
+        <p>
+          {r.comoCuantil(
+            cuantil(catalogo.critical_fraction),
+            etiquetaFecha(catalogo.dt),
+            magnitud(catalogo.co, 1),
+            magnitud(catalogo.cu, 0),
+          )}
+        </p>
+        <p>
+          {r.comoPolitica(
+            String(catalogo.policy_window),
+            catalogo.model_name,
+            porcentajeSimple(catalogo.tail_mass * 100, 1),
+          )}
+        </p>
+        <p>{r.comoAhorro}</p>
+      </ComoSeCalcula>
     </div>
   );
 }
 
-function FilaSerie({
-  fila,
-  abierta,
-  maxImpacto,
-  maxHoras,
-  onAbrir,
-  onIrASerie,
-}: {
-  fila: Fila;
-  abierta: boolean;
-  maxImpacto: number;
-  maxHoras: number;
-  onAbrir: () => void;
-  onIrASerie: () => void;
-}) {
-  const maxPron = Math.max(
-    ...fila.pronostico.map((p) => p.pred_hi ?? p.y_pred),
-    1,
-  );
-  const idDetalle = `detalle-${fila.serie.series_id}`;
+function Kpi({ rotulo, valor, pie }: { rotulo: string; valor: string; pie: string }) {
   return (
-    <>
-      {/* El `aria-expanded` va en un **botón dentro de la celda** y no en el `tr`:
-          ARIA solo lo permite en filas de `grid` o `treegrid`, y esta es una tabla
-          común. El audit con axe lo marcó como violación seria en las 25 filas.
-          La fila sigue siendo clickeable con el mouse; el teclado llega al botón,
-          que es el control de verdad. */}
-      <tr className="fila" onClick={onAbrir}>
-        <td className="izq serie">
-          <button
-            type="button"
-            aria-expanded={abierta}
-            aria-controls={idDetalle}
-            onClick={(e) => {
-              e.stopPropagation();
-              onAbrir();
-            }}
-            style={{ font: "inherit", color: "inherit", textAlign: "left" }}
-          >
-            {serieCorta(fila.serie.store_id, fila.serie.product_id)}
-          </button>
-        </td>
-        {/* La clase es la banda de rotación con los mismos cortes del backtest:
-            en baja rotación no se espera que el modelo complejo gane, así que hay
-            que poder ver de qué clase es cada fila sin salir de la tabla. */}
-        <td className="col-opcional apagada">
-          {fila.serie.rotation_band ?? "—"}
-        </td>
-        <td className="col-opcional">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              justifyContent: "flex-end",
-            }}
-          >
-            <Sparkline valores={fila.quiebre14} maximo={maxHoras} />
-            <span className="apagada">{conteo(fila.diasQuiebre28)} d</span>
-          </div>
-        </td>
-        {/* Cuánto de la señal reciente es observada. No es un juicio sobre el
-            modelo sino sobre sus insumos: con una fracción alta el pronóstico se
-            apoya en la propia corrección de censura, y el intervalo conformal no
-            refleja esa incertidumbre porque mide el error del modelo y no el de la
-            recuperación. */}
-        <td className="col-opcional">
-          <span className="senal" data-estado={fila.senal.estado} title={fila.senal.detalle}>
-            {fila.senal.rotulo}
-          </span>
-        </td>
-        <td className="apagada">{magnitud(fila.politica)}</td>
-        <td className="sugerido">{magnitud(fila.sugerido)}</td>
-        <td style={{ fontWeight: fila.delta >= 20 ? 600 : 400 }}>
-          {porcentaje(fila.delta)}
-        </td>
-        <td>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              justifyContent: "flex-end",
-            }}
-          >
-            <span
-              className="barra-impacto"
-              style={{
-                width:
-                  maxImpacto > 0 ? `${(fila.impacto / maxImpacto) * 78}px` : 0,
-              }}
-            />
-            <span>{magnitud(fila.impacto)}</span>
-          </div>
-        </td>
-      </tr>
-
-      {abierta && (
-        <tr className="fila-expandida">
-          <td colSpan={8} id={idDetalle}>
-            <div className="detalle">
-              <div>
-                <div className="rotulo" style={{ marginBottom: 6 }}>
-                  Pronóstico a 7 días
-                </div>
-                {fila.pronostico.map((p) => (
-                  <div className="dia" key={p.dt}>
-                    <span className="apagada">{etiquetaFecha(p.dt)}</span>
-                    <span
-                      className="barra-dia"
-                      style={{
-                        width: `${Math.max(2, (p.y_pred / maxPron) * 100)}%`,
-                      }}
-                    />
-                    <span className="apagada" style={{ textAlign: "right" }}>
-                      {p.pred_lo != null && p.pred_hi != null
-                        ? `${magnitud(p.pred_lo)} – ${magnitud(p.pred_hi)}`
-                        : "sin banda"}
-                    </span>
-                    <span
-                      className="tinta"
-                      style={{ textAlign: "right", fontWeight: 600 }}
-                    >
-                      {magnitud(p.y_pred)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div>
-                <div className="rotulo" style={{ marginBottom: 6 }}>
-                  Por qué difiere
-                </div>
-                <dl
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto",
-                    gap: "6px 12px",
-                    margin: 0,
-                    fontSize: 12,
-                  }}
-                >
-                  <dt className="apagada">Días con quiebre (28 d)</dt>
-                  <dd style={{ margin: 0, textAlign: "right" }}>
-                    {conteo(fila.diasQuiebre28)}
-                  </dd>
-                  <dt className="apagada">Racha máxima</dt>
-                  <dd style={{ margin: 0, textAlign: "right" }}>
-                    {conteo(fila.rachaMax)} d
-                  </dd>
-                  <dt className="apagada">Uplift de la serie</dt>
-                  <dd
-                    style={{ margin: 0, textAlign: "right" }}
-                    className="acento"
-                  >
-                    {porcentaje(fila.historia.summary.uplift_pct)}
-                  </dd>
-                </dl>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onIrASerie();
-                  }}
-                  style={{
-                    marginTop: 10,
-                    fontSize: 11.5,
-                    color: "var(--tinta)",
-                    borderBottom: "1px solid var(--regla-control)",
-                  }}
-                >
-                  Ver la serie completa →
-                </button>
-              </div>
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
+    <div className="kpi" role="listitem">
+      <div className="rotulo">{rotulo}</div>
+      <div className="kpi-valor">{valor}</div>
+      <div className="kpi-pie">{pie}</div>
+    </div>
   );
 }
 
-function CifraTotal({ valor }: { valor: number }) {
+function CifraAnimada({ valor, formato }: { valor: number; formato: (v: number) => string }) {
   const mostrado = useConteo(valor);
+  return <span className="cifra-decision cifra-total">{formato(mostrado)}</span>;
+}
+
+/**
+ * Encabezado que ordena. Es un `<button>` dentro del `<th>`: un th con manejador
+ * no es alcanzable por teclado. `aria-sort` le dice al lector por qué columna está
+ * ordenada.
+ */
+function ThOrden({
+  columna,
+  etiqueta,
+  className,
+}: {
+  columna: Columna;
+  etiqueta: string;
+  className?: string;
+}) {
+  const { orden, direccion, ordenarPor } = useEstado();
+  const r = t().reposicion;
+  const activa = orden === columna;
+  const aria = activa ? (direccion === "desc" ? "descending" : "ascending") : "none";
   return (
-    <span className="cifra-decision cifra-total">{magnitud(mostrado)}</span>
+    <th scope="col" className={className} aria-sort={aria}>
+      <button
+        type="button"
+        className="th-orden"
+        onClick={() => ordenarPor(columna)}
+        aria-label={r.ordenarPor(r.orden[columna])}
+      >
+        {etiqueta}
+        <span aria-hidden="true" className="flecha">
+          {activa ? (direccion === "desc" ? "▾" : "▴") : ""}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+function FilaSerie({
+  linea,
+  historia,
+  maxParte,
+  onAbrir,
+}: {
+  linea: CatalogLine;
+  historia: SeriesHistory | null;
+  maxParte: number;
+  onAbrir: () => void;
+}) {
+  const horas = historia ? diasConQuiebre(historia.points, DIAS_QUIEBRE) : [];
+  const diasConQ = horas.filter((h) => h > 0).length;
+  const maxHoras = historia?.open_hours ?? 16;
+  const delta = linea.delta_pct;
+  const textos = t();
+
+  return (
+    <tr className="fila" onClick={onAbrir}>
+      <td className="izq serie">
+        <button
+          type="button"
+          className="enlace-fila"
+          title={descripcionCatalogo(linea.label)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onAbrir();
+          }}
+        >
+          {serieCorta(linea.series.store_id, linea.series.product_id)}
+        </button>
+      </td>
+      <td className="izq apagada col-opcional">
+        {linea.rotation_band ? (textos.bandas[linea.rotation_band] ?? linea.rotation_band) : "—"}
+      </td>
+      <td className="izq">
+        <span className="sellos">
+          {(linea.reasons ?? []).map((k) => (
+            <SelloMotivo key={k} clave={k} />
+          ))}
+        </span>
+      </td>
+      <td className="apagada">{magnitud(linea.policy_qty)}</td>
+      <td className="sugerido">{magnitud(linea.qty)}</td>
+      <td style={{ fontWeight: delta != null && Math.abs(delta) >= 20 ? 600 : 400 }}>
+        {delta != null ? porcentaje(delta) : "—"}
+      </td>
+      <td>
+        <div className="celda-barra">
+          <span
+            className="barra-impacto"
+            style={{ width: `${(Math.max(0, linea.saving_share) / maxParte) * 64}px` }}
+          />
+          <span>{porcentajeSimple(linea.saving_share * 100, 1)}</span>
+        </div>
+      </td>
+      <td className="col-opcional">
+        {historia ? (
+          <div
+            className="celda-barra"
+            title={textos.reposicion.diasConQuiebre(conteo(diasConQ), String(DIAS_QUIEBRE))}
+          >
+            <Sparkline valores={horas} maximo={maxHoras} />
+            <span className="apagada">{textos.comun.dias(conteo(diasConQ))}</span>
+          </div>
+        ) : (
+          "—"
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function Paginador({ total }: { total: number }) {
+  const { offset, setOffset } = useEstado();
+  const comun = t().comun;
+  const desde = total === 0 ? 0 : offset + 1;
+  const hasta = Math.min(offset + FILAS, total);
+  const pagina = Math.floor(offset / FILAS) + 1;
+  const paginas = Math.max(1, Math.ceil(total / FILAS));
+  return (
+    <div className="paginador">
+      <span className="nota">
+        {comun.paginacion(conteo(desde), conteo(hasta), conteo(total), conteo(pagina), conteo(paginas))}
+      </span>
+      <div className="paginador-botones">
+        <button type="button" onClick={() => setOffset(0)} disabled={offset === 0} aria-label={comun.primeraPagina}>
+          ««
+        </button>
+        <button
+          type="button"
+          onClick={() => setOffset(offset - FILAS)}
+          disabled={offset === 0}
+          aria-label={comun.paginaAnterior}
+        >
+          «
+        </button>
+        <button
+          type="button"
+          onClick={() => setOffset(offset + FILAS)}
+          disabled={hasta >= total}
+          aria-label={comun.paginaSiguiente}
+        >
+          »
+        </button>
+      </div>
+    </div>
   );
 }

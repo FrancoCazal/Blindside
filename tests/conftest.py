@@ -158,6 +158,31 @@ def recovered_panel(synthetic_hourly_panel: pd.DataFrame) -> pd.DataFrame:
     return out.drop(columns=[*S.HOURLY_COLS, "profile_weight"], errors="ignore")
 
 
+@pytest.fixture()
+def panel_on_disk(recovered_panel: pd.DataFrame, tmp_path, monkeypatch):
+    """Escribe el panel en un directorio temporal y apunta la config ahi.
+
+    Devuelve el directorio de artefactos. Lo usan los tests de la API.
+    """
+    processed = tmp_path / "processed"
+    processed.mkdir(parents=True)
+    recovered_panel.to_parquet(processed / cfg.DEMAND_FILE, index=False)
+
+    monkeypatch.setattr(cfg, "DATA_PROCESSED", processed)
+    monkeypatch.setattr(cfg, "DATA_SAMPLE", tmp_path / "sample_vacio")
+    # Sin manifiesto no hay referencia de panel completo, y eso tiene que ser el
+    # default del test: si apuntara al data/interim/ real, el resultado dependeria
+    # de si la maquina descargo el dataset.
+    monkeypatch.setattr(cfg, "DATA_INTERIM", tmp_path / "interim_vacio")
+    # Idem con los reportes: si apuntara al reports/ real, la cobertura por
+    # horizonte dependeria de si en esta maquina se corrio `make models`.
+    monkeypatch.setattr(cfg, "REPORTS", tmp_path / "reports_vacio")
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    monkeypatch.setattr(cfg, "ARTIFACTS", artifacts)
+    return artifacts
+
+
 @pytest.fixture(scope="session")
 def small_forecast_config() -> cfg.ForecastConfig:
     """Configuracion reducida: 3 origenes en vez de 8, para que los tests vuelen."""

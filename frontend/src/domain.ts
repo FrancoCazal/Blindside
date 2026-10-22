@@ -9,25 +9,25 @@
  */
 
 import type { HistoryPoint } from "./api/client";
+import { porcentajeSimple } from "./format";
+import { t } from "./i18n";
 
 /**
  * Presets del control de ratio de costo. `cu` queda en 1 y se mueve `co`, así
  * que el ratio del botón es Co/Cu y el cuantil resultante es q* = Cu/(Cu+Co).
  *
  * La relación entre ratio y cuantil no se explica en un tooltip: se muestra el
- * cuantil resultante en el propio botón.
+ * cuantil resultante en el propio botón. La lectura de cada preset está en el
+ * diccionario, con `String(co)` como clave.
  */
-export const RATIOS = [
-  { co: 0.3, lectura: "Producto seco: el sobrante es capital inmovilizado" },
-  {
-    co: 0.6,
-    lectura: "Perecedero: el sobrante es pérdida total al vencimiento",
-  },
-  { co: 1.0, lectura: "Los dos errores cuestan igual: el óptimo es la mediana" },
-  { co: 1.5, lectura: "El sobrante duele más que el quiebre" },
-] as const;
+export const RATIOS = [{ co: 0.3 }, { co: 0.6 }, { co: 1.0 }, { co: 1.5 }] as const;
 
 export const RATIO_POR_DEFECTO = 0.6;
+
+/** Qué significa un ratio en palabras, o `null` si no es un preset. */
+export function lecturaRatio(co: number): string | null {
+  return RATIOS.some((r) => r.co === co) ? (t().ratio.lecturas[String(co)] ?? null) : null;
+}
 
 /** q* = Cu / (Cu + Co). El cuantil que hay que pronosticar. */
 export function cuantilCritico(cu: number, co: number): number {
@@ -50,38 +50,10 @@ export function diasConQuiebre(points: HistoryPoint[], n = 14): number[] {
 }
 
 /**
- * Ahorro esperado de una línea de `/reorder`, en unidades de costo.
- *
- * **Este número ya no es simulado.** El backend devuelve `expected_shortfall` y
- * `expected_overage` integrados sobre la distribución predictiva del modelo, y
- * `cost_delta_pct` comparando la orden contra la política de media móvil con las
- * dos cantidades evaluadas bajo **la misma** distribución. Acá solo se reconstruye
- * el ahorro absoluto a partir del costo de la orden y ese porcentaje, porque la
- * tabla ordena por magnitud y no por porcentaje: una serie que ahorra 30 % sobre
- * una base ínfima no es la que hay que mirar primero.
- *
- * Lo que había antes en este archivo era una estimación propia con la banda
- * conformal tomada como uniforme. Se fue: un supuesto de distribución en la capa
- * de presentación es invisible y no tiene test.
+ * El ahorro esperado por serie ya no se reconstruye acá: `/reorder/catalog`
+ * devuelve `saving` (costo de la política menos el de la orden, bajo la misma
+ * distribución predictiva) y lo ordena en el servidor sobre todo el catálogo.
  */
-export function impactoDeLinea(
-  linea:
-    | {
-        expected_shortfall: number;
-        expected_overage: number;
-        cost_delta_pct: number;
-      }
-    | undefined,
-  ratio: number,
-): number {
-  if (!linea) return 0;
-  const costoOrden = linea.expected_shortfall + ratio * linea.expected_overage;
-  const factor = 1 + linea.cost_delta_pct / 100;
-  // costoOrden = costoPolitica * factor, así que el ahorro es la diferencia.
-  if (factor <= 0) return 0;
-  const costoPolitica = costoOrden / factor;
-  return costoPolitica - costoOrden;
-}
 
 /**
  * E[(D − q)+] con D uniforme en [lo, hi].
@@ -174,22 +146,19 @@ export function clasificarSenal(resumen: {
   const estado: EstadoSenal =
     frac >= SENAL.escasa ? "escasa" : frac >= SENAL.parcial ? "parcial" : "observada";
 
-  const partes = [`${(frac * 100).toFixed(0)} % de la demanda de los últimos 28 días es estimada`];
-  if (racha > 0) {
-    partes.push(`${racha} ${racha === 1 ? "día" : "días"} de quiebre hasta hoy`);
-  }
-  if (sinVenta != null && sinVenta > 0) {
-    partes.push(`${sinVenta} sin venta registrada`);
-  }
+  const textos = t().senal;
+  const partes = [textos.detalleEstimada(porcentajeSimple(frac * 100))];
+  if (racha > 0) partes.push(textos.detalleRacha(racha));
+  if (sinVenta != null && sinVenta > 0) partes.push(textos.detalleSinVenta(sinVenta));
 
   const rotulo =
     estado === "escasa"
-      ? "casi sin observar"
+      ? textos.escasa
       : estado === "parcial"
-        ? "parcial"
+        ? textos.parcial
         : racha >= SENAL.rachaVigente
-          ? `en quiebre ${racha} d`
-          : "observada";
+          ? textos.enQuiebre(racha)
+          : textos.observada;
 
   return {
     estado,
@@ -209,43 +178,59 @@ export function clasificarSenal(resumen: {
  * que `latent_roll_mean_7` significa una media de siete días.
  */
 export function etiquetaFeature(feature: string): string {
-  const exactas: Record<string, string> = {
-    discount: "Factor de descuento",
-    holiday_flag: "Feriado",
-    activity_flag: "Actividad comercial",
-    product_id: "Producto",
-    store_id: "Tienda",
-    city_id: "Ciudad",
-    management_group_id: "Grupo de gestión",
-    first_category_id: "Categoría principal",
-    second_category_id: "Subcategoría",
-    third_category_id: "Categoría detallada",
-    horizon_step: "Día del horizonte",
-    h: "Día del horizonte",
-    dow_sin: "Día de semana · ciclo seno",
-    dow_cos: "Día de semana · ciclo coseno",
-    dom_sin: "Día del mes · ciclo seno",
-    dom_cos: "Día del mes · ciclo coseno",
-  };
-  if (exactas[feature]) return exactas[feature];
+  const textos = t().features;
+  if (textos.exactas[feature]) return textos.exactas[feature];
 
-  const movil = feature.match(/^(?:latent|observed|sale)_roll_(mean|median|std|min|max)_(\d+)$/);
-  if (movil) {
-    const operacion: Record<string, string> = {
-      mean: "Media de demanda",
-      median: "Mediana de demanda",
-      std: "Variabilidad de demanda",
-      min: "Mínimo de demanda",
-      max: "Máximo de demanda",
-    };
-    return `${operacion[movil[1]]} · ${movil[2]} días`;
+  const rezagoClima = feature.match(/^(precpt|avg_temperature|avg_humidity|avg_wind_level|discount)_lag_(\d+)$/);
+  if (rezagoClima) {
+    const dias = Number(rezagoClima[2]);
+    return `${textos.clima[rezagoClima[1]]} · ${dias === 0 ? textos.elDiaDelOrigen : textos.haceDias(String(dias))}`;
   }
 
+  const movil = feature.match(/^(?:latent|observed|sale)_roll_(mean|median|std|min|max)_(\d+)$/);
+  if (movil) return textos.ventana(textos.operaciones[movil[1]], movil[2]);
+
   const rezago = feature.match(/^(?:latent|observed|sale)_lag_(\d+)$/);
-  if (rezago) return `Demanda hace ${rezago[1]} días`;
+  if (rezago) {
+    const dias = Number(rezago[1]);
+    return dias === 0 ? textos.demandaDelOrigen : textos.demandaHace(String(dias));
+  }
 
   const texto = feature.replaceAll("_", " ");
-  return texto.charAt(0).toLocaleUpperCase("es") + texto.slice(1);
+  return texto.charAt(0).toLocaleUpperCase(t().locale) + texto.slice(1);
+}
+
+/** Features cuyo valor es un id o una bandera: se muestran sin decimales. */
+const CATEGORICAS = new Set([
+  "city_id",
+  "store_id",
+  "management_group_id",
+  "first_category_id",
+  "second_category_id",
+  "third_category_id",
+  "product_id",
+  "holiday_flag",
+  "activity_flag",
+  "dow",
+  "day_of_month",
+  "week_of_year",
+  "month",
+  "is_weekend",
+  "is_month_start",
+  "is_month_end",
+  "h",
+]);
+
+/**
+ * Valor de una feature para mostrar. Un id de producto no es una magnitud:
+ * «Producto = 600,00» se leía como una cantidad.
+ */
+export function valorFeature(feature: string, valor: number | null | undefined): string {
+  if (valor == null) return t().comun.sinDato;
+  if (CATEGORICAS.has(feature)) return String(Math.round(valor));
+  return new Intl.NumberFormat(t().locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
+    valor,
+  );
 }
 
 /**

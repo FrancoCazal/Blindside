@@ -1,4 +1,4 @@
-.PHONY: help setup data recover sample lint format test test-leakage backtest models models-fast train ablation classical tune notebooks app api clean \
+.PHONY: help setup data recover update update-batch update-status promote rollback sample lint format test test-leakage backtest models models-fast train ablation classical tune notebooks app api clean \
         front front-setup front-build front-test api-schema \
         docker-build docker-build-full docker-up docker-down docker-logs docker-ps docker-shell docker-test docker-data
 
@@ -14,6 +14,10 @@ help:
 	@echo "setup         - instala dependencias fijas + el paquete en modo editable"
 	@echo "data          - descarga y submuestrea FreshRetailNet-50K a data/interim/"
 	@echo "recover       - recupera la demanda censurada -> data/processed/demand.parquet"
+	@echo "update        - ingiere un lote nuevo: make update INPUT=lote.parquet [TRAIN=1]"
+	@echo "update-batch  - arma un lote de prueba desde el split eval"
+	@echo "update-status - estado de las capas y de los artefactos"
+	@echo "rollback      - vuelve a la version anterior de los artefactos"
 	@echo "sample        - genera data/sample/ (commiteado) desde data/interim/"
 	@echo "lint          - ruff check"
 	@echo "format        - ruff format"
@@ -59,6 +63,35 @@ data:
 
 recover:
 	$(PY) -m blindside.decision recover --method hourly_profile
+
+# --- Actualizacion continua ---------------------------------------------
+# Suma un lote al panel: valida, upsert por (serie, dia), rechaza conflictos,
+# recupera la censura y escribe las capas de forma atomica. La API recarga sola.
+#   make update INPUT=data/incoming/lote.parquet
+#   make update INPUT=lote.parquet TRAIN=1          # ademas reentrena y promueve
+#   make update INPUT=lote.parquet CONFLICT=replace # acepta correcciones
+INPUT ?=
+CONFLICT ?= reject
+update:
+ifeq ($(strip $(INPUT)),)
+	@echo "falta INPUT: make update INPUT=data/incoming/lote.parquet" && exit 2
+endif
+	$(PY) -m blindside.data.update ingest --input $(INPUT) --on-conflict $(CONFLICT) \
+		$(if $(TRAIN),--train,)
+
+# Arma un lote real desde el split eval del dataset, para ejercitar la ingesta.
+# Como el panel ya trae ese split, ingerirlo prueba la idempotencia: 0 filas nuevas.
+update-batch:
+	$(PY) -m blindside.data.update batch --split eval
+
+update-status:
+	$(PY) -m blindside.data.update status
+
+promote:
+	$(PY) -m blindside.data.update promote
+
+rollback:
+	$(PY) -m blindside.data.update rollback
 
 sample:
 	$(PY) -m blindside.data.freshretail --make-sample --out data/sample --seed 42
@@ -156,8 +189,13 @@ clean:
 front-setup:
 	cd frontend && npm install
 
+# Vite se lanza con node directo y no con `npm run dev`. En Windows `npm` es un
+# archivo por lotes (npm.cmd): al apretar Ctrl+C, cmd pregunta "terminar el
+# trabajo por lotes (S/N)" mientras make ya salio, los dos se pelean por la
+# entrada estandar y la terminal queda sin poder tipear. Sin .cmd en la cadena,
+# Ctrl+C corta limpio. Funciona igual en Linux y macOS.
 front:
-	cd frontend && npm run dev
+	cd frontend && node node_modules/vite/bin/vite.js
 
 front-build:
 	cd frontend && npm run build

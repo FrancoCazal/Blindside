@@ -5,6 +5,7 @@
 
 import { useEstado, type Basis } from "../state";
 import { magnitud } from "../format";
+import { t } from "../i18n";
 
 /**
  * Logotipo: dos líneas que coinciden y en un punto se abren, más la cuña rellena
@@ -82,17 +83,14 @@ export function ToggleCensura({
   cantidadDespues?: number;
 }) {
   const { basis, setBasis, anunciar } = useEstado();
+  const textos = t();
 
   const cambiar = (siguiente: Basis) => {
     if (siguiente === basis) return;
     setBasis(siguiente);
-    const nombre = siguiente === "recovered" ? "Demanda recuperada" : "Venta observada";
+    const nombre = textos.bases[siguiente];
     if (cantidadAntes != null && cantidadDespues != null) {
-      anunciar(
-        `${nombre}. La cantidad sugerida pasa de ${magnitud(cantidadAntes)} a ${magnitud(
-          cantidadDespues,
-        )}`,
-      );
+      anunciar(textos.toggle.anuncioCantidad(nombre, magnitud(cantidadAntes), magnitud(cantidadDespues)));
     } else {
       anunciar(nombre);
     }
@@ -113,20 +111,20 @@ export function ToggleCensura({
     <div>
       <div
         role="group"
-        aria-label="Base de cálculo"
+        aria-label={textos.toggle.aria}
         aria-keyshortcuts="b"
         className="toggle"
         onKeyDown={alTeclear}
       >
         <button type="button" aria-pressed={basis === "observed"} onClick={() => cambiar("observed")}>
-          Venta observada
+          {textos.bases.observed}
         </button>
         <button
           type="button"
           aria-pressed={basis === "recovered"}
           onClick={() => cambiar("recovered")}
         >
-          Demanda recuperada
+          {textos.bases.recovered}
         </button>
       </div>
       <div className="regla-acento" data-activa={basis === "recovered"} />

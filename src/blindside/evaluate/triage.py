@@ -37,10 +37,14 @@ if TYPE_CHECKING:
 
 __all__ = [
     "GRUPOS",
+    "GRUPOS_CON_MODELO",
+    "GRUPO_MERMA",
     "MOTIVO_COL",
+    "TODOS_LOS_GRUPOS",
     "UMBRALES",
     "Grupo",
     "Umbrales",
+    "merma_signals",
     "resumen_por_grupo",
     "series_signals",
     "triage",
@@ -81,6 +85,13 @@ class Umbrales:
     """El volumen no tiene un corte natural, asi que se usa un cuantil y se declara.
     Por construccion marca el 10 %."""
 
+    merma_politica: float = 0.50
+    """Sobrante esperado de la politica actual sobre la demanda esperada del
+    horizonte. El corte tiene lectura directa: **la mitad o mas de lo que se va a
+    vender queda sin vender**, y en perecedero eso es perdida al vencimiento. No es
+    un cuantil: sobre el panel la mediana es 0,20 y el p90 0,42, asi que 0,50 cae
+    cerca del p93 y deja afuera la variabilidad normal de una serie intermitente."""
+
 
 UMBRALES = Umbrales()
 
@@ -93,6 +104,10 @@ class Grupo:
     etiqueta: str
     que_significa: str
     que_hacer: str
+    #: Si la accion es de hoy y no de analisis. La interfaz los muestra primero:
+    #: una serie quebrada pierde venta mientras se lee la pantalla, una serie con
+    #: modelo no confiable se puede revisar manana.
+    urgente: bool = False
 
 
 #: Los cuatro grupos, en orden de cuanto costo concentran. Los textos de `etiqueta`,
@@ -137,11 +152,74 @@ GRUPOS: tuple[Grupo, ...] = (
         etiqueta="Quebrado ahora",
         que_significa="Viene con quiebre en los últimos días, sin cortar.",
         que_hacer=(
-            "Es lo único de la lista que es urgente hoy y no analítico: hay demanda "
-            "que se está perdiendo mientras se lee esto."
+            "Es urgente hoy y no analítico: hay demanda que se está perdiendo mientras "
+            "se lee esto. Reponer antes de revisar cualquier otra cosa."
         ),
+        urgente=True,
     ),
 )
+
+#: Riesgo de merma. Va aparte de `GRUPOS` porque **necesita el modelo**: el
+#: sobrante esperado sale de la distribucion predictiva, y el triage de los otros
+#: cuatro grupos tiene que poder correr sin artefacto (el dashboard de Streamlit
+#: lo hace asi).
+#:
+#: **No es "por vencer".** El dataset no trae vida util, lote ni stock disponible,
+#: asi que una alerta de vencimiento tendria que inventar esos numeros. Lo que si
+#: se mide es cuanto de lo que pide la politica actual se espera que **no se
+#: venda**: en perecedero ese sobrante es lo que termina vencido en gondola.
+GRUPO_MERMA = Grupo(
+    clave="riesgo_merma",
+    etiqueta="Riesgo de merma",
+    que_significa=(
+        "Con la política actual, la mitad o más de lo que se pide no se espera vender "
+        "en el horizonte. En perecedero ese sobrante se pierde al vencer."
+    ),
+    que_hacer=(
+        "Bajar a la cantidad sugerida, que ya descuenta el costo del sobrante. La "
+        "columna de merma evitable dice cuánto de esa pérdida se va con el cambio."
+    ),
+    urgente=True,
+)
+
+GRUPOS_CON_MODELO: tuple[Grupo, ...] = (GRUPO_MERMA,)
+
+#: Los cinco grupos, en el orden en que los muestra la interfaz operativa: primero
+#: lo urgente de hoy, despues lo analitico.
+TODOS_LOS_GRUPOS: tuple[Grupo, ...] = (
+    *(g for g in (*GRUPOS, *GRUPOS_CON_MODELO) if g.urgente),
+    *(g for g in (*GRUPOS, *GRUPOS_CON_MODELO) if not g.urgente),
+)
+
+
+def merma_signals(lines: pd.DataFrame) -> pd.DataFrame:
+    """Sobrante esperado por serie, de la orden sugerida y de la politica actual.
+
+    `lines` tiene una fila por (serie, dia del horizonte) con `expected_demand`,
+    `overage_model` y `overage_policy`: las esperanzas bajo la **misma**
+    distribucion predictiva, que es lo que vuelve comparables las dos ordenes.
+
+    Las tres fracciones van sobre la demanda esperada del horizonte y no sobre la
+    cantidad pedida. Sobre lo pedido, una serie que pide el doble de lo que vende
+    marcaria 50 %; sobre lo vendido marca 100 %, que es la lectura que importa:
+    se va a tirar tanto como se vende.
+    """
+    g = lines.groupby(lines[S.SERIES_ID].astype(str), observed=True)
+    out = pd.DataFrame(
+        {
+            "demanda_esperada": g["expected_demand"].sum(),
+            "sobrante_modelo": g["overage_model"].sum(),
+            "sobrante_politica": g["overage_policy"].sum(),
+        }
+    )
+    d = out["demanda_esperada"].where(out["demanda_esperada"] > 0)
+    out["merma_politica"] = (out["sobrante_politica"] / d).fillna(0.0)
+    out["merma_modelo"] = (out["sobrante_modelo"] / d).fillna(0.0)
+    out["merma_evitable"] = (
+        (out["sobrante_politica"] - out["sobrante_modelo"]).clip(lower=0) / d
+    ).fillna(0.0)
+    out.index.name = S.SERIES_ID
+    return out
 
 
 def series_signals(
@@ -165,17 +243,46 @@ def series_signals(
     """
     fin = pd.to_datetime(panel[S.DATE]).max()
     reciente = panel[pd.to_datetime(panel[S.DATE]) > fin - pd.Timedelta(days=ventana_dias)]
+    reciente = reciente.sort_values([S.SERIES_ID, S.DATE], kind="mergesort")
     g = reciente.groupby(S.SERIES_ID, observed=True)
 
     obs = S.SALE_AMOUNT if S.SALE_AMOUNT in panel.columns else target
+    # Las dos señales por serie van vectorizadas y no con `groupby.apply`: sobre
+    # 3.066 series el apply tardaba 5,7 s, y esto lo llama la API en cada recarga.
+    # `_frac_estimada` y `_racha_vigente` siguen siendo la definicion de referencia,
+    # y los tests verifican que las dos formas coincidan.
+    if target in reciente.columns and obs in reciente.columns and target != obs:
+        estimada = (
+            (reciente[target] - reciente[obs])
+            .clip(lower=0)
+            .groupby(reciente[S.SERIES_ID], observed=True)
+            .sum()
+        )
+        masa = g[target].sum()
+        frac = (estimada / masa.where(masa > 0)).fillna(0.0)
+    else:
+        frac = pd.Series(0.0, index=g[target].size().index)
+
+    if S.IS_CENSORED in reciente.columns:
+        cens = reciente[S.IS_CENSORED].astype(bool).to_numpy()
+        pos = g.cumcount().to_numpy()
+        # Posicion del ultimo dia sano de cada serie; -1 si no hubo ninguno.
+        ultimo_sano = (
+            pd.Series(np.where(~cens, pos, -1), index=reciente.index)
+            .groupby(reciente[S.SERIES_ID], observed=True)
+            .max()
+        )
+        racha = (g.size() - 1 - ultimo_sano).astype(int)
+        tasa = g[S.IS_CENSORED].mean()
+    else:
+        racha, tasa = 0, 0.0
+
     señales = pd.DataFrame(
         {
             "demanda_media": g[target].mean(),
-            "frac_estimada": g.apply(_frac_estimada, target=target, obs=obs, include_groups=False),
-            "racha_vigente": g[S.IS_CENSORED].apply(_racha_vigente)
-            if S.IS_CENSORED in panel.columns
-            else 0,
-            "tasa_quiebre": g[S.IS_CENSORED].mean() if S.IS_CENSORED in panel.columns else 0.0,
+            "frac_estimada": frac,
+            "racha_vigente": racha,
+            "tasa_quiebre": tasa,
         }
     )
     señales["dias"] = g[target].size()
@@ -272,6 +379,14 @@ def triage(
         out["senal_escasa"] = out["frac_estimada"] > umbrales.frac_estimada_escasa
     if "racha_vigente" in out.columns and "quebrado_ahora" in disponibles:
         out["quebrado_ahora"] = out["racha_vigente"] >= umbrales.racha_vigente_dias
+    if "merma_politica" in out.columns and "riesgo_merma" in disponibles:
+        # Las dos condiciones: mucha merma esperada **y** que la orden sugerida la
+        # reduzca. Una serie de demanda muy erratica puede tener sobrante alto con
+        # cualquier orden razonable, y mandar a "bajar la cantidad" ahi no arregla
+        # nada.
+        out["riesgo_merma"] = (out["merma_politica"] >= umbrales.merma_politica) & (
+            out.get("merma_evitable", 0.0) > 0
+        )
 
     presentes = [g for g in grupos if g.clave in out.columns]
     if presentes:

@@ -31,15 +31,18 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
+import time
 from contextlib import asynccontextmanager
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
 from api import schemas as sc
-from fastapi import FastAPI, HTTPException, Path, Query, status
+from fastapi import FastAPI, HTTPException, Path, Query, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.concurrency import run_in_threadpool
 
 from blindside import __version__
 from blindside import config as cfg
@@ -186,6 +189,7 @@ def _panel_info(panel: pd.DataFrame, path: FsPath) -> sc.PanelInfo:
         reference_n_series=reference.get("n_series_actual"),
         reference_n_stores=reference.get("n_stores"),
         reference_n_products=reference.get("n_products"),
+        store_ids=sorted(int(s) for s in panel[S.STORE_ID].unique()),
     )
 
 
@@ -279,34 +283,127 @@ def _coverage_by_horizon() -> tuple[list[sc.CoveragePoint], str | None]:
     return rows, nota
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """Carga el panel y los artefactos al arrancar.
+#: Cada cuantos segundos, como maximo, la API mira si cambiaron los archivos que
+#: sirve. Con 0 no recarga nunca y vuelve al comportamiento batch.
+RELOAD_INTERVAL_S: float = float(os.environ.get("BLINDSIDE_RELOAD_SECONDS", "2"))
+_RELOAD_LOCK = threading.Lock()
+#: El calculo de alertas y del catalogo tarda un par de segundos; dos requests
+#: simultaneos al arrancar no tienen que pagarlo dos veces. Reentrante porque las
+#: alertas se arman sobre la caché del catalogo.
+_CACHE_LOCK = threading.RLock()
+
+#: Combinaciones de base y ratio que se guardan en la caché del catalogo. Son 2
+#: bases por 4 presets de ratio; un ratio arbitrario por request desplaza al mas
+#: viejo en vez de crecer sin limite.
+_CATALOG_MAX = 8
+
+
+def _watched_files() -> list[FsPath]:
+    """Archivos cuyo cambio obliga a recargar. Se leen de `config` en cada llamada
+    porque los tests reapuntan las rutas con monkeypatch."""
+    return [
+        cfg.DATA_PROCESSED / cfg.DEMAND_FILE,
+        cfg.DATA_SAMPLE / cfg.DEMAND_FILE,
+        *(cfg.model_path(b) for b in cfg.MODEL_FILES),
+        cfg.REPORTS / "backtest_models.parquet",
+        cfg.DATA_PROCESSED / cfg.UPDATE_LOG_FILE,
+        cfg.DATA_SAMPLE / cfg.UPDATE_LOG_FILE,
+    ]
+
+
+def _signature() -> tuple[tuple[str, int | None, int | None], ...]:
+    out = []
+    for p in _watched_files():
+        try:
+            st = p.stat()
+            out.append((str(p), st.st_mtime_ns, st.st_size))
+        except OSError:
+            out.append((str(p), None, None))
+    return tuple(out)
+
+
+def _load_state() -> None:
+    """Carga panel, artefactos y reportes. La usan el arranque y la recarga.
+
+    Todo se arma en un diccionario aparte y se publica de una vez, asi un request
+    que llega durante la recarga ve el estado anterior completo y no una mezcla
+    de panel nuevo con cache vieja.
 
     Si no hay artefacto entrenado la API **igual levanta**, y `/health` lo dice con
     `model_loaded: false`. Es a proposito: un healthcheck que no distingue "no
     arranco" de "arranco sin modelo" hace perder tiempo cuando algo falla.
     """
+    # La firma se toma **antes** de leer: si un archivo cambia durante la carga,
+    # la proxima comparacion lo detecta en vez de darlo por visto.
+    firma = _signature()
+    nuevo: dict[str, Any] = {
+        "panel": None,
+        "panel_info": None,
+        "panel_path": None,
+        "plan_default": None,
+        "rotation_bands": None,
+        "alerts": None,
+        "dataset_summary": None,
+        "labels": None,
+        "catalog": {},
+        "products_map": None,
+    }
     try:
         path = loaders.resolve_path("demand")
-        STATE["panel"] = loaders.load_demand(path=path)
-        STATE["panel_info"] = _panel_info(STATE["panel"], path)
-        # El plan por defecto se deriva del panel, asi que se invalida con el.
-        STATE["plan_default"] = None
+        nuevo["panel"] = loaders.load_demand(path=path)
+        nuevo["panel_info"] = _panel_info(nuevo["panel"], path)
+        nuevo["panel_path"] = path
     except loaders.DataNotAvailableError as exc:
         log.warning("sin datos: %s", exc)
 
-    STATE["models"] = {basis: _load_artifact(basis) for basis in cfg.MODEL_FILES}
-    if STATE["panel"] is not None:
-        for slot in STATE["models"].values():
+    nuevo["models"] = {basis: _load_artifact(basis) for basis in cfg.MODEL_FILES}
+    if nuevo["panel"] is not None:
+        for slot in nuevo["models"].values():
             if slot["model"] is not None:
-                _check_model_matches_panel(slot["model"], STATE["panel"])
+                _check_model_matches_panel(slot["model"], nuevo["panel"])
 
+    # La cobertura elige el modelo por nombre del artefacto servido, que lee de
+    # STATE: se publican los modelos antes de calcularla.
+    STATE["models"] = nuevo["models"]
     try:
-        STATE["coverage_by_horizon"], STATE["coverage_note"] = _coverage_by_horizon()
+        nuevo["coverage_by_horizon"], nuevo["coverage_note"] = _coverage_by_horizon()
     except Exception as exc:  # noqa: BLE001 - un reporte roto no tumba la API
-        STATE["coverage_by_horizon"], STATE["coverage_note"] = [], f"{type(exc).__name__}: {exc}"
+        nuevo["coverage_by_horizon"], nuevo["coverage_note"] = [], f"{type(exc).__name__}: {exc}"
         log.warning("no se pudo calcular la cobertura por horizonte: %s", exc)
+
+    nuevo["loaded_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    nuevo["signature"] = firma
+    nuevo["checked_at"] = time.monotonic()
+    STATE.update(nuevo)
+
+
+def _maybe_reload() -> bool:
+    """Recarga si cambio algun archivo servido. Devuelve si recargo.
+
+    Es la mitad de lectura de la actualizacion continua: `blindside.data.update`
+    escribe con `os.replace`, la API ve cambiar la fecha de modificacion y vuelve
+    a cargar. No hay endpoint para forzarlo a proposito: sin autenticacion, una
+    ruta que cambie lo que se sirve es un agujero.
+    """
+    if RELOAD_INTERVAL_S <= 0 or "signature" not in STATE:
+        return False
+    if time.monotonic() - STATE.get("checked_at", 0.0) < RELOAD_INTERVAL_S:
+        return False
+    with _RELOAD_LOCK:
+        if time.monotonic() - STATE.get("checked_at", 0.0) < RELOAD_INTERVAL_S:
+            return False
+        STATE["checked_at"] = time.monotonic()
+        if _signature() == STATE.get("signature"):
+            return False
+        log.info("cambiaron los archivos servidos: recargando panel y artefactos")
+        _load_state()
+        return True
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Carga el panel y los artefactos al arrancar."""
+    _load_state()
     yield
     STATE.clear()
 
@@ -349,6 +446,17 @@ def cors_origins() -> list[str]:
             "navegador y no hay autenticacion. Solo para desarrollo local."
         )
     return origins
+
+
+@app.middleware("http")
+async def _recarga_si_cambio(request: Request, call_next):
+    """Antes de cada request, como mucho cada `RELOAD_INTERVAL_S`, mira los archivos.
+
+    Corre en el pool de hilos: la recarga lee parquet y deserializa artefactos, y
+    hacerlo en el loop de eventos bloquearia todos los requests en curso.
+    """
+    await run_in_threadpool(_maybe_reload)
+    return await call_next(request)
 
 
 app.add_middleware(
@@ -715,6 +823,47 @@ def health() -> sc.Health:
         coverage_nominal=cfg.FORECAST.coverage,
         coverage_by_horizon=STATE.get("coverage_by_horizon") or [],
         coverage_note=STATE.get("coverage_note"),
+        freshness=_freshness(),
+    )
+
+
+def _update_log_path() -> FsPath:
+    info = STATE.get("panel_info")
+    base = cfg.DATA_SAMPLE if info is not None and info.is_sample else cfg.DATA_PROCESSED
+    return base / cfg.UPDATE_LOG_FILE
+
+
+def _update_entries() -> list[dict[str, Any]]:
+    from blindside.data.update import read_log
+
+    return read_log(_update_log_path())
+
+
+def _freshness() -> sc.Freshness:
+    """Datos contra modelo. Es frescura, no deriva: ver `sc.Freshness`."""
+    info = STATE.get("panel_info")
+    slot = _slot(cfg.DEFAULT_BASIS)
+    data_max = info.date_max if info is not None else None
+    trained = slot.get("trained_until")
+    ingestas = [e for e in _update_entries() if e.get("kind") == "ingest"]
+    ultima = ingestas[-1] if ingestas else None
+
+    behind = (data_max - trained).days if data_max and trained else None
+    if data_max is None:
+        estado = "sin_datos"
+    elif slot.get("model") is None:
+        estado = "sin_modelo"
+    else:
+        estado = "desfasado" if behind is not None and behind > 0 else "al_dia"
+
+    return sc.Freshness(
+        data_date_max=data_max,
+        trained_until=trained,
+        days_behind=behind,
+        status=estado,
+        loaded_at=STATE.get("loaded_at"),
+        last_update_at=(ultima or {}).get("finished_at"),
+        last_update_status=(ultima or {}).get("status"),
     )
 
 
@@ -782,7 +931,23 @@ def list_series(
     if rotation_band is not None:
         index = index[index["rotation_band"] == rotation_band]
     if q:
-        haystack = index[S.SERIES_ID].astype(str).str.lower() + " " + index["label"].str.lower()
+        # La interfaz se usa en ingles y en espanol: «store 60» y «tienda 60» tienen
+        # que encontrar lo mismo. Se agregan los terminos en ingles al texto buscable
+        # sin cambiar el `label` que se devuelve.
+        ingles = (
+            index["label"]
+            .str.replace("tienda", "store", regex=False)
+            .str.replace("producto", "product", regex=False)
+            .str.replace("grupo", "group", regex=False)
+            .str.replace("ciudad", "city", regex=False)
+        )
+        haystack = (
+            index[S.SERIES_ID].astype(str).str.lower()
+            + " "
+            + index["label"].str.lower()
+            + " "
+            + ingles.str.lower()
+        )
         for token in q.lower().split():
             index = index[haystack.loc[index.index].str.contains(token, regex=False)]
 
@@ -988,33 +1153,29 @@ def forecast(req: sc.ForecastRequest) -> sc.ForecastResponse:
     )
 
 
-@app.post("/reorder", response_model=sc.ReorderResponse, tags=["decision"])
-def reorder(req: sc.ReorderRequest) -> sc.ReorderResponse:
-    """Cantidad a reponer: el cuantil critico del newsvendor.
+def _reorder_frame(
+    panel: pd.DataFrame,
+    model,
+    basis: cfg.Basis,
+    series_ids: Sequence[str],
+    *,
+    horizon: int,
+    cu: float,
+    co: float,
+    plan: sc.CommercialPlan | None,
+    policy_window: int,
+) -> dict[str, Any]:
+    """Orden sugerida y politica actual, con sus esperanzas, para varias series.
 
-    La salida del modelo **es** la orden. No es un pronostico que alguien tenga que
-    interpretar y despues ajustar a mano con un stock de seguridad.
-
-    El faltante y el sobrante son **esperanzas bajo la distribucion predictiva del
-    modelo**, no resultados medidos: el horizonte todavia no paso, asi que no hay
-    realizacion contra la que contar. Antes se devolvian en cero y la interfaz
-    estimaba el impacto asumiendo la banda uniforme, o sea que el supuesto de
-    distribucion vivia en la capa de presentacion. Ahora vive aca, con test.
+    Es el calculo de `/reorder` sin la forma de la respuesta. Vive aparte porque
+    las alertas de merma lo necesitan para el catalogo entero, y tener dos copias
+    del newsvendor garantiza que en algun momento no coincidan.
     """
     from blindside.decision.newsvendor import (
         critical_fraction,
         expected_cost_from_quantiles,
         optimal_order_from_quantiles,
     )
-
-    basis = _basis_of(recover_censoring=req.recover_censoring)
-    panel = _require_panel()
-    model = _require_model(basis)
-    refs = _series_refs(panel, req.series_ids)
-
-    economics = cfg.EconomicsConfig(cu=req.cu, co=req.co)
-    q_star = critical_fraction(cu=req.cu, co=req.co)
-    future = _future_index(panel, req.series_ids, req.horizon, req.plan)
 
     if not (hasattr(model, "predict_quantile") and getattr(model, "supports_quantiles", False)):
         raise HTTPException(
@@ -1025,6 +1186,10 @@ def reorder(req: sc.ReorderRequest) -> sc.ReorderResponse:
                 "economia. Cargar un LightGBMQuantileForecaster o un ConformalForecaster."
             ),
         )
+
+    economics = cfg.EconomicsConfig(cu=cu, co=co)
+    q_star = critical_fraction(cu=cu, co=co)
+    future = _future_index(panel, series_ids, horizon, plan)
 
     # Los cuantiles se le preguntan al modelo, no al config. Con el default de
     # config la API pedia (0,05 0,5 0,9 0,95) e interpolaba q*, cuando el
@@ -1041,7 +1206,7 @@ def reorder(req: sc.ReorderRequest) -> sc.ReorderResponse:
 
     # La politica actual: promedio movil de N dias de la base activa. Es con lo
     # que repone la operacion hoy y es el denominador del ahorro.
-    policy = _policy_order(panel, req.series_ids, basis, window=req.policy_window)
+    policy = _policy_order(panel, series_ids, basis, window=policy_window)
     policy_qty = future[S.SERIES_ID].astype(str).map(policy).fillna(0.0)
 
     modelo = expected_cost_from_quantiles(
@@ -1050,6 +1215,265 @@ def reorder(req: sc.ReorderRequest) -> sc.ReorderResponse:
     politica = expected_cost_from_quantiles(
         preds, quantiles=quantiles, order=policy_qty, economics=economics
     )
+    return {
+        "future": future,
+        "qty": qty,
+        "policy_qty": policy_qty,
+        "modelo": modelo,
+        "politica": politica,
+        "q_star": q_star,
+    }
+
+
+def _catalog_lines(basis: cfg.Basis, co: float) -> dict[str, Any]:
+    """Reposicion del catalogo entero para una base y un ratio, memorizada.
+
+    Una fila por (serie, dia del horizonte) con la orden, la politica y las
+    esperanzas de las dos. Cuesta ~2 s sobre 3.066 series y se paga una vez por
+    combinacion hasta la proxima recarga. La usan `/reorder/catalog` y las
+    alertas de merma, asi que las dos superficies leen exactamente el mismo
+    calculo.
+    """
+    clave = (basis, round(float(co), 6))
+    cache: dict = STATE.setdefault("catalog", {})
+    if clave in cache:
+        return cache[clave]
+    with _CACHE_LOCK:
+        if clave in cache:
+            return cache[clave]
+        panel = _require_panel()
+        model = _require_model(basis)
+        ids = sorted(panel[S.SERIES_ID].astype(str).unique())
+        ventana = sc.ReorderRequest.model_fields["policy_window"].default
+        calc = _reorder_frame(
+            panel,
+            model,
+            basis,
+            ids,
+            horizon=cfg.FORECAST.horizon,
+            cu=1.0,
+            co=co,
+            plan=None,
+            policy_window=ventana,
+        )
+        fut, modelo, politica = calc["future"], calc["modelo"], calc["politica"]
+        lineas = pd.DataFrame(
+            {
+                S.SERIES_ID: fut[S.SERIES_ID].astype(str).to_numpy(),
+                S.DATE: pd.to_datetime(fut[S.DATE]).to_numpy(),
+                "h": fut["h"].to_numpy(),
+                "qty": calc["qty"].to_numpy(dtype="float64"),
+                "policy_qty": calc["policy_qty"].to_numpy(dtype="float64"),
+                "expected_demand": modelo["expected_demand"].to_numpy(),
+                "shortfall_model": modelo["expected_shortfall"].to_numpy(),
+                "overage_model": modelo["expected_overage"].to_numpy(),
+                "cost_model": modelo["expected_cost"].to_numpy(),
+                "shortfall_policy": politica["expected_shortfall"].to_numpy(),
+                "overage_policy": politica["expected_overage"].to_numpy(),
+                "cost_policy": politica["expected_cost"].to_numpy(),
+            }
+        )
+        entrada = {
+            "lines": lineas,
+            "q_star": calc["q_star"],
+            "policy_window": ventana,
+            "tail_mass": float(modelo["tail_mass"].iloc[0]) if len(modelo) else 0.0,
+            "model_name": _model_name(basis),
+        }
+        if len(cache) >= _CATALOG_MAX:
+            cache.pop(next(iter(cache)))
+        cache[clave] = entrada
+        return entrada
+
+
+def _pct(nuevo: float, base: float) -> float:
+    return 100.0 * (nuevo / base - 1.0) if base > 0 else 0.0
+
+
+@app.get("/reorder/catalog", response_model=sc.ReorderCatalog, tags=["decision"])
+def reorder_catalog(
+    recover_censoring: bool = Query(default=True),
+    co: float = Query(default=cfg.ECONOMICS.co, gt=0, le=10),
+    store_id: int | None = Query(default=None),
+    rotation_band: str | None = Query(default=None),
+    sort: str = Query(default="impacto", pattern="^(impacto|delta|sugerido|politica|serie)$"),
+    dir: str = Query(default="desc", pattern="^(asc|desc)$"),  # noqa: A002
+    limit: int = Query(default=25, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> sc.ReorderCatalog:
+    """Que pedir de **todo** el catalogo, ordenado y paginado en el servidor.
+
+    Antes la interfaz pedia `/reorder` para las 25 series de una pagina de
+    `/series`, que viene ordenada por id, y ordenaba esas 25. La pagina 1 de "que
+    pedir hoy" eran las series de la tienda 0 en orden alfabetico, y la de mayor
+    ahorro podia estar en la pagina 80.
+
+    Es la orden del **primer dia** del horizonte, la de hoy. Los totales son del
+    catalogo filtrado y todos se leen contra la politica actual de la misma base.
+    """
+    basis = _basis_of(recover_censoring=recover_censoring)
+    panel = _require_panel()
+    cat = _catalog_lines(basis, co)
+    lineas: pd.DataFrame = cat["lines"]
+    primero = lineas[lineas["h"] == lineas["h"].min()].set_index(S.SERIES_ID)
+
+    index = S.series_index(panel).set_index(S.SERIES_ID)
+    index.index = index.index.astype(str)
+    bandas = _rotation_bands()
+    primero = primero.join(index[[S.STORE_ID, S.PRODUCT_ID, S.CITY_ID]])
+    primero["rotation_band"] = primero.index.map(bandas)
+    if store_id is not None:
+        primero = primero[primero[S.STORE_ID] == store_id]
+    if rotation_band is not None:
+        primero = primero[primero["rotation_band"] == rotation_band]
+
+    primero = primero.assign(
+        saving=primero["cost_policy"] - primero["cost_model"],
+        delta=np.where(
+            primero["policy_qty"] > 0,
+            100.0 * (primero["qty"] / primero["policy_qty"].where(primero["policy_qty"] > 0) - 1),
+            np.nan,
+        ),
+    )
+    ahorro_total = float(primero["saving"].clip(lower=0).sum())
+
+    clave_orden = {
+        "impacto": "saving",
+        "delta": "delta",
+        "sugerido": "qty",
+        "politica": "policy_qty",
+        "serie": None,
+    }[sort]
+    asc = dir == "asc"
+    if clave_orden is None:
+        primero = primero.sort_index(ascending=asc)
+    else:
+        # El id de serie desempata para que el orden sea estable entre paginas.
+        primero = primero.rename_axis("sid").sort_values(
+            [clave_orden, "sid"], ascending=[asc, True], na_position="last"
+        )
+
+    total = int(len(primero))
+    pagina = primero.iloc[offset : offset + limit]
+
+    motivos = _motivos_por_serie()
+    labels = _labels()
+    items = [
+        sc.CatalogLine(
+            series=sc.SeriesRef(
+                series_id=str(sid),
+                store_id=int(r[S.STORE_ID]),
+                product_id=int(r[S.PRODUCT_ID]),
+                city_id=_opt_int(r[S.CITY_ID]),
+            ),
+            label=str(labels.get(str(sid), sid)),
+            rotation_band=str(r["rotation_band"]) if pd.notna(r["rotation_band"]) else None,
+            qty=float(r["qty"]),
+            policy_qty=float(r["policy_qty"]),
+            delta_pct=_opt_float(r["delta"]),
+            expected_demand=float(r["expected_demand"]),
+            expected_shortfall=float(r["shortfall_model"]),
+            expected_overage=float(r["overage_model"]),
+            saving=float(r["saving"]),
+            saving_share=float(max(0.0, r["saving"]) / ahorro_total) if ahorro_total > 0 else 0.0,
+            cost_delta_pct=_pct(float(r["cost_model"]), float(r["cost_policy"])),
+            reasons=motivos.get(str(sid), []),
+        )
+        for sid, r in pagina.iterrows()
+    ]
+
+    suma = primero[
+        [
+            "qty",
+            "policy_qty",
+            "cost_model",
+            "cost_policy",
+            "overage_model",
+            "overage_policy",
+            "shortfall_model",
+            "shortfall_policy",
+        ]
+    ].sum()
+    fecha = pd.Timestamp(lineas.loc[lineas["h"] == lineas["h"].min(), S.DATE].iloc[0]).date()
+    return sc.ReorderCatalog(
+        dt=fecha,
+        basis=sc.Basis(basis),
+        model_name=cat["model_name"],
+        critical_fraction=cat["q_star"],
+        cu=1.0,
+        co=co,
+        policy_window=cat["policy_window"],
+        tail_mass=cat["tail_mass"],
+        sort=sort,
+        dir="asc" if asc else "desc",
+        totals=sc.CatalogTotals(
+            n_series=total,
+            qty=float(suma["qty"]),
+            policy_qty=float(suma["policy_qty"]),
+            qty_delta_pct=_pct(float(suma["qty"]), float(suma["policy_qty"])),
+            cost_model=float(suma["cost_model"]),
+            cost_policy=float(suma["cost_policy"]),
+            cost_delta_pct=_pct(float(suma["cost_model"]), float(suma["cost_policy"])),
+            overage_model=float(suma["overage_model"]),
+            overage_policy=float(suma["overage_policy"]),
+            overage_delta_pct=_pct(float(suma["overage_model"]), float(suma["overage_policy"])),
+            shortfall_model=float(suma["shortfall_model"]),
+            shortfall_policy=float(suma["shortfall_policy"]),
+            shortfall_delta_pct=_pct(
+                float(suma["shortfall_model"]), float(suma["shortfall_policy"])
+            ),
+            n_big_change=int((primero["delta"].abs() > 20).sum()),
+        ),
+        total=total,
+        limit=limit,
+        offset=offset,
+        items=items,
+    )
+
+
+def _motivos_por_serie() -> dict[str, list[str]]:
+    """Claves de alerta por serie. Vacio si las alertas no se pueden calcular."""
+    try:
+        estado = _alerts_state()
+    except HTTPException:
+        return {}
+    marcado: pd.DataFrame = estado["marcado"]
+    claves = [g.clave for g in estado["grupos"]]
+    con_motivo = marcado[marcado["n_motivos"] > 0]
+    return {str(sid): [c for c in claves if bool(fila[c])] for sid, fila in con_motivo.iterrows()}
+
+
+@app.post("/reorder", response_model=sc.ReorderResponse, tags=["decision"])
+def reorder(req: sc.ReorderRequest) -> sc.ReorderResponse:
+    """Cantidad a reponer: el cuantil critico del newsvendor.
+
+    La salida del modelo **es** la orden. No es un pronostico que alguien tenga que
+    interpretar y despues ajustar a mano con un stock de seguridad.
+
+    El faltante y el sobrante son **esperanzas bajo la distribucion predictiva del
+    modelo**, no resultados medidos: el horizonte todavia no paso, asi que no hay
+    realizacion contra la que contar. Antes se devolvian en cero y la interfaz
+    estimaba el impacto asumiendo la banda uniforme, o sea que el supuesto de
+    distribucion vivia en la capa de presentacion. Ahora vive aca, con test.
+    """
+    basis = _basis_of(recover_censoring=req.recover_censoring)
+    panel = _require_panel()
+    model = _require_model(basis)
+    refs = _series_refs(panel, req.series_ids)
+
+    calc = _reorder_frame(
+        panel,
+        model,
+        basis,
+        req.series_ids,
+        horizon=req.horizon,
+        cu=req.cu,
+        co=req.co,
+        plan=req.plan,
+        policy_window=req.policy_window,
+    )
+    future, qty, policy_qty = calc["future"], calc["qty"], calc["policy_qty"]
+    modelo, politica, q_star = calc["modelo"], calc["politica"], calc["q_star"]
 
     # Las dos ordenes se evaluan bajo la **misma** distribucion predictiva. Es lo
     # que hace la comparacion justa: cambia la cantidad, no el supuesto.
@@ -1162,7 +1586,11 @@ def explain(req: sc.ExplainRequest) -> sc.ExplainResponse:
         ) from exc
 
     interno = modelo_explicable(model)
-    prediccion = float(model.predict(fila).iloc[0])
+    # La cifra explicada es la que reconstruye la propia atribucion: valor base mas
+    # todas las contribuciones. Con el modelo cuantilico es la salida del booster de
+    # q*, que es la cantidad a pedir. Antes se devolvia `model.predict`, que es la
+    # mediana, y la interfaz cerraba la cuenta inventando un "resto" en el cliente.
+    puntual = float(model.predict(fila).iloc[0])
 
     return sc.ExplainResponse(
         series=refs[req.series_id],
@@ -1171,7 +1599,9 @@ def explain(req: sc.ExplainRequest) -> sc.ExplainResponse:
         model_name=_model_name(basis),
         quantile=getattr(interno, "_explainable_quantile", lambda: None)(),
         base_value=atribucion.valor_base,
-        prediction=prediccion,
+        prediction=float(max(0.0, atribucion.prediccion_reconstruida)),
+        rest=atribucion.resto,
+        point_forecast=puntual,
         plan=_plan_echo(req.plan, panel),
         contributions=[
             sc.ShapContribution(
@@ -1196,8 +1626,19 @@ def products_map() -> sc.ProductMap:
     """
     from blindside.unsupervised import embeddings as emb
 
+    # Se memoriza hasta la proxima recarga: el PCA no cambia entre requests y
+    # cuesta casi un segundo sobre el panel completo.
+    cacheado = STATE.get("products_map")
+    if cacheado is not None:
+        return cacheado
+
     panel = _require_panel()
     puntos, varianza = emb.project_products(panel)
+    STATE["products_map"] = mapa = _product_map(emb, puntos, varianza)
+    return mapa
+
+
+def _product_map(emb, puntos: pd.DataFrame, varianza) -> sc.ProductMap:
     return sc.ProductMap(
         method="pca",
         features=list(emb.FEATURES),
@@ -1306,6 +1747,526 @@ def censoring() -> dict[str, Any]:
             "por diseno: son la verdad de terreno con la que se mide el sesgo."
         ),
     }
+
+
+# --------------------------------------------------------------------------
+# Alertas
+# --------------------------------------------------------------------------
+def _labels() -> pd.Series:
+    """Descripcion buscable por serie, memorizada con el panel."""
+    cacheadas = STATE.get("labels")
+    if cacheadas is not None:
+        return cacheadas
+    index = S.series_index(_require_panel())
+    labels = pd.Series(
+        index.apply(_catalog_label, axis=1).to_numpy(),
+        index=index[S.SERIES_ID].astype(str),
+    )
+    STATE["labels"] = labels
+    return labels
+
+
+def _umbral_texto(clave: str) -> str:
+    from blindside.evaluate.triage import UMBRALES as U
+
+    def pct(x: float) -> str:
+        return f"{round(x * 100)} %"
+
+    mase = f"{U.mase_no_confiable:.1f}".replace(".", ",")
+    textos = {
+        "no_confiable": f"MASE de la serie mayor a {mase}: peor que el naive estacional",
+        "alto_volumen": "decil superior de demanda media de los últimos 28 días",
+        "senal_escasa": f"más del {pct(U.frac_estimada_escasa)} de la demanda de 28 días es "
+        "estimada",
+        "quebrado_ahora": f"{U.racha_vigente_dias} días o más de quiebre seguidos hasta hoy",
+        "riesgo_merma": f"sobrante esperado de la política actual de {pct(U.merma_politica)} o "
+        f"más de la demanda esperada a {cfg.FORECAST.horizon} días, y la cantidad sugerida lo "
+        "reduce",
+    }
+    return textos.get(clave, "")
+
+
+def _umbral_valor(clave: str) -> float | None:
+    """El corte de cada grupo como numero, para que la interfaz lo redacte."""
+    from blindside.evaluate.triage import UMBRALES as U
+
+    return {
+        "no_confiable": U.mase_no_confiable,
+        "alto_volumen": U.cuantil_volumen,
+        "senal_escasa": U.frac_estimada_escasa,
+        "quebrado_ahora": float(U.racha_vigente_dias),
+        "riesgo_merma": U.merma_politica,
+    }.get(clave)
+
+
+def _alerts_state() -> dict[str, Any]:
+    """Triage del catalogo completo, memorizado hasta la proxima recarga.
+
+    Cuesta ~3 s sobre 3.066 series: la merma necesita los cuantiles del modelo
+    para todo el catalogo. Se paga una vez por version de los datos, no por
+    request.
+    """
+    cacheado = STATE.get("alerts")
+    if cacheado is not None:
+        return cacheado
+    with _CACHE_LOCK:
+        cacheado = STATE.get("alerts")
+        if cacheado is not None:
+            return cacheado
+
+        from blindside.evaluate import triage as T
+
+        panel = _require_panel()
+        basis = cfg.DEFAULT_BASIS
+        unavailable: list[sc.AlertUnavailable] = []
+
+        backtest_path = cfg.REPORTS / "backtest_models.parquet"
+        result = pd.read_parquet(backtest_path) if backtest_path.exists() else None
+        if result is None:
+            unavailable.append(
+                sc.AlertUnavailable(
+                    key="no_confiable",
+                    label="Modelo no confiable",
+                    reason="no hay backtest guardado: correr `make models` para medir el "
+                    "error por serie",
+                )
+            )
+        señales = T.series_signals(panel, result)
+
+        slot = _slot(basis)
+        model = slot.get("model")
+        grupos = list(T.GRUPOS)
+        if model is not None and getattr(model, "supports_quantiles", False):
+            # El mismo calculo que `/reorder/catalog` para la economia por defecto:
+            # la merma de la alerta y la de la tabla de reposicion no pueden diferir.
+            lineas = _catalog_lines(basis, cfg.ECONOMICS.co)["lines"]
+            merma = T.merma_signals(lineas)
+            cantidades = lineas.groupby(S.SERIES_ID)[["qty", "policy_qty"]].sum()
+            señales = señales.join(merma).join(cantidades)
+            grupos = list(T.TODOS_LOS_GRUPOS)
+        else:
+            unavailable.append(
+                sc.AlertUnavailable(
+                    key="riesgo_merma",
+                    label="Riesgo de merma",
+                    reason=(
+                        f"la base '{basis}' no tiene un modelo con cuantiles cargado, y el "
+                        "sobrante esperado sale de la distribución predictiva. Entrenar con "
+                        "`make train`"
+                    ),
+                )
+            )
+            grupos = [g for g in T.TODOS_LOS_GRUPOS if g.clave != "riesgo_merma"]
+
+        marcado = T.triage(señales, grupos=grupos)
+        resumen = T.resumen_por_grupo(marcado, grupos=grupos).set_index("clave")
+        estado = {
+            "marcado": marcado,
+            "resumen": resumen,
+            "grupos": [g for g in grupos if g.clave in marcado.columns],
+            "unavailable": unavailable,
+            "basis": basis,
+            "model_name": slot.get("name"),
+        }
+        STATE["alerts"] = estado
+        return estado
+
+
+@app.get("/alerts", response_model=sc.AlertsResponse, tags=["decision"])
+def alerts(
+    group: str | None = Query(
+        default=None, description="clave de un grupo: devuelve solo las series de ese motivo"
+    ),
+    store_id: int | None = Query(default=None, description="filtra por tienda"),
+    rotation_band: str | None = Query(
+        default=None, description="filtra por clase de rotacion: baja, media o alta"
+    ),
+    series_id: str | None = Query(
+        default=None, description="una sola serie: devuelve sus motivos, si tiene"
+    ),
+    limit: int = Query(default=200, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
+) -> sc.AlertsResponse:
+    """Que series mirar primero, agrupadas por **motivo**. No es un ranking.
+
+    Los ejes de criticidad son ortogonales — el top 50 por volumen y el top 50 por
+    error no comparten una sola serie — asi que un score unico promediaria cosas
+    que no se suman y perderia lo accionable, que es **por que** entro cada serie.
+    Ver `blindside.evaluate.triage`.
+
+    El riesgo de merma **no es "por vencer"**: el dataset no trae vida util, lote
+    ni stock. Es el sobrante esperado de lo que pide la politica actual, que en
+    perecedero es lo que termina vencido.
+    """
+    panel = _require_panel()
+    estado = _alerts_state()
+    marcado: pd.DataFrame = estado["marcado"]
+    resumen: pd.DataFrame = estado["resumen"]
+    grupos = estado["grupos"]
+    claves = [g.clave for g in grupos]
+
+    if group is not None and group not in claves:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"grupo '{group}' desconocido o no disponible. Disponibles: {claves}",
+        )
+
+    filas = marcado[marcado["n_motivos"] > 0]
+    if group is not None:
+        filas = filas[filas[group].astype(bool)]
+    index = S.series_index(panel).set_index(S.SERIES_ID)
+    index.index = index.index.astype(str)
+    if series_id is not None:
+        filas = filas[filas.index.astype(str) == series_id]
+    if store_id is not None:
+        tiendas = index.loc[filas.index.astype(str), S.STORE_ID]
+        filas = filas[tiendas.to_numpy() == store_id]
+    if rotation_band is not None:
+        bandas_filtro = filas.index.astype(str).map(_rotation_bands())
+        filas = filas[np.asarray(bandas_filtro == rotation_band, dtype=bool)]
+
+    # Orden estable y explicable: primero las que tienen mas motivos, despues por
+    # volumen. No es un score: dentro de un grupo el orden por volumen es el que
+    # responde "por donde empiezo".
+    filas = filas.sort_values(["n_motivos", "demanda_media"], ascending=[False, False])
+    total = int(len(filas))
+    pagina = filas.iloc[offset : offset + limit]
+
+    labels = _labels()
+    bandas = _rotation_bands()
+
+    def opt(fila: pd.Series, col: str) -> float | None:
+        return _opt_float(fila[col]) if col in fila.index else None
+
+    items = []
+    for sid, fila in pagina.iterrows():
+        sid = str(sid)
+        meta = index.loc[sid]
+        items.append(
+            sc.AlertItem(
+                series=sc.SeriesRef(
+                    series_id=sid,
+                    store_id=int(meta[S.STORE_ID]),
+                    product_id=int(meta[S.PRODUCT_ID]),
+                    city_id=_opt_int(meta.get(S.CITY_ID)),
+                ),
+                label=str(labels.get(sid, sid)),
+                rotation_band=(str(bandas.get(sid)) if pd.notna(bandas.get(sid)) else None),
+                reasons=[c for c in claves if bool(fila[c])],
+                demand_mean=float(fila["demanda_media"]),
+                estimated_share=float(fila["frac_estimada"]),
+                current_run_days=int(fila["racha_vigente"]),
+                stockout_rate=float(fila["tasa_quiebre"]),
+                mase=opt(fila, "mase_serie"),
+                waste_policy=opt(fila, "merma_politica"),
+                waste_model=opt(fila, "merma_modelo"),
+                waste_avoidable=opt(fila, "merma_evitable"),
+                policy_qty=opt(fila, "policy_qty"),
+                suggested_qty=opt(fila, "qty"),
+            )
+        )
+
+    return sc.AlertsResponse(
+        data_date_max=pd.Timestamp(panel[S.DATE].max()).date(),
+        basis=sc.Basis(estado["basis"]),
+        model_name=estado["model_name"],
+        n_series=int(len(marcado)),
+        n_flagged=int((marcado["n_motivos"] > 0).sum()),
+        groups=[
+            sc.AlertGroup(
+                key=g.clave,
+                label=g.etiqueta,
+                meaning=g.que_significa,
+                action=g.que_hacer,
+                urgent=g.urgente,
+                n_series=int(resumen.loc[g.clave, "series"]),
+                share_series=float(resumen.loc[g.clave, "share_series"]),
+                share_volume=float(resumen.loc[g.clave, "share_volumen"]),
+                only_this=int(resumen.loc[g.clave, "solo_este_motivo"]),
+                threshold=_umbral_texto(g.clave),
+                threshold_value=_umbral_valor(g.clave),
+            )
+            for g in grupos
+        ],
+        unavailable=estado["unavailable"],
+        total=total,
+        items=items,
+    )
+
+
+# --------------------------------------------------------------------------
+# Dataset
+# --------------------------------------------------------------------------
+def _hourly_profile(info: sc.PanelInfo | None) -> tuple[list[sc.HourPoint], str | None]:
+    """Perfil horario de quiebres y de venta, desde la capa con secuencias.
+
+    El panel servido ya no trae las secuencias horarias — se descartan despues de
+    la recuperacion porque multiplican la memoria por 24 —, asi que se leen solo
+    esas dos columnas de la capa intermedia que corresponde.
+    """
+    if info is None:
+        return [], "sin panel cargado"
+    path = (cfg.DATA_SAMPLE if info.is_sample else cfg.DATA_INTERIM) / cfg.PANEL_FILE
+    if not path.exists():
+        return [], f"no esta {path.name} con las secuencias horarias: correr `make data`"
+    try:
+        df = pd.read_parquet(path, columns=[S.HOURS_SALE, S.HOURS_STOCK_STATUS])
+    except Exception as exc:  # noqa: BLE001 - un archivo roto no tumba el resumen
+        return [], f"{type(exc).__name__}: {exc}"
+    estado = np.stack([np.asarray(v, dtype="float32") for v in df[S.HOURS_STOCK_STATUS]])
+    venta = np.stack([np.asarray(v, dtype="float64") for v in df[S.HOURS_SALE]])
+    total = float(venta.sum())
+    abiertas = set(cfg.CENSORING.open_hours)
+    return [
+        sc.HourPoint(
+            hour=h,
+            share_stockout=float(estado[:, h].mean()),
+            share_sales=float(venta[:, h].sum() / total) if total > 0 else 0.0,
+            open=h in abiertas,
+        )
+        for h in range(24)
+    ], None
+
+
+def _group_stats(panel: pd.DataFrame, col: str) -> list[sc.GroupStat]:
+    total = float(panel[S.DEMAND_LATENT].sum())
+    g = panel.groupby(col, observed=True)
+    tabla = pd.DataFrame(
+        {
+            "n_series": g[S.SERIES_ID].nunique(),
+            "demand_mean": g[S.DEMAND_LATENT].mean(),
+            "volumen": g[S.DEMAND_LATENT].sum(),
+            "observado": g[S.SALE_AMOUNT].sum(),
+            "share_censored": g[S.IS_CENSORED].mean(),
+        }
+    )
+    return [
+        sc.GroupStat(
+            id=int(k),
+            n_series=int(r["n_series"]),
+            demand_mean=float(r["demand_mean"]),
+            share_volume=float(r["volumen"] / total) if total > 0 else 0.0,
+            share_censored=float(r["share_censored"]),
+            uplift_pct=(
+                100.0 * (float(r["volumen"]) / float(r["observado"]) - 1.0)
+                if r["observado"] > 0
+                else 0.0
+            ),
+        )
+        for k, r in tabla.iterrows()
+    ]
+
+
+def _dataset_summary() -> sc.DatasetSummary:
+    cacheado = STATE.get("dataset_summary")
+    if cacheado is not None:
+        return cacheado
+    with _CACHE_LOCK:
+        cacheado = STATE.get("dataset_summary")
+        if cacheado is not None:
+            return cacheado
+
+        panel = _require_panel()
+        info = STATE.get("panel_info")
+        resumen = S.describe_censoring(panel)
+
+        diario = panel.groupby(S.DATE, observed=True).agg(
+            observed=(S.SALE_AMOUNT, "sum"),
+            recovered=(S.DEMAND_LATENT, "sum"),
+            share_censored=(S.IS_CENSORED, "mean"),
+            n_series=(S.SERIES_ID, "size"),
+        )
+        dow = panel[S.DATE].dt.dayofweek
+        semanal = panel.groupby(dow).agg(
+            observed_mean=(S.SALE_AMOUNT, "mean"),
+            recovered_mean=(S.DEMAND_LATENT, "mean"),
+            share_censored=(S.IS_CENSORED, "mean"),
+        )
+
+        bandas = _rotation_bands()
+        por_serie = panel.groupby(S.SERIES_ID, observed=True).agg(
+            volumen=(S.DEMAND_LATENT, "sum"), tasa=(S.IS_CENSORED, "mean")
+        )
+        por_serie.index = por_serie.index.astype(str)
+        por_serie["banda"] = por_serie.index.map(bandas)
+        total_vol = float(por_serie["volumen"].sum())
+        rotacion = []
+        for banda in ("alta", "media", "baja"):
+            sub = por_serie[por_serie["banda"] == banda]
+            if sub.empty:
+                continue
+            rotacion.append(
+                sc.BandStat(
+                    band=banda,
+                    n_series=int(len(sub)),
+                    share_series=float(len(sub) / len(por_serie)),
+                    share_volume=float(sub["volumen"].sum() / total_vol) if total_vol else 0.0,
+                    share_censored=float(sub["tasa"].mean()),
+                )
+            )
+
+        bordes = np.linspace(0.0, 1.0, 11)
+        conteos, _ = np.histogram(por_serie["tasa"].to_numpy(), bins=bordes)
+        horas, nota_horas = _hourly_profile(info)
+
+        observado = float(panel[S.SALE_AMOUNT].sum())
+        cacheado = sc.DatasetSummary(
+            panel=info,
+            totals=sc.DatasetTotals(
+                n_rows=int(resumen["n_rows"]),
+                n_series=int(resumen["n_series"]),
+                n_days=int(resumen["n_days"]),
+                share_censored_days=float(resumen["share_censored_days"]),
+                share_zero_sale_days=float(resumen["share_zero_sale_days"]),
+                mean_oos_hours_when_censored=_opt_float(resumen["mean_oos_hours_when_censored"]),
+                uplift_pct=(
+                    100.0 * (float(panel[S.DEMAND_LATENT].sum()) / observado - 1.0)
+                    if observado > 0
+                    else 0.0
+                ),
+            ),
+            daily=[
+                sc.DailyPoint(
+                    dt=pd.Timestamp(d).date(),
+                    observed=float(r["observed"]),
+                    recovered=float(r["recovered"]),
+                    share_censored=float(r["share_censored"]),
+                    n_series=int(r["n_series"]),
+                )
+                for d, r in diario.iterrows()
+            ],
+            weekday=[
+                sc.WeekdayPoint(
+                    dow=int(d),
+                    observed_mean=float(r["observed_mean"]),
+                    recovered_mean=float(r["recovered_mean"]),
+                    share_censored=float(r["share_censored"]),
+                )
+                for d, r in semanal.iterrows()
+            ],
+            hourly=horas,
+            hourly_note=nota_horas,
+            stores=_group_stats(panel, S.STORE_ID),
+            categories=_group_stats(panel, S.FIRST_CATEGORY_ID),
+            rotation=rotacion,
+            stockout_hist=[
+                sc.HistBin(lo=float(bordes[i]), hi=float(bordes[i + 1]), n_series=int(c))
+                for i, c in enumerate(conteos)
+            ],
+        )
+        STATE["dataset_summary"] = cacheado
+        return cacheado
+
+
+@app.get("/dataset/summary", response_model=sc.DatasetSummary, tags=["datos"])
+def dataset_summary() -> sc.DatasetSummary:
+    """El panel servido en las formas que lo explican: tiempo, semana, hora, tienda,
+    categoria y rotacion. Todo con la venta observada al lado de la recuperada."""
+    return _dataset_summary()
+
+
+# --------------------------------------------------------------------------
+# Pipeline
+# --------------------------------------------------------------------------
+def _layer_file(path: FsPath) -> sc.LayerFile:
+    if not path.exists():
+        return sc.LayerFile(file=path.name, exists=False)
+    st = path.stat()
+    return sc.LayerFile(
+        file=path.name,
+        exists=True,
+        modified=datetime.fromtimestamp(st.st_mtime, timezone.utc).isoformat(timespec="seconds"),
+        bytes=int(st.st_size),
+    )
+
+
+#: Los pasos del pipeline con su comando. Van en la respuesta porque la interfaz
+#: no puede dispararlos — la API no tiene autenticacion — y lo util entonces es
+#: decir exactamente que correr.
+PIPELINE_STEPS: tuple[sc.PipelineStep, ...] = (
+    sc.PipelineStep(
+        key="carga",
+        name="Carga inicial",
+        command="make data && make recover",
+        what="Descarga FreshRetailNet-50K, submuestrea por tienda y recupera la censura.",
+    ),
+    sc.PipelineStep(
+        key="lote",
+        name="Armar un lote",
+        command="make update-batch",
+        what="Exporta un lote en el esquema crudo desde el split eval, para probar la ingesta.",
+    ),
+    sc.PipelineStep(
+        key="ingesta",
+        name="Ingerir un lote",
+        command="make update INPUT=data/incoming/lote.parquet",
+        what=(
+            "Valida, hace upsert por (serie, día), rechaza conflictos, recupera la censura y "
+            "escribe las capas de forma atómica. La API recarga sola."
+        ),
+    ),
+    sc.PipelineStep(
+        key="reentreno",
+        name="Ingerir y reentrenar",
+        command="make update INPUT=data/incoming/lote.parquet TRAIN=1",
+        what=(
+            "Además entrena candidatos, les corre una prueba de humo y recién ahí los "
+            "promueve. El anterior queda como .prev."
+        ),
+    ),
+    sc.PipelineStep(
+        key="rollback",
+        name="Volver atrás",
+        command="make rollback",
+        what="Intercambia el artefacto vigente con el anterior. Se puede deshacer.",
+    ),
+)
+
+
+@app.get("/pipeline", response_model=sc.PipelineStatus, tags=["infra"])
+def pipeline() -> sc.PipelineStatus:
+    """Estado del pipeline de datos, **solo lectura**.
+
+    Nada se dispara por HTTP. La API no tiene autenticacion, y un endpoint que
+    escriba datos o cambie el modelo servido sin autenticacion es un agujero. La
+    ingesta corre con `blindside.data.update` y la API la ve sola.
+    """
+    info = STATE.get("panel_info")
+    is_sample = info is not None and info.is_sample
+    panel_file = (cfg.DATA_SAMPLE if is_sample else cfg.DATA_INTERIM) / cfg.PANEL_FILE
+    demand_file = (cfg.DATA_SAMPLE if is_sample else cfg.DATA_PROCESSED) / cfg.DEMAND_FILE
+
+    artefactos = []
+    for basis in cfg.MODEL_FILES:
+        slot = _slot(basis)
+        artefactos.append(
+            sc.ArtifactVersions(
+                basis=sc.Basis(basis),
+                current=_layer_file(cfg.model_path(basis)),
+                previous=_layer_file(cfg.previous_path(basis)),
+                candidate=_layer_file(cfg.candidate_path(basis)),
+                trained_until=slot.get("trained_until"),
+                model_name=slot.get("name"),
+            )
+        )
+
+    registros = []
+    for entrada in reversed(_update_entries()[-20:]):
+        try:
+            registros.append(sc.UpdateRecord.model_validate(entrada))
+        except Exception as exc:  # noqa: BLE001 - una entrada rara no tumba el estado
+            log.warning("entrada del registro ilegible: %s", exc)
+
+    return sc.PipelineStatus(
+        layer=info.source if info is not None else None,
+        panel_file=_layer_file(panel_file),
+        demand_file=_layer_file(demand_file),
+        freshness=_freshness(),
+        artifacts=artefactos,
+        updates=registros,
+        steps=list(PIPELINE_STEPS),
+        auto_reload_seconds=RELOAD_INTERVAL_S,
+    )
 
 
 @app.get("/", include_in_schema=False)

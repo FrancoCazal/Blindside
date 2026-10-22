@@ -4,8 +4,9 @@
  * recorta el pico, un tramo de quiebre que desaparece del gráfico.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { textoUmbral, textosMotivo } from "./alertas";
 import { areaHoras, escalaX, escalaY, maximoEje, rangosRecuperados, tramosDibujables } from "./chart";
 import {
   RATIOS,
@@ -17,10 +18,27 @@ import {
   esperanzaFaltante,
   esperanzaSobrante,
   etiquetaFeature,
-  impactoDeLinea,
+  lecturaRatio,
+  valorFeature,
 } from "./domain";
-import { conteoDeTotal, magnitud, porcentaje, serieCorta } from "./format";
+import {
+  conteoDeTotal,
+  descripcionCatalogo,
+  estadoIngesta,
+  etiquetaFecha,
+  magnitud,
+  porcentaje,
+  porcentajeSimple,
+  serieCorta,
+} from "./format";
+import { IDIOMA_POR_DEFECTO, fijarIdioma, idiomaActual } from "./i18n";
+import { agruparModelos, conclusionBanda, grupoServido, nombreModelo, textoMejora } from "./modelos";
 import type { HistoryPoint, StockoutRun } from "./api/client";
+
+// Los tests de abajo fijan los textos en español, que es como se escribieron. El
+// inglés, que es el idioma por defecto, tiene su propio bloque al final.
+beforeAll(() => fijarIdioma("es"));
+afterAll(() => fijarIdioma(IDIOMA_POR_DEFECTO));
 
 const punto = (dt: string, observed: number, recovered = observed, horas = 0): HistoryPoint => ({
   dt,
@@ -80,36 +98,92 @@ describe("cuantil crítico", () => {
   });
 });
 
-describe("ahorro esperado de una línea de reorder", () => {
-  const linea = (faltante: number, sobrante: number, deltaPct: number) => ({
-    expected_shortfall: faltante,
-    expected_overage: sobrante,
-    cost_delta_pct: deltaPct,
+describe("modelos: nombres, agrupación y mejora", () => {
+  const fila = (model_name: string, metric: string, mean: number) => ({
+    model_name,
+    metric,
+    mean,
+    std: 0.04,
+    worst_origin: mean + 0.05,
+    best_origin: mean - 0.05,
+    n_origins: 8,
+  });
+  const rows = [
+    ...["cqr_lgbm_quantile", "conformal_lgbm_quantile_adaptive", "lgbm_global"].flatMap((m) => [
+      fila(m, "mase", 0.8217),
+      fila(m, "wape", 0.351),
+      fila(m, "mae", 0.47),
+    ]),
+    fila("moving_average", "mase", 0.905),
+    fila("moving_average", "wape", 0.396),
+    fila("moving_average", "mae", 0.52),
+    fila("seasonal_naive", "mase", 1.1),
+    fila("seasonal_naive", "wape", 0.471),
+    fila("seasonal_naive", "mae", 0.6),
+    fila("cqr_lgbm_quantile", "coverage", 0.88),
+  ];
+
+  it("agrupa los modelos con el mismo pronóstico puntual en una fila", () => {
+    const grupos = agruparModelos(rows);
+    expect(grupos).toHaveLength(3);
+    const lgbm = grupos[0];
+    expect(lgbm.nombre).toBe("LightGBM global · CQR");
+    expect(lgbm.miembros).toHaveLength(3);
+    // El servido representa al grupo.
+    expect(lgbm.clave).toBe("cqr_lgbm_quantile");
+    expect(grupoServido(grupos)?.clave).toBe("cqr_lgbm_quantile");
   });
 
-  it("reconstruye el ahorro absoluto desde el delta porcentual", () => {
-    // costo de la orden = 0,2 + 0,6 * 0,5 = 0,5. Si eso es 8 % menos que la
-    // política, la política cuesta 0,5 / 0,92 y el ahorro es la diferencia.
-    const costoOrden = 0.2 + 0.6 * 0.5;
-    const esperado = costoOrden / 0.92 - costoOrden;
-    expect(impactoDeLinea(linea(0.2, 0.5, -8), 0.6)).toBeCloseTo(esperado, 10);
+  it("no agrupa modelos que difieren aunque sea en una métrica", () => {
+    const distinto = rows.map((r) =>
+      r.model_name === "lgbm_global" && r.metric === "mae" ? { ...r, mean: 0.471 } : r,
+    );
+    expect(agruparModelos(distinto)).toHaveLength(4);
   });
 
-  it("da ahorro negativo cuando la orden cuesta más que la política", () => {
-    expect(impactoDeLinea(linea(0.2, 0.5, +10), 0.6)).toBeLessThan(0);
+  it("mide la mejora contra el naive estacional con una sola convención de signo", () => {
+    const lgbm = agruparModelos(rows)[0];
+    expect(lgbm.mejora).toBeCloseTo(25.3, 1);
+    expect(lgbm.cumpleObjetivo).toBe(true);
+    const fmt = (v: number) => `${magnitud(v, 1)} %`;
+    expect(textoMejora(25.3, fmt)).toBe("25,3 % menos error");
+    expect(textoMejora(-5.5, fmt)).toBe("5,5 % más error");
+    expect(agruparModelos(rows).find((g) => g.esReferencia)?.mejora).toBeNull();
   });
 
-  it("es cero sin línea, que es el caso de la API caída", () => {
-    expect(impactoDeLinea(undefined, 0.6)).toBe(0);
+  it("traduce las claves de modelo y conserva las desconocidas", () => {
+    expect(nombreModelo("moving_average")).toBe("Media móvil 21 días");
+    expect(nombreModelo("seasonal_naive")).toBe("Naive estacional");
+    expect(nombreModelo("modelo_nuevo")).toBe("modelo_nuevo");
   });
 
-  it("ordena por magnitud y no por porcentaje", () => {
-    // Dos series con el mismo ahorro relativo y bases muy distintas: la que
-    // mueve más plata tiene que quedar primera. Es el motivo de reconstruir el
-    // absoluto en vez de ordenar por cost_delta_pct.
-    const grande = impactoDeLinea(linea(2.0, 5.0, -10), 0.6);
-    const chica = impactoDeLinea(linea(0.02, 0.05, -10), 0.6);
-    expect(grande).toBeGreaterThan(chica);
+  it("deriva la conclusión por banda de los números, no de un texto fijo", () => {
+    // El texto fijo anterior decía lo contrario de la tabla: 0,822 contra 1,121.
+    expect(conclusionBanda(0.822, 1.121, "baja")).toMatch(/le gana al naive/);
+    expect(conclusionBanda(1.0, 1.01, "media")).toMatch(/empata/);
+    expect(conclusionBanda(1.3, 1.0, "alta")).toMatch(/naive estacional le gana/);
+  });
+});
+
+describe("valores de feature y estados de ingesta", () => {
+  it("muestra ids y banderas sin decimales y magnitudes con dos", () => {
+    expect(valorFeature("product_id", 600)).toBe("600");
+    expect(valorFeature("holiday_flag", 1)).toBe("1");
+    expect(valorFeature("latent_roll_mean_7", 6.04)).toBe("6,04");
+    expect(valorFeature("discount", null)).toBe("sin dato");
+  });
+
+  it("traduce las features que quedaban en inglés", () => {
+    expect(etiquetaFeature("days_since_start")).toBe("Antigüedad de la serie");
+    expect(etiquetaFeature("dow")).toBe("Día de la semana");
+    expect(etiquetaFeature("latent_lag_0")).toBe("Demanda del día del origen");
+    expect(etiquetaFeature("avg_temperature_lag_7")).toBe("Temperatura · hace 7 días");
+  });
+
+  it("no muestra claves crudas de estado", () => {
+    expect(estadoIngesta("sin_cambios")).toBe("sin cambios");
+    expect(estadoIngesta("ok")).toBe("aplicado");
+    expect(estadoIngesta("otro_estado")).toBe("otro estado");
   });
 });
 
@@ -258,4 +332,97 @@ describe("franja de horas de quiebre", () => {
     // Y el día limpio queda sobre la base.
     expect(trazo).toContain("L986.00 46.00");
   });
+});
+
+describe("idioma", () => {
+  // Cada test fija su idioma y lo devuelve: el resto del archivo corre en español.
+  const enIngles = (fn: () => void) => () => {
+    fijarIdioma("en");
+    try {
+      fn();
+    } finally {
+      fijarIdioma("es");
+    }
+  };
+
+  it("el idioma por defecto es inglés", () => {
+    expect(IDIOMA_POR_DEFECTO).toBe("en");
+  });
+
+  it(
+    "en inglés usa punto decimal, coma de miles y el % pegado a la cifra",
+    enIngles(() => {
+      expect(idiomaActual()).toBe("en");
+      expect(magnitud(1.35)).toBe("1.35");
+      expect(conteoDeTotal(60, 3066)).toBe("60 of 3,066");
+      expect(porcentaje(-24.5)).toBe("\u221224.5%");
+      expect(porcentajeSimple(42)).toBe("42%");
+    }),
+  );
+
+  it(
+    "en inglés la tienda se abrevia S y la fecha va mes y día",
+    enIngles(() => {
+      expect(serieCorta(4, 871)).toBe("S04 · P0871");
+      expect(etiquetaFecha("2024-07-03")).toBe("Jul 3");
+    }),
+  );
+
+  it("en español la fecha va día y mes", () => {
+    expect(etiquetaFecha("2024-07-03")).toBe("3 jul");
+  });
+
+  it(
+    "traduce modelos, features, estados y conclusiones",
+    enIngles(() => {
+      expect(nombreModelo("moving_average")).toBe("21-day moving average");
+      expect(etiquetaFeature("latent_roll_mean_7")).toBe("Mean demand · 7 days");
+      expect(etiquetaFeature("latent_lag_0")).toBe("Demand on the origin day");
+      expect(estadoIngesta("sin_cambios")).toBe("no changes");
+      expect(valorFeature("discount", null)).toBe("no data");
+      expect(textoMejora(25.3, (v) => porcentajeSimple(v, 1))).toBe("25.3% less error");
+      // La banda llega como valor de la API y se nombra en el idioma activo.
+      expect(conclusionBanda(0.822, 1.121, "baja")).toBe(
+        "In low turnover the model beats the seasonal naive.",
+      );
+      expect(clasificarSenal({ estimated_share_last_28: 0.1, current_run_days: 4 }).rotulo).toBe(
+        "out of stock 4 d",
+      );
+      expect(lecturaRatio(0.6)).toMatch(/^Perishable/);
+      expect(lecturaRatio(0.42)).toBeNull();
+    }),
+  );
+
+  it(
+    "redacta los textos de un motivo por clave y cae en los de la API si no la conoce",
+    enIngles(() => {
+      const grupo = {
+        key: "no_confiable",
+        label: "Modelo no confiable",
+        meaning: "texto de la API",
+        action: "texto de la API",
+        threshold: "umbral de la API",
+        threshold_value: 1,
+      };
+      expect(textosMotivo(grupo).rotulo).toBe("Unreliable model");
+      expect(textoUmbral(grupo)).toBe("series MASE above 1.0: worse than the seasonal naive");
+      expect(textoUmbral({ ...grupo, key: "riesgo_merma", threshold_value: 0.5 })).toMatch(
+        /of 50% or more of expected demand over 7 days/,
+      );
+      const nuevo = { ...grupo, key: "motivo_nuevo" };
+      expect(textosMotivo(nuevo).rotulo).toBe("Modelo no confiable");
+      expect(textoUmbral(nuevo)).toBe("umbral de la API");
+    }),
+  );
+
+  it(
+    "vuelve a redactar la descripción de catálogo que la API arma en español",
+    enIngles(() => {
+      expect(descripcionCatalogo("tienda 12 · producto 403 · grupo 1 · cat 2/5/9 · ciudad 0")).toBe(
+        "store 12 · product 403 · group 1 · cat 2/5/9 · city 0",
+      );
+      // Un formato que no se reconoce se muestra tal cual en vez de inventar.
+      expect(descripcionCatalogo("otra cosa")).toBe("otra cosa");
+    }),
+  );
 });

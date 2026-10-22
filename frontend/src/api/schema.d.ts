@@ -139,6 +139,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/reorder/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reorder Catalog
+         * @description Que pedir de **todo** el catalogo, ordenado y paginado en el servidor.
+         *
+         *     Antes la interfaz pedia `/reorder` para las 25 series de una pagina de
+         *     `/series`, que viene ordenada por id, y ordenaba esas 25. La pagina 1 de "que
+         *     pedir hoy" eran las series de la tienda 0 en orden alfabetico, y la de mayor
+         *     ahorro podia estar en la pagina 80.
+         *
+         *     Es la orden del **primer dia** del horizonte, la de hoy. Los totales son del
+         *     catalogo filtrado y todos se leen contra la politica actual de la misma base.
+         */
+        get: operations["reorder_catalog_reorder_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/reorder": {
         parameters: {
             query?: never;
@@ -290,10 +318,197 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Alerts
+         * @description Que series mirar primero, agrupadas por **motivo**. No es un ranking.
+         *
+         *     Los ejes de criticidad son ortogonales — el top 50 por volumen y el top 50 por
+         *     error no comparten una sola serie — asi que un score unico promediaria cosas
+         *     que no se suman y perderia lo accionable, que es **por que** entro cada serie.
+         *     Ver `blindside.evaluate.triage`.
+         *
+         *     El riesgo de merma **no es "por vencer"**: el dataset no trae vida util, lote
+         *     ni stock. Es el sobrante esperado de lo que pide la politica actual, que en
+         *     perecedero es lo que termina vencido.
+         */
+        get: operations["alerts_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/dataset/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dataset Summary
+         * @description El panel servido en las formas que lo explican: tiempo, semana, hora, tienda,
+         *     categoria y rotacion. Todo con la venta observada al lado de la recuperada.
+         */
+        get: operations["dataset_summary_dataset_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/pipeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Pipeline
+         * @description Estado del pipeline de datos, **solo lectura**.
+         *
+         *     Nada se dispara por HTTP. La API no tiene autenticacion, y un endpoint que
+         *     escriba datos o cambie el modelo servido sin autenticacion es un agujero. La
+         *     ingesta corre con `blindside.data.update` y la API la ve sola.
+         */
+        get: operations["pipeline_pipeline_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AlertGroup
+         * @description Un motivo por el que una serie pide atencion, con su remedio.
+         *
+         *     Los textos son los de `blindside.evaluate.triage`, que tambien usa el
+         *     dashboard de Streamlit: una sola redaccion para las dos superficies.
+         */
+        AlertGroup: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Meaning */
+            meaning: string;
+            /** Action */
+            action: string;
+            /** Urgent */
+            urgent: boolean;
+            /** N Series */
+            n_series: number;
+            /** Share Series */
+            share_series: number;
+            /** Share Volume */
+            share_volume: number;
+            /** Only This */
+            only_this: number;
+            /** Threshold */
+            threshold: string;
+            /** Threshold Value */
+            threshold_value?: number | null;
+        };
+        /** AlertItem */
+        AlertItem: {
+            series: components["schemas"]["SeriesRef"];
+            /** Label */
+            label: string;
+            /** Rotation Band */
+            rotation_band?: string | null;
+            /** Reasons */
+            reasons: string[];
+            /** Demand Mean */
+            demand_mean: number;
+            /** Estimated Share */
+            estimated_share: number;
+            /** Current Run Days */
+            current_run_days: number;
+            /** Stockout Rate */
+            stockout_rate: number;
+            /** Mase */
+            mase?: number | null;
+            /** Waste Policy */
+            waste_policy?: number | null;
+            /** Waste Model */
+            waste_model?: number | null;
+            /** Waste Avoidable */
+            waste_avoidable?: number | null;
+            /** Policy Qty */
+            policy_qty?: number | null;
+            /** Suggested Qty */
+            suggested_qty?: number | null;
+        };
+        /**
+         * AlertUnavailable
+         * @description Grupo que no se pudo calcular, con el motivo y el comando que lo arregla.
+         */
+        AlertUnavailable: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Reason */
+            reason: string;
+        };
+        /**
+         * AlertsResponse
+         * @description Que series mirar primero y por que. **No es un ranking**: ver triage.py.
+         */
+        AlertsResponse: {
+            /**
+             * Data Date Max
+             * Format: date
+             */
+            data_date_max: string;
+            basis: components["schemas"]["Basis"];
+            /** Model Name */
+            model_name?: string | null;
+            /** N Series */
+            n_series: number;
+            /** N Flagged */
+            n_flagged: number;
+            /** Groups */
+            groups: components["schemas"]["AlertGroup"][];
+            /**
+             * Unavailable
+             * @default []
+             */
+            unavailable: components["schemas"]["AlertUnavailable"][];
+            /** Total */
+            total: number;
+            /** Items */
+            items: components["schemas"]["AlertItem"][];
+        };
+        /** ArtifactVersions */
+        ArtifactVersions: {
+            basis: components["schemas"]["Basis"];
+            current: components["schemas"]["LayerFile"];
+            previous: components["schemas"]["LayerFile"];
+            candidate: components["schemas"]["LayerFile"];
+            /** Trained Until */
+            trained_until?: string | null;
+            /** Model Name */
+            model_name?: string | null;
+        };
         /**
          * BacktestBreakdown
          * @description Desagregado del backtest: por origen, por horizonte y por banda.
@@ -341,6 +556,19 @@ export interface components {
             /** N */
             n: number;
         };
+        /** BandStat */
+        BandStat: {
+            /** Band */
+            band: string;
+            /** N Series */
+            n_series: number;
+            /** Share Series */
+            share_series: number;
+            /** Share Volume */
+            share_volume: number;
+            /** Share Censored */
+            share_censored: number;
+        };
         /**
          * Basis
          * @description Base de calculo. Es el vocabulario del toggle de la interfaz (`?basis=`).
@@ -351,6 +579,74 @@ export interface components {
          * @enum {string}
          */
         Basis: "observed" | "recovered";
+        /**
+         * CatalogLine
+         * @description La orden de una serie para el primer dia del horizonte.
+         */
+        CatalogLine: {
+            series: components["schemas"]["SeriesRef"];
+            /** Label */
+            label: string;
+            /** Rotation Band */
+            rotation_band?: string | null;
+            /** Qty */
+            qty: number;
+            /** Policy Qty */
+            policy_qty: number;
+            /** Delta Pct */
+            delta_pct?: number | null;
+            /** Expected Demand */
+            expected_demand: number;
+            /** Expected Shortfall */
+            expected_shortfall: number;
+            /** Expected Overage */
+            expected_overage: number;
+            /** Saving */
+            saving: number;
+            /** Saving Share */
+            saving_share: number;
+            /** Cost Delta Pct */
+            cost_delta_pct: number;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+        };
+        /**
+         * CatalogTotals
+         * @description Totales del catalogo filtrado. Todo se lee **contra la politica actual**.
+         */
+        CatalogTotals: {
+            /** N Series */
+            n_series: number;
+            /** Qty */
+            qty: number;
+            /** Policy Qty */
+            policy_qty: number;
+            /** Qty Delta Pct */
+            qty_delta_pct: number;
+            /** Cost Model */
+            cost_model: number;
+            /** Cost Policy */
+            cost_policy: number;
+            /** Cost Delta Pct */
+            cost_delta_pct: number;
+            /** Overage Model */
+            overage_model: number;
+            /** Overage Policy */
+            overage_policy: number;
+            /** Overage Delta Pct */
+            overage_delta_pct: number;
+            /** Shortfall Model */
+            shortfall_model: number;
+            /** Shortfall Policy */
+            shortfall_policy: number;
+            /** Shortfall Delta Pct */
+            shortfall_delta_pct: number;
+            /** N Big Change */
+            n_big_change: number;
+        };
         /**
          * CommercialPlan
          * @description Covariables que se conocen de antemano, para los dias del horizonte.
@@ -408,6 +704,71 @@ export interface components {
             /** N */
             n: number;
         };
+        /** DailyPoint */
+        DailyPoint: {
+            /**
+             * Dt
+             * Format: date
+             */
+            dt: string;
+            /** Observed */
+            observed: number;
+            /** Recovered */
+            recovered: number;
+            /** Share Censored */
+            share_censored: number;
+            /** N Series */
+            n_series: number;
+        };
+        /**
+         * DatasetSummary
+         * @description Lo que hay en el panel servido, en las formas que lo explican.
+         */
+        DatasetSummary: {
+            panel?: components["schemas"]["PanelInfo"] | null;
+            totals: components["schemas"]["DatasetTotals"];
+            /** Daily */
+            daily: components["schemas"]["DailyPoint"][];
+            /** Weekday */
+            weekday: components["schemas"]["WeekdayPoint"][];
+            /**
+             * Hourly
+             * @default []
+             */
+            hourly: components["schemas"]["HourPoint"][];
+            /** Hourly Note */
+            hourly_note?: string | null;
+            /** Stores */
+            stores: components["schemas"]["GroupStat"][];
+            /** Categories */
+            categories: components["schemas"]["GroupStat"][];
+            /** Rotation */
+            rotation: components["schemas"]["BandStat"][];
+            /** Stockout Hist */
+            stockout_hist: components["schemas"]["HistBin"][];
+            /**
+             * Source
+             * @default FreshRetailNet-50K (Dingdong-Inc, CC BY 4.0)
+             */
+            source: string;
+        };
+        /** DatasetTotals */
+        DatasetTotals: {
+            /** N Rows */
+            n_rows: number;
+            /** N Series */
+            n_series: number;
+            /** N Days */
+            n_days: number;
+            /** Share Censored Days */
+            share_censored_days: number;
+            /** Share Zero Sale Days */
+            share_zero_sale_days: number;
+            /** Mean Oos Hours When Censored */
+            mean_oos_hours_when_censored?: number | null;
+            /** Uplift Pct */
+            uplift_pct: number;
+        };
         /** ExplainRequest */
         ExplainRequest: {
             /** Series Id */
@@ -446,6 +807,13 @@ export interface components {
             base_value: number;
             /** Prediction */
             prediction: number;
+            /**
+             * Rest
+             * @default 0
+             */
+            rest: number;
+            /** Point Forecast */
+            point_forecast?: number | null;
             plan: components["schemas"]["PlanEcho"];
             /** Contributions */
             contributions: components["schemas"]["ShapContribution"][];
@@ -500,6 +868,52 @@ export interface components {
             /** Forecasts */
             forecasts: components["schemas"]["SeriesForecast"][];
         };
+        /**
+         * Freshness
+         * @description Que tan al dia estan los datos y el modelo, uno contra el otro.
+         *
+         *     Es **frescura**, no deriva: que el artefacto este entrenado hasta una fecha
+         *     vieja no dice que la distribucion haya cambiado, dice que el modelo no vio los
+         *     ultimos dias. Llamar "drift" a una fecha vieja seria prometer una medicion que
+         *     la API no hace.
+         */
+        Freshness: {
+            /** Data Date Max */
+            data_date_max?: string | null;
+            /** Trained Until */
+            trained_until?: string | null;
+            /** Days Behind */
+            days_behind?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "al_dia" | "desfasado" | "sin_modelo" | "sin_datos";
+            /** Loaded At */
+            loaded_at?: string | null;
+            /** Last Update At */
+            last_update_at?: string | null;
+            /** Last Update Status */
+            last_update_status?: string | null;
+        };
+        /**
+         * GroupStat
+         * @description Una tienda o una categoria, con su censura y su volumen.
+         */
+        GroupStat: {
+            /** Id */
+            id: number;
+            /** N Series */
+            n_series: number;
+            /** Demand Mean */
+            demand_mean: number;
+            /** Share Volume */
+            share_volume: number;
+            /** Share Censored */
+            share_censored: number;
+            /** Uplift Pct */
+            uplift_pct: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -540,6 +954,16 @@ export interface components {
             coverage_by_horizon: components["schemas"]["CoveragePoint"][];
             /** Coverage Note */
             coverage_note?: string | null;
+            freshness?: components["schemas"]["Freshness"] | null;
+        };
+        /** HistBin */
+        HistBin: {
+            /** Lo */
+            lo: number;
+            /** Hi */
+            hi: number;
+            /** N Series */
+            n_series: number;
         };
         /** HistoryPoint */
         HistoryPoint: {
@@ -599,6 +1023,28 @@ export interface components {
             metric: string;
             /** Value */
             value: number;
+        };
+        /** HourPoint */
+        HourPoint: {
+            /** Hour */
+            hour: number;
+            /** Share Stockout */
+            share_stockout: number;
+            /** Share Sales */
+            share_sales: number;
+            /** Open */
+            open: boolean;
+        };
+        /** LayerFile */
+        LayerFile: {
+            /** File */
+            file: string;
+            /** Exists */
+            exists: boolean;
+            /** Modified */
+            modified?: string | null;
+            /** Bytes */
+            bytes?: number | null;
         };
         /**
          * MetricRow
@@ -708,6 +1154,45 @@ export interface components {
             reference_n_stores?: number | null;
             /** Reference N Products */
             reference_n_products?: number | null;
+            /**
+             * Store Ids
+             * @default []
+             */
+            store_ids: number[];
+        };
+        /**
+         * PipelineStatus
+         * @description Estado del pipeline de datos. **Solo lectura**: nada de esto se dispara por
+         *     HTTP, porque la API no tiene autenticacion.
+         */
+        PipelineStatus: {
+            /** Layer */
+            layer?: ("processed" | "sample") | null;
+            panel_file: components["schemas"]["LayerFile"];
+            demand_file: components["schemas"]["LayerFile"];
+            freshness: components["schemas"]["Freshness"];
+            /** Artifacts */
+            artifacts: components["schemas"]["ArtifactVersions"][];
+            /** Updates */
+            updates: components["schemas"]["UpdateRecord"][];
+            /** Steps */
+            steps: components["schemas"]["PipelineStep"][];
+            /** Auto Reload Seconds */
+            auto_reload_seconds: number;
+        };
+        /**
+         * PipelineStep
+         * @description Un paso del pipeline, con el comando que lo corre.
+         */
+        PipelineStep: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Command */
+            command: string;
+            /** What */
+            what: string;
         };
         /**
          * PlanEcho
@@ -769,6 +1254,49 @@ export interface components {
             tasa_quiebre: number;
             /** N Series */
             n_series: number;
+        };
+        /**
+         * ReorderCatalog
+         * @description Reposicion del catalogo entero, ordenada y paginada en el servidor.
+         */
+        ReorderCatalog: {
+            /**
+             * Dt
+             * Format: date
+             */
+            dt: string;
+            basis: components["schemas"]["Basis"];
+            /** Model Name */
+            model_name: string;
+            /** Critical Fraction */
+            critical_fraction: number;
+            /** Cu */
+            cu: number;
+            /** Co */
+            co: number;
+            /** Policy Window */
+            policy_window: number;
+            /** Tail Mass */
+            tail_mass: number;
+            /**
+             * Sort
+             * @enum {string}
+             */
+            sort: "impacto" | "delta" | "sugerido" | "politica" | "serie";
+            /**
+             * Dir
+             * @enum {string}
+             */
+            dir: "asc" | "desc";
+            totals: components["schemas"]["CatalogTotals"];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Items */
+            items: components["schemas"]["CatalogLine"][];
         };
         /** ReorderLine */
         ReorderLine: {
@@ -974,6 +1502,49 @@ export interface components {
             /** N Days */
             n_days: number;
         };
+        /**
+         * UpdateRecord
+         * @description Una entrada del registro de `blindside.data.update`.
+         */
+        UpdateRecord: {
+            /** Kind */
+            kind: string;
+            /** Status */
+            status: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Input */
+            input?: string | null;
+            /** Rows In */
+            rows_in?: number | null;
+            /** Rows New */
+            rows_new?: number | null;
+            /** Rows Duplicate */
+            rows_duplicate?: number | null;
+            /** Rows Conflict */
+            rows_conflict?: number | null;
+            /** Rows Replaced */
+            rows_replaced?: number | null;
+            /** New Series */
+            new_series?: number | null;
+            /** Batch Date Min */
+            batch_date_min?: string | null;
+            /** Batch Date Max */
+            batch_date_max?: string | null;
+            /** Panel Date Max After */
+            panel_date_max_after?: string | null;
+            /** Trained */
+            trained?: boolean | null;
+            /** Seconds */
+            seconds?: number | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -982,6 +1553,17 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** WeekdayPoint */
+        WeekdayPoint: {
+            /** Dow */
+            dow: number;
+            /** Observed Mean */
+            observed_mean: number;
+            /** Recovered Mean */
+            recovered_mean: number;
+            /** Share Censored */
+            share_censored: number;
         };
     };
     responses: never;
@@ -1151,6 +1733,44 @@ export interface operations {
             };
         };
     };
+    reorder_catalog_reorder_catalog_get: {
+        parameters: {
+            query?: {
+                recover_censoring?: boolean;
+                co?: number;
+                store_id?: number | null;
+                rotation_band?: string | null;
+                sort?: string;
+                dir?: string;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReorderCatalog"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reorder_reorder_post: {
         parameters: {
             query?: never;
@@ -1293,6 +1913,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    alerts_alerts_get: {
+        parameters: {
+            query?: {
+                /** @description clave de un grupo: devuelve solo las series de ese motivo */
+                group?: string | null;
+                /** @description filtra por tienda */
+                store_id?: number | null;
+                /** @description filtra por clase de rotacion: baja, media o alta */
+                rotation_band?: string | null;
+                /** @description una sola serie: devuelve sus motivos, si tiene */
+                series_id?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dataset_summary_dataset_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetSummary"];
+                };
+            };
+        };
+    };
+    pipeline_pipeline_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineStatus"];
                 };
             };
         };

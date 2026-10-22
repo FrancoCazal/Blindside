@@ -25,27 +25,8 @@ from blindside import config as cfg
 from blindside.data import schema as S
 from blindside.models.baselines import SeasonalNaiveForecaster
 
-
-@pytest.fixture()
-def panel_on_disk(recovered_panel: pd.DataFrame, tmp_path, monkeypatch):
-    """Escribe el panel en un directorio temporal y apunta la config ahi."""
-    processed = tmp_path / "processed"
-    processed.mkdir(parents=True)
-    recovered_panel.to_parquet(processed / cfg.DEMAND_FILE, index=False)
-
-    monkeypatch.setattr(cfg, "DATA_PROCESSED", processed)
-    monkeypatch.setattr(cfg, "DATA_SAMPLE", tmp_path / "sample_vacio")
-    # Sin manifiesto no hay referencia de panel completo, y eso tiene que ser el
-    # default del test: si apuntara al data/interim/ real, el resultado dependeria
-    # de si la maquina descargo el dataset.
-    monkeypatch.setattr(cfg, "DATA_INTERIM", tmp_path / "interim_vacio")
-    # Idem con los reportes: si apuntara al reports/ real, la cobertura por
-    # horizonte dependeria de si en esta maquina se corrio `make models`.
-    monkeypatch.setattr(cfg, "REPORTS", tmp_path / "reports_vacio")
-    artifacts = tmp_path / "artifacts"
-    artifacts.mkdir()
-    monkeypatch.setattr(cfg, "ARTIFACTS", artifacts)
-    return artifacts
+# El fixture `panel_on_disk` vive en conftest.py: lo comparten este archivo y
+# test_api_operacion.py.
 
 
 def _save_both_bases(artifacts, panel: pd.DataFrame) -> None:

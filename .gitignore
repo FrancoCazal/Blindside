@@ -8,6 +8,13 @@ data/processed/*
 !data/processed/.gitkeep
 !data/sample/
 !data/sample/**
+# Respaldos y registro del pipeline de actualizacion (`blindside.data.update`).
+# Van despues de la excepcion de data/sample/ para que tambien apliquen ahi: la
+# muestra commiteada no puede cambiar por correr una ingesta de prueba.
+data/incoming/
+**/*.prev.parquet
+**/.*.tmp
+data/sample/update_log.json
 
 # --- Artefactos de modelo ------------------------------------------------
 artifacts/*

@@ -403,7 +403,7 @@ Secuencia de demo:
 4. Abrir una serie.
 5. Mostrar intervalo y política.
 6. Mostrar explicación por features.
-7. Si queda tiempo, mostrar Salud del modelo.
+7. Si queda tiempo, mostrar Modelos: error con su dispersión y la cobertura del intervalo.
 
 ---
 

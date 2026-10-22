@@ -1,5 +1,10 @@
 # Diseño del frontend · Blindside
 
+> **Reemplazado en parte (2026-10-16).** La arquitectura de pantallas de este documento — las
+> secciones 3.1, 3.2, 4 y 5 — la reemplaza [`rediseno_frontend.md`](rediseno_frontend.md), que
+> baja el frontend de diez pantallas a siete y define dónde vive cada dato. Las restricciones de
+> los datos (6), el sistema visual (8), la accesibilidad (9) y los estados (10) siguen vigentes.
+
 **Estado:** especificación para diseñar. No hay código de frontend todavía.
 **Frente H** del plan (sección 13). Depende del contrato de API, que ya está congelado.
 **Redactado:** 2026-09-15

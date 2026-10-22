@@ -36,7 +36,8 @@ import {
   rangosRecuperados,
   tramosDibujables,
 } from "../chart";
-import { etiquetaFecha, magnitud } from "../format";
+import { conteo, etiquetaFecha, magnitud } from "../format";
+import { t } from "../i18n";
 
 export function GraficoSerie({
   historia,
@@ -103,12 +104,12 @@ export function GraficoSerie({
         ))}
 
         {/* 2 · tramos de quiebre, de borde a borde */}
-        {tramos.map((t, i) => (
+        {tramos.map((tramo, i) => (
           <rect
             key={i}
-            x={t.x}
+            x={tramo.x}
             y={GRAFICO.padArriba}
-            width={t.ancho}
+            width={tramo.ancho}
             height={ejeY - GRAFICO.padArriba}
             fill="var(--quiebre)"
           />
@@ -229,7 +230,7 @@ export function GraficoSerie({
         viewBox={`0 0 ${FRANJA.ancho} ${FRANJA.alto}`}
         className="grafico"
         role="img"
-        aria-label={`Horas de quiebre por día, de 0 a ${historia.open_hours} franjas comerciales`}
+        aria-label={t().graficoSerie.franjaAria(String(historia.open_hours))}
       >
         <line
           x1={GRAFICO.padIzq}
@@ -252,7 +253,7 @@ export function GraficoSerie({
           0
         </text>
         <text x={GRAFICO.padIzq} y={FRANJA.alto - 2} fontSize="10.5" fill="var(--rotulo)">
-          HORAS DE QUIEBRE POR DÍA
+          {t().graficoSerie.franja}
         </text>
       </svg>
 
@@ -268,6 +269,8 @@ function Leyenda({
   conQuiebres: boolean;
   mostrarEvidencia: boolean;
 }) {
+  const textos = t();
+  const g = textos.graficoSerie;
   return (
     <div className="leyenda">
       <span>
@@ -281,14 +284,14 @@ function Leyenda({
             strokeWidth={conQuiebres ? 1.4 : 1.8}
           />
         </svg>
-        Venta observada
+        {textos.bases.observed}
       </span>
       {mostrarEvidencia && (
         <span>
           <svg width="22" height="8" aria-hidden="true">
             <line x1="0" y1="4" x2="22" y2="4" stroke="var(--recuperado)" strokeWidth="2.4" />
           </svg>
-          Demanda recuperada
+          {textos.bases.recovered}
         </span>
       )}
       <span>
@@ -303,20 +306,20 @@ function Leyenda({
             strokeDasharray="5 4"
           />
         </svg>
-        Pronóstico
+        {g.pronostico}
       </span>
       <span>
         <svg width="22" height="10" aria-hidden="true">
           <rect x="0" y="1" width="22" height="8" fill="var(--banda)" />
         </svg>
-        Banda conformal 90 %
+        {g.banda}
       </span>
       {conQuiebres && (
         <span>
           <svg width="22" height="10" aria-hidden="true">
             <rect x="0" y="1" width="22" height="8" fill="var(--quiebre)" />
           </svg>
-          Día con quiebre
+          {g.diaConQuiebre}
         </span>
       )}
       {!conQuiebres && (
@@ -330,7 +333,7 @@ function Leyenda({
             color: "var(--rotulo)",
           }}
         >
-          Serie limpia
+          {g.serieLimpia}
         </span>
       )}
     </div>
@@ -339,9 +342,12 @@ function Leyenda({
 
 function descripcion(historia: SeriesHistory, basis: "observed" | "recovered"): string {
   const s = historia.summary;
-  const base = basis === "recovered" ? "demanda recuperada" : "venta observada";
-  return (
-    `Serie ${historia.series.series_id}: ${base} de ${historia.points.length} días, ` +
-    `${s.n_censored_days} con quiebre de stock, racha máxima de ${s.max_run_days} días.`
+  const textos = t();
+  return textos.graficoSerie.aria(
+    historia.series.series_id,
+    textos.bases[basis].toLocaleLowerCase(textos.locale),
+    conteo(historia.points.length),
+    conteo(s.n_censored_days),
+    conteo(s.max_run_days),
   );
 }
