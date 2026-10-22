@@ -54,7 +54,12 @@ make front   # frontend React en localhost:5173 (necesita la API arriba)
 > autenticación antes.** Para la Fase 2 multi-tenant es bloqueante: hace falta autenticación por
 > tenant y aislamiento de datos.
 
-![Pantalla de reposición de Blindside](docs/assets/reposicion.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screens/dashboard-dark.png">
+  <img alt="Panel de Blindside: series que requieren atención, error del modelo, cobertura del intervalo y demanda escondida por quiebres" src="docs/assets/screens/dashboard-light.png">
+</picture>
+
+*Las capturas son de la interfaz en inglés, que es el idioma con el que abre.*
 
 **Defensa:** [presentación en PDF](docs/slides/blindside_defensa.pdf) ·
 [fuente Marp](docs/slides/blindside_defensa.md) ·
@@ -78,6 +83,14 @@ de [`docs/rediseno_frontend.md`](docs/rediseno_frontend.md); los datos, de la AP
 | Análisis | **Modelos** | Qué tan bueno es el modelo y dónde falla, con el intervalo CQR contra el conformal de residuos |
 | Análisis | **Datos** | Cómo es el panel y cuánta demanda esconden los quiebres, con el mapa del catálogo |
 | Sistema | **Pipeline** | Qué datos y qué modelo se sirven, y cómo se actualizan |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screens/series-dark.png">
+  <img alt="Pantalla Serie: venta observada contra demanda recuperada, días con quiebre, el pronóstico con su banda conformal del 90 % y la explicación por variable de la cantidad sugerida" src="docs/assets/screens/series-light.png">
+</picture>
+
+*Serie: venta observada contra demanda recuperada, los días con quiebre, el pronóstico con su
+banda conformal del 90 % y por qué el modelo sugiere esa cantidad.*
 
 Cada dato tiene una pantalla dueña y las demás enlazan: el MASE vive en Modelos, la frescura en
 Pipeline, la censura del panel en Datos. Los controles viven donde actúan: el toggle de censura y
@@ -116,6 +129,14 @@ same-origin y esconderían un CORS mal configurado hasta el despliegue. Por eso 
 allowlist explícito de orígenes (`BLINDSIDE_CORS_ORIGINS`, por defecto los puertos 5173 y 4173 de
 Vite) y no un comodín: sin autenticación, `allow_origins=["*"]` significaría que cualquier página
 abierta en el navegador del usuario puede leer los pronósticos de todas las tiendas.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screens/replenishment-dark.png">
+  <img alt="Pantalla Reposición: ahorro esperado contra la política actual y la cantidad sugerida para cada serie, con el toggle venta observada / demanda recuperada" src="docs/assets/screens/replenishment-light.png">
+</picture>
+
+*Reposición: la orden sugerida para todo el catálogo, ordenada por ahorro esperado, con el toggle
+de censura arriba a la derecha.*
 
 El control central es el **toggle de censura**, y cambia la decisión y no solo el dibujo: hay
 **dos artefactos**, uno entrenado sobre venta observada y otro sobre demanda latente, con la misma
@@ -236,6 +257,14 @@ predicción central**. Lo que cambia entre ellas es el intervalo, y ahí la dife
 Todas las métricas van **con su dispersión entre orígenes**, nunca como número único: un
 promedio bueno puede esconder un origen catastrófico, y el origen catastrófico es el que pasa en
 producción.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screens/models-dark.png">
+  <img alt="Pantalla Modelos: error por modelo con su dispersión entre orígenes, y CQR contra el conformal de residuos" src="docs/assets/screens/models-light.png">
+</picture>
+
+*Modelos: la misma tabla, servida por la API, junto a la comparación de intervalos y la cobertura
+por día del horizonte.*
 
 ### Cobertura del intervalo, que es la segunda métrica de éxito
 

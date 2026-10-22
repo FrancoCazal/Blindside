@@ -54,7 +54,10 @@ make front   # React frontend on localhost:5173 (needs the API running)
 > For the multi-tenant Phase 2 this is a blocker: it needs per-tenant authentication and data
 > isolation.
 
-![Blindside replenishment screen](docs/assets/reposicion.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screens/dashboard-dark.png">
+  <img alt="Blindside dashboard: series needing attention, model error, interval coverage and demand hidden by stockouts" src="docs/assets/screens/dashboard-light.png">
+</picture>
 
 **Defense:** [slides as PDF](docs/slides/blindside_defensa.pdf) ·
 [Marp source](docs/slides/blindside_defensa.md) ·
@@ -78,6 +81,14 @@ data lives, from [`docs/rediseno_frontend.md`](docs/rediseno_frontend.md); the d
 | Analysis | **Models** | How good the model is and where it fails, with the CQR interval against residual conformal |
 | Analysis | **Data** | What the panel looks like and how much demand the stockouts hide, with the catalog map |
 | System | **Pipeline** | Which data and which model are being served, and how they get updated |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screens/series-dark.png">
+  <img alt="Series screen: observed sales against recovered demand, stockout days, the forecast with its 90% conformal band, and the per-feature explanation of the suggested quantity" src="docs/assets/screens/series-light.png">
+</picture>
+
+*Series: observed sales against recovered demand, the stockout days, the forecast with its 90%
+conformal band, and why the model suggests that quantity.*
 
 Each piece of data has an owner screen and the others link to it: MASE lives in Models, freshness
 in Pipeline, panel censoring in Data. Controls live where they act: the censoring toggle and the
@@ -115,6 +126,14 @@ same-origin and hide a misconfigured CORS until deployment. That is why the API 
 explicit allowlist of origins (`BLINDSIDE_CORS_ORIGINS`, by default Vite's ports 5173 and 4173)
 and not a wildcard: without authentication, `allow_origins=["*"]` would mean that any page open in
 the user's browser could read every store's forecasts.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screens/replenishment-dark.png">
+  <img alt="Replenishment screen: expected saving against the current policy and the suggested quantity for every series, with the observed sales / recovered demand toggle" src="docs/assets/screens/replenishment-light.png">
+</picture>
+
+*Replenishment: the suggested order for the whole catalog, sorted by expected saving, with the
+censoring toggle at the top right.*
 
 The central control is the **censoring toggle**, and it changes the decision, not just the chart:
 there are **two artifacts**, one trained on observed sales and one on latent demand, with the same
@@ -235,6 +254,14 @@ What changes between them is the interval, and there the difference is large.
 
 Every metric comes **with its dispersion across origins**, never as a single number: a good average
 can hide a catastrophic origin, and the catastrophic origin is the one that happens in production.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/screens/models-dark.png">
+  <img alt="Models screen: error by model with dispersion across origins, and CQR against residual conformal" src="docs/assets/screens/models-light.png">
+</picture>
+
+*Models: the same table, served by the API, next to the interval comparison and the coverage by
+horizon day.*
 
 ### Interval coverage, the second success metric
 
